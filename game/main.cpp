@@ -98,7 +98,7 @@ void initWin(uint32_t width, uint32_t height) {
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cout << "Failed to initialize Glad.\n";
     }
-    LfTheme theme = lf_default_theme("../game/fonts/arial.ttf", 28);
+    LfTheme theme = lf_default_theme("../game/fonts/arial.ttf", 24);
     theme.div_props.color = (vec4s){LF_RGBA(0, 0, 0, 0)};
     lf_init_glfw(width, height, "../game/fonts/arial.ttf", &theme, state.win);   
     lf_set_text_wrap(true);
@@ -127,7 +127,8 @@ void renderOpenFileMenu() {
     }
     if(state.openFileMenu.inputOpen) {
         lf_input_text(&state.openFileMenu.input);
-        lf_set_item_color(RGB_COLOR(46, 46, 179)); 
+        LfUIElementProps props = lf_theme()->button_props;
+        lf_set_item_color((vec4s){0, 0, 0, 0});
         if(lf_button("Open") == LF_CLICKED) {
             std::ifstream file(std::string(state.openFileMenu.input.buf));
              
@@ -135,6 +136,7 @@ void renderOpenFileMenu() {
             state.openFileMenu.showCommentTextTimer = 0.0f;
         }
         lf_unset_item_color();
+        lf_pop_style_props();
     }
 }
 void renderBuffersTab() {
@@ -233,25 +235,28 @@ void handleDeleteBuffer(uint32_t bufferIndex) {
 }
 
 int main(int argc, char* argv[]) {
-    initWin(1920, 1080); 
+    // Initialization
+    initWin(1280, 720); 
     state.createFileMenu.init();
     state.openFileMenu.init();
 
     while(!glfwWindowShouldClose(state.win)) { 
+        // Delta-Time calculation
         float currentTime = glfwGetTime();
         state.deltaTime = currentTime - state.lastTime;
         state.lastTime = currentTime;
 
+        // OpenGL color clearing 
         glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(LF_RGBA(25, 25, 25, 255));
-        
+        glClearColor(0.2f, 0.3f, 0.8f, 1.0f);
+        // Render the application with leif
         lf_div_begin((vec2s){0.0f, 0.0f}, (vec2s){(float)state.winWidth, (float)state.winHeight});
-        lf_rect((float)state.winWidth, 60, RGB_COLOR(31, 31, 31));
-        renderNewFileMenu();
-        renderOpenFileMenu();
-        renderFileCommentsTab();
-        renderBuffersTab();
-        renderFileContentTab();
+        //lf_rect((float)state.winWidth, 60, RGBA_COLOR(31, 31, 31, 255));
+        //renderNewFileMenu();
+        //renderOpenFileMenu();
+        //renderFileCommentsTab();
+        //renderBuffersTab();
+        //renderFileContentTab();
         lf_div_end();
 
         // Flush
