@@ -80,6 +80,7 @@ typedef struct {
     LfFont font;
 } LfTheme;
 
+typedef void (*LfMenuItemCallback)(uint32_t*);
 
 void lf_init_glfw(uint32_t display_width, uint32_t display_height, const char* font_path, LfTheme* theme, void* glfw_window);
 
@@ -153,6 +154,10 @@ void lf_set_ptr_x(float x);
 
 void lf_set_ptr_y(float y);
 
+float lf_get_ptr_x();
+
+float lf_get_ptr_y();
+
 void lf_image(LfTexture tex);
 
 LfTheme* lf_theme();
@@ -185,7 +190,7 @@ void lf_rect(float width, float height, vec4s color);
 
 void lf_slider_int(LfSlider* slider);
 
-int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, bool vertical);
+int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, 
         int32_t stop_point, int32_t start_point, bool no_render, vec4s color);

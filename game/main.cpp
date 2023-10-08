@@ -3,21 +3,31 @@
 #include <cstring>
 #include <iostream>
 #include <fstream>
+#include <filesystem>
+#include <sstream>
+#include <vector>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <sstream>
-#include <vector>
 
 #include "../leif.h"
 
 #define RGB_COLOR(r, g, b) (vec4s){LF_RGBA(r, g, b, 255.0f)}
 #define RGBA_COLOR(r, g, b, a) (vec4s){LF_RGBA(r, g, b, a)}
 
+enum class FileStatus {
+    None = 0,
+    FailedToOpen, 
+    FailedToCreate,
+    AlreadyExists, 
+    OpenSuccess,
+    CreationSucces
+};
+
 struct InputFieldState {
     LfInputField input;
     bool inputOpen = false;
-    int32_t creationSuccess = -1;
+    FileStatus fileStatus = FileStatus::None;
     
     const float showCommentTextTime = 2.5f;
     float showCommentTextTimer = 0.0f;
@@ -51,17 +61,21 @@ struct GlobalState {
 
 static GlobalState state;
 
-static void       winResizeCb(GLFWwindow* window, int32_t width, int32_t height);
-static void       initWin(uint32_t width, uint32_t height);
+static void             winResizeCb(GLFWwindow* window, int32_t width, int32_t height);
+static void             initWin(uint32_t width, uint32_t height);
 
-static void       renderNewFileMenu();
-static void       renderOpenFileMenu();
+static void             renderNewFileMenu();
+static void             renderOpenFileMenu();
 
-static void       renderBuffersTab();
-static void       renderFileContentTab();
+static void             renderBuffersTab();
+static void             renderFileContentTab();
 
-static bool       handleCreateFile(const std::string& filepath);
-static bool       handleOpenFile(const std::string& filepath);
+static void             renderFileCommentsTab();
+
+static FileStatus       handleCreateFile(const std::string& filepath);
+static FileStatus       handleOpenFile(const std::string& filepath);
+
+static void             handleDeleteBuffer(uint32_t bufferIndex);
 
 void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
     lf_resize_display(width, height);
@@ -100,23 +114,11 @@ void renderNewFileMenu() {
         lf_input_text(&state.createFileMenu.input);
         lf_set_item_color(RGB_COLOR(22, 181, 125)); 
         if(lf_button("Create") == LF_CLICKED) {
-            std::ofstream file(std::string(state.createFileMenu.input.buf));
-            
-            state.createFileMenu.creationSuccess = handleCreateFile(state.createFileMenu.input.buf);
+            state.createFileMenu.fileStatus = handleCreateFile(state.createFileMenu.input.buf);
             state.createFileMenu.showCommentTextTimer = 0.0f;
         }
         lf_unset_item_color();
-        if(state.createFileMenu.creationSuccess != -1 && state.createFileMenu.showCommentTextTimer < state.createFileMenu.showCommentTextTime) {
-            state.createFileMenu.showCommentTextTimer += state.deltaTime;
-            lf_next_line();
-            if(!state.createFileMenu.creationSuccess) {
-                lf_set_text_color(RGB_COLOR(166, 0, 0));
-                lf_text("Failed to create file '%s'", state.createFileMenu.input.buf);
-                lf_unset_text_color();
-            }
-        }
     }
-
 }
 
 void renderOpenFileMenu() {
@@ -128,23 +130,12 @@ void renderOpenFileMenu() {
         lf_set_item_color(RGB_COLOR(46, 46, 179)); 
         if(lf_button("Open") == LF_CLICKED) {
             std::ifstream file(std::string(state.openFileMenu.input.buf));
-            
-            state.openFileMenu.creationSuccess = handleOpenFile(state.openFileMenu.input.buf);
+             
+            state.openFileMenu.fileStatus = handleOpenFile(state.openFileMenu.input.buf);
             state.openFileMenu.showCommentTextTimer = 0.0f;
         }
         lf_unset_item_color();
-        if(state.openFileMenu.creationSuccess != -1 && state.openFileMenu.showCommentTextTimer < state.openFileMenu.showCommentTextTime) {
-            state.openFileMenu.showCommentTextTimer += state.deltaTime;
-            lf_next_line();
-            if(!state.openFileMenu.creationSuccess) {
-                lf_set_text_color(RGB_COLOR(166, 0, 0));
-                lf_text("Failed to create file '%s'", state.openFileMenu.input.buf);
-                lf_unset_text_color();
-            }
-        }
     }
-
-
 }
 void renderBuffersTab() {
     lf_next_line();
@@ -153,9 +144,48 @@ void renderBuffersTab() {
         for(auto& fileBuffer : state.fileBuffers) {
             filenames.push_back(fileBuffer.name.c_str());
         }
-        int32_t clickedItem = lf_menu_item_list(filenames.data(), filenames.size(), state.fileBufferIndex, RGB_COLOR(189, 189, 189), false);
+        int32_t clickedItem = lf_menu_item_list(filenames.data(), filenames.size(), state.fileBufferIndex, RGB_COLOR(189, 189, 189), [](uint32_t* item_index) {
+                    LfUIElementProps props = lf_theme()->button_props;
+                    props.margin_left = 0;
+                    props.margin_right = 0;
+                    lf_set_item_color(RGB_COLOR(0, 0, 0)); 
+                    lf_set_text_color(RGB_COLOR(255, 255, 255));
+                    lf_push_style_props(props); 
+                    if(lf_button("X") == LF_CLICKED) {
+                        handleDeleteBuffer(*item_index); 
+                    }
+                    lf_pop_style_props();
+                    lf_unset_item_color();
+                    lf_unset_text_color();
+                }, false);
         if(clickedItem != -1)
             state.fileBufferIndex = clickedItem;
+    }
+}
+void renderFileCommentsTab() {
+    // Create Button
+    if(state.createFileMenu.fileStatus != FileStatus::None && state.createFileMenu.showCommentTextTimer < state.createFileMenu.showCommentTextTime) {
+        state.createFileMenu.showCommentTextTimer += state.deltaTime;
+        lf_next_line();
+        if(state.createFileMenu.fileStatus == FileStatus::FailedToCreate) {
+            lf_set_text_color(RGB_COLOR(166, 0, 0));
+            lf_text("Failed to create file.");
+            lf_unset_text_color();
+        } else if(state.createFileMenu.fileStatus == FileStatus::AlreadyExists) {
+            lf_set_text_color(RGB_COLOR(166, 0, 0));
+            lf_text("File already exists.");
+            lf_unset_text_color();
+        }
+    }
+    // Open Button
+    if(state.openFileMenu.fileStatus != FileStatus:: None && state.openFileMenu.showCommentTextTimer < state.openFileMenu.showCommentTextTime) {
+        state.openFileMenu.showCommentTextTimer += state.deltaTime;
+        lf_next_line();
+        if(state.openFileMenu.fileStatus == FileStatus::FailedToOpen) {
+            lf_set_text_color(RGB_COLOR(166, 0, 0));
+            lf_text("Failed to open file.");
+            lf_unset_text_color();
+        }
     }
 }
 
@@ -167,28 +197,39 @@ void renderFileContentTab() {
         lf_text("%s", fileContent);
     }
 }
-bool handleCreateFile(const std::string& filepath) {
+FileStatus handleCreateFile(const std::string& filepath) {
+    if(std::filesystem::exists(filepath)) {
+        std::cerr << "File '" << filepath << "' already exists.\n";
+        return FileStatus::AlreadyExists;
+    }
+
     std::ofstream inputFile(filepath); 
     if (!inputFile.is_open()) {
         std::cerr << "Failed to create file '" << filepath  << "\n";
-        return false;
+        return FileStatus::FailedToCreate;
     }
     state.fileBufferIndex = state.fileBuffers.size();
     state.fileBuffers.push_back((FileBuffer){.buf = "", .name = filepath});
-    return true;
+    return FileStatus::CreationSucces;
 }
-bool handleOpenFile(const std::string& filepath) {
+FileStatus handleOpenFile(const std::string& filepath) {
     std::ifstream inputFile(filepath); 
     if (!inputFile.is_open()) {
         std::cerr << "Failed to read from file '" << filepath  << "\n";
-        return false;
+        return FileStatus::FailedToOpen;
     }
     std::stringstream buf;
     buf << inputFile.rdbuf();
     inputFile.close(); 
     state.fileBufferIndex = state.fileBuffers.size();
     state.fileBuffers.push_back((FileBuffer){.buf = buf.str(), .name = filepath});
-    return true;
+    return FileStatus::OpenSuccess;
+}
+void handleDeleteBuffer(uint32_t bufferIndex) {
+    auto it = state.fileBuffers.begin() + bufferIndex;
+    state.fileBuffers.erase(it);
+    state.fileBufferIndex--;
+    if(state.fileBufferIndex < 0) state.fileBufferIndex = 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -208,6 +249,7 @@ int main(int argc, char* argv[]) {
         lf_rect((float)state.winWidth, 60, RGB_COLOR(31, 31, 31));
         renderNewFileMenu();
         renderOpenFileMenu();
+        renderFileCommentsTab();
         renderBuffersTab();
         renderFileContentTab();
         lf_div_end();
