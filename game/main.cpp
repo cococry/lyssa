@@ -28,7 +28,7 @@ struct InputFieldState {
     LfInputField input;
     bool inputOpen = false;
     FileStatus fileStatus = FileStatus::None;
-    
+
     const float showCommentTextTime = 2.5f;
     float showCommentTextTimer = 0.0f;
     const uint32_t height = 60;
@@ -57,6 +57,10 @@ struct GlobalState {
     std::vector<FileBuffer> fileBuffers;
     std::vector<char*> bufferFileNames;
     int32_t fileBufferIndex = -1;
+
+    int32_t textScrollOffset = 0;
+
+    LfFont codeFont;
 };
 
 static GlobalState state;
@@ -76,6 +80,8 @@ static FileStatus       handleCreateFile(const std::string& filepath);
 static FileStatus       handleOpenFile(const std::string& filepath);
 
 static void             handleDeleteBuffer(uint32_t bufferIndex);
+
+static void             onMouseScroll(GLFWwindow* window, double xoffset, double yoffset);
 
 void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
     lf_resize_display(width, height);
@@ -104,6 +110,10 @@ void initWin(uint32_t width, uint32_t height) {
     lf_set_text_wrap(true);
     glfwSetFramebufferSizeCallback(state.win, winResizeCb);
     glViewport(0, 0, width, height);
+
+    lf_add_scroll_callback((void*)onMouseScroll);
+
+    state.codeFont = lf_load_font("../game/fonts/Cascadia.ttf", 24);
 }
 
 void renderNewFileMenu() { 
@@ -113,7 +123,7 @@ void renderNewFileMenu() {
     if(state.createFileMenu.inputOpen) {
         lf_input_text(&state.createFileMenu.input);
         lf_set_item_color(RGB_COLOR(22, 181, 125)); 
-        if(lf_button("Create") == LF_CLICKED) {
+        if(lf_button_fixed("Create", 100, -1) == LF_CLICKED) {
             state.createFileMenu.fileStatus = handleCreateFile(state.createFileMenu.input.buf);
             state.createFileMenu.showCommentTextTimer = 0.0f;
         }
@@ -122,7 +132,7 @@ void renderNewFileMenu() {
 }
 
 void renderOpenFileMenu() {
-   if(lf_button("Open") == LF_CLICKED) {
+    if(lf_button("Open") == LF_CLICKED) {
         state.openFileMenu.inputOpen = !state.openFileMenu.inputOpen;
     }
     if(state.openFileMenu.inputOpen) {
@@ -130,13 +140,14 @@ void renderOpenFileMenu() {
         LfUIElementProps props = lf_theme()->button_props;
         lf_set_item_color((vec4s){0, 0, 0, 0});
         if(lf_button("Open") == LF_CLICKED) {
+            lf_set_item_color(RGB_COLOR(46, 46, 179)); 
             std::ifstream file(std::string(state.openFileMenu.input.buf));
-             
+
             state.openFileMenu.fileStatus = handleOpenFile(state.openFileMenu.input.buf);
             state.openFileMenu.showCommentTextTimer = 0.0f;
+            lf_unset_item_color();
+            lf_pop_style_props();
         }
-        lf_unset_item_color();
-        lf_pop_style_props();
     }
 }
 void renderBuffersTab() {
@@ -147,18 +158,18 @@ void renderBuffersTab() {
             filenames.push_back(fileBuffer.name.c_str());
         }
         int32_t clickedItem = lf_menu_item_list(filenames.data(), filenames.size(), state.fileBufferIndex, RGB_COLOR(189, 189, 189), [](uint32_t* item_index) {
-                    LfUIElementProps props = lf_theme()->button_props;
-                    props.margin_left = 0;
-                    props.margin_right = 0;
-                    lf_set_item_color(RGB_COLOR(0, 0, 0)); 
-                    lf_set_text_color(RGB_COLOR(255, 255, 255));
-                    lf_push_style_props(props); 
-                    if(lf_button("X") == LF_CLICKED) {
-                        handleDeleteBuffer(*item_index); 
-                    }
-                    lf_pop_style_props();
-                    lf_unset_item_color();
-                    lf_unset_text_color();
+                LfUIElementProps props = lf_theme()->button_props;
+                props.margin_left = 0;
+                props.margin_right = 0;
+                lf_set_item_color(RGB_COLOR(0, 0, 0)); 
+                lf_set_text_color(RGB_COLOR(255, 255, 255));
+                lf_push_style_props(props); 
+                if(lf_button("X") == LF_CLICKED) {
+                handleDeleteBuffer(*item_index); 
+                }
+                lf_pop_style_props();
+                lf_unset_item_color();
+                lf_unset_text_color();
                 }, false);
         if(clickedItem != -1)
             state.fileBufferIndex = clickedItem;
@@ -196,7 +207,19 @@ void renderFileContentTab() {
         lf_next_line();
         FileBuffer& buffer = state.fileBuffers[state.fileBufferIndex];
         const char* fileContent = buffer.buf.c_str();
-        lf_text("%s", fileContent);
+        lf_push_font(&state.codeFont);
+        lf_push_text_stop_y(state.winHeight);
+        lf_push_text_start_y(lf_get_ptr_y());
+        LfUIElementProps props = lf_theme()->text_props;
+        props.margin_top = state.codeFont.font_size;
+        props.margin_left = 10;
+        lf_push_style_props(props);
+        lf_set_ptr_y(lf_get_ptr_y() - state.textScrollOffset);
+        lf_text(fileContent);
+        lf_pop_style_props();
+        lf_pop_text_stop_y();
+        lf_pop_text_start_y();
+        lf_pop_font();
     }
 }
 FileStatus handleCreateFile(const std::string& filepath) {
@@ -234,6 +257,10 @@ void handleDeleteBuffer(uint32_t bufferIndex) {
     if(state.fileBufferIndex < 0) state.fileBufferIndex = 0;
 }
 
+void onMouseScroll(GLFWwindow* window, double xoffset, double yoffset) {
+    state.textScrollOffset += yoffset * state.codeFont.font_size;
+}
+
 int main(int argc, char* argv[]) {
     // Initialization
     initWin(1280, 720); 
@@ -248,8 +275,9 @@ int main(int argc, char* argv[]) {
 
         // OpenGL color clearing 
         glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(0.2f, 0.3f, 0.8f, 1.0f);
-        // Render the application with leif
+        glClearColor(LF_RGBA(25, 25, 25, 255));
+
+        lf_begin();
         lf_div_begin((vec2s){0.0f, 0.0f}, (vec2s){(float)state.winWidth, (float)state.winHeight});
         //lf_rect((float)state.winWidth, 60, RGBA_COLOR(31, 31, 31, 255));
         //renderNewFileMenu();
@@ -260,7 +288,7 @@ int main(int argc, char* argv[]) {
         lf_div_end();
 
         // Flush
-        lf_update();
+        lf_end();
         glfwPollEvents();
         glfwSwapBuffers(state.win);
     }

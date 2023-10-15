@@ -146,7 +146,7 @@ vec2s lf_text_dimension(const char* str);
 
 float lf_get_text_end(const char* str, float start_x);
 
-void lf_text(const char* fmt, ...);
+void lf_text(const char* text);
 
 vec2s lf_get_div_size();
 
@@ -162,7 +162,9 @@ void lf_image(LfTexture tex);
 
 LfTheme* lf_theme();
 
-void lf_update();
+void lf_begin();
+
+void lf_end();
 
 void lf_input_text(LfInputField* input);
 
@@ -193,7 +195,7 @@ void lf_slider_int(LfSlider* slider);
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, 
-        int32_t stop_point, int32_t start_point, bool no_render, vec4s color);
+        int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, bool no_render, vec4s color);
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color);
 
@@ -207,3 +209,18 @@ void lf_push_style_props(LfUIElementProps props);
 
 void lf_pop_style_props();
 
+void lf_push_text_start_x(int32_t start_x);
+
+void lf_push_text_stop_x(int32_t stop_x);
+
+void lf_push_text_start_y(int32_t start_y);
+
+void lf_push_text_stop_y(int32_t stop_y);
+
+void lf_pop_text_start_x();
+
+void lf_pop_text_stop_x();
+
+void lf_pop_text_start_y();
+
+void lf_pop_text_stop_y();
