@@ -138,7 +138,6 @@ void renderOpenFileMenu() {
     if(state.openFileMenu.inputOpen) {
         lf_input_text(&state.openFileMenu.input);
         LfUIElementProps props = lf_theme()->button_props;
-        lf_set_item_color((vec4s){0, 0, 0, 0});
         if(lf_button("Open") == LF_CLICKED) {
             lf_set_item_color(RGB_COLOR(46, 46, 179)); 
             std::ifstream file(std::string(state.openFileMenu.input.buf));
@@ -279,12 +278,12 @@ int main(int argc, char* argv[]) {
 
         lf_begin();
         lf_div_begin((vec2s){0.0f, 0.0f}, (vec2s){(float)state.winWidth, (float)state.winHeight});
-        //lf_rect((float)state.winWidth, 60, RGBA_COLOR(31, 31, 31, 255));
-        //renderNewFileMenu();
-        //renderOpenFileMenu();
-        //renderFileCommentsTab();
-        //renderBuffersTab();
-        //renderFileContentTab();
+        lf_rect((float)state.winWidth, 60, RGBA_COLOR(31, 31, 31, 255));
+        renderNewFileMenu();
+        renderOpenFileMenu();
+        renderFileCommentsTab();
+        renderBuffersTab();
+        renderFileContentTab();
         lf_div_end();
 
         // Flush

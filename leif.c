@@ -369,64 +369,20 @@ void renderer_init() {
             "gl_Position = u_proj * vec4(a_pos.x, a_pos.y, 0.0f, 1.0);\n"
         "}\n";
 
+    
     const char* frag_src =
         "#version 460 core\n"
         "out vec4 o_color;\n"
         "in vec4 v_color;\n"
         "in vec2 v_texcoord;\n"
         "in float v_tex_index;\n"
-        "in vec2 v_scale;\n"
         "uniform sampler2D u_textures[32];\n"
-        "float borderWidth = 1;\n"
-        "float u_ThicknessTop    = 20.0;\n"
-        "float u_ThicknessBottom = 30.0;\n"
-        "float u_ThicknessLeft   = 25.0;\n"
-        "float u_ThicknessRight  = 35.0;\n"
-        
-        "const vec4 u_v4BorderColor = vec4(1.0, 1.0, 0.0, 1.0);\n"
-        "const float u_fRadiusPx    = 50.0;\n"
-        "vec2 u_resolution = v_scale;\n"
         "void main() {\n"
-        "   vec2 iResolution = v_scale;\n"
-        "   vec2 fragCoord   = gl_FragCoord.xy;\n"
-        "   vec2 uv = fragCoord / iResolution;\n"
-        "   vec2 v2edgeThickness = vec2(\n"
-        "       uv.x > 0.5 ? u_ThicknessRight : u_ThicknessLeft,\n"
-        "       uv.y > 0.5 ? u_ThicknessTop : u_ThicknessBottom );\n"
-    
-        "   vec2 v2CenteredPos     = abs(fragCoord - iResolution.xy / 2.0);\n"
-        "   vec2 v2HalfShapeSizePx = iResolution/2.0 - v2edgeThickness/2.0;\n" 
-
-        "   float fHalfBorderDist      = 0.0;\n"
-        "   float fHalfBorderThickness = 0.0;\n"
-        "   if (fragCoord.x > max(u_fRadiusPx, u_ThicknessLeft) &&\n" 
-        "       fragCoord.x < u_resolution.x - max(u_fRadiusPx, u_ThicknessRight))\n"
-        "{\n"
-        "   fHalfBorderDist      = v2CenteredPos.y - v2HalfShapeSizePx.y;\n"
-        "   fHalfBorderThickness = v2edgeThickness.y / 2.0;\n" 
-        "}\n"
-        "   else if (fragCoord.y > max(u_fRadiusPx, u_ThicknessBottom) &&\n" 
-             "fragCoord.y < u_resolution.y - max(u_fRadiusPx, u_ThicknessTop))\n"
-        "   {\n"
-                "fHalfBorderDist      = v2CenteredPos.x - v2HalfShapeSizePx.x;\n"
-            "   fHalfBorderThickness = v2edgeThickness.x / 2.0;\n"
+        "   if(v_tex_index == -1) {\n"
+        "     o_color = v_color;\n"
+        "   } else {\n"
+        "     o_color = texture(u_textures[int(v_tex_index)], v_texcoord) * v_color;\n"
         "   }\n"
-        "   else {\n"
-        "   vec2 edgeVec = max(vec2(0.0), u_fRadiusPx - vec2(\n"
-        "   uv.x > 0.5 ? iResolution.x-fragCoord.x : fragCoord.x,\n"
-        "   uv.y > 0.5 ? iResolution.y-fragCoord.y : fragCoord.y));\n"
-        
-        "   vec2 ellipse_ab    = u_fRadiusPx-v2edgeThickness;\n"
-        "   vec2 ellipse_isect = (v2edgeThickness.x > u_fRadiusPx || v2edgeThickness.y > u_fRadiusPx) ? vec2(0.0) :\n"
-        "       edgeVec.xy * ellipse_ab.x*ellipse_ab.y / length(ellipse_ab*edgeVec.yx);\n" 
-            
-        "   fHalfBorderThickness = (u_fRadiusPx - length(ellipse_isect)) / 2.0;\n"
-        "   fHalfBorderDist      = length(edgeVec) - (u_fRadiusPx - fHalfBorderThickness);\n"
-        "}\n"
-
-        "vec4 v4FromColor = u_v4BorderColor;\n" 
-        "vec4 v4ToColor   = vec4(0.0, 0.0, 0.0, 0.0);\n"
-        "o_color = vec4(fHalfBorderDist - fHalfBorderThickness, 0.0f, 0.0f, 1.0f);\n"
         "}\n";
     state.render.shader = shader_prg_create(vert_src, frag_src);
 
@@ -603,9 +559,6 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
     }
     /* Rendering a rect with the given proportions with different color based on if it is hoverd, clicked or idle */
     bool is_hovered = hovered(pos, size);
-    lf_rect_render((vec2s){pos.x - border_width, pos.y - border_width}, 
-                (vec2s){size.x + border_width * 2.0f, size.y + border_width * 2.0f}, 
-                props.border_color);
     if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
         if(click_color) {
             // Click color is 40 lighter than the base color for every value
@@ -1492,7 +1445,7 @@ LfClickableItemState lf_button(const char* text) {
     LfFont font = state.font_stack ? *state.font_stack : state.theme.font;
 
     // If the button does not fit onto the current div, advance to the next line
-    LfTextProps text_props = lf_text_render(state.pos_ptr, text, font, -1, -1, -1, -1, -1, true, text_color);
+    LfTextProps text_props = text_render_simple(state.pos_ptr, text, font, text_color, true);
     next_line_on_overflow(
         (vec2s){text_props.width + padding * 2.0f + margin_right + margin_left + border_width * 2.0f, 
                     text_props.height + padding * 2.0f + margin_bottom + margin_top + border_width * 2.0f});
@@ -1503,9 +1456,9 @@ LfClickableItemState lf_button(const char* text) {
 
     // Rendering the button
     LfClickableItemState ret = clickable_item(state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
-                                              props, (vec4s){LF_RGBA(255, 255, 255, 0)}, border_width, true, true);
+                                              props, color, border_width, true, true);
     // Rendering the text of the button
-    lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + text_props.height / 2.0f}, text, font, -1, -1, -1, -1, -1, false, text_color);
+    text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + text_props.height / 2.0f}, text, font, text_color, false);
 
     // Advancing the position pointer by the width of the button
     state.pos_ptr.x += text_props.width + margin_right + padding * 2.0f + border_width;
