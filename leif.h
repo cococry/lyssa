@@ -46,6 +46,7 @@ typedef struct {
 typedef struct {
     void* val;
     int32_t handle_pos;
+    bool _init;
     float min, max;
     bool held, selcted;
     uint32_t width;
@@ -192,9 +193,9 @@ void lf_checkbox(const char* text, bool* val, uint32_t tex);
 
 void lf_rect(float width, float height, vec4s color);
 
-void lf_slider_int(LfSlider* slider);
+LfClickableItemState lf_slider_int(LfSlider* slider);
 
-void lf_progress_bar_int(LfSlider* slider);
+LfClickableItemState lf_progress_bar_int(LfSlider* slider);
 
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical);
 
@@ -230,3 +231,6 @@ void lf_pop_text_start_y();
 void lf_pop_text_stop_y();
 
 bool lf_hovered(vec2s pos, vec2s size);
+
+void lf_flush();
+void lf_renderer_begin();

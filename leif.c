@@ -208,8 +208,6 @@ static LfShader                 shader_prg_create(const char* vert_src, const ch
 static void                     shader_set_mat(LfShader prg, const char* name, mat4 mat); 
 
 static void                     renderer_init();
-static void                     renderer_begin();
-static void                     flush();
 
 static LfTexture                tex_create(const char* filepath, bool flip, LfTextureFiltering filter);
 
@@ -727,8 +725,8 @@ void lf_rect_render(vec2s pos, vec2s size, vec4s color) {
     // Adding the vertices to the batch renderer
     for(uint32_t i = 0; i < 4; i++) {
         if(state.render.vert_count >= MAX_RENDER_BATCH) {
-            flush();
-            renderer_begin();
+            lf_flush();
+            lf_renderer_begin();
         }
         vec4 result;
         glm_mat4_mulv(transform, state.render.vert_pos[i].raw, result);
@@ -793,8 +791,8 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex) {
     // Adding the vertices to the batch renderer
     for(uint32_t i = 0; i < 4; i++) {
         if(state.render.vert_count >= MAX_RENDER_BATCH) {
-            flush();
-            renderer_begin();
+            lf_flush();
+            lf_renderer_begin();
         }
         vec4 result;
         glm_mat4_mulv(transform, state.render.vert_pos[i].raw, result);
@@ -1125,8 +1123,8 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
                     }; 
                     for(uint32_t i = 0; i < 4; i++) {
                         if(state.render.vert_count >= MAX_RENDER_BATCH) {
-                            flush();
-                            renderer_begin();
+                            lf_flush();
+                            lf_renderer_begin();
                         }
                         vec2 verts_arr;
                         verts_arr[0] = verts[i].x;
@@ -1173,12 +1171,12 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
     return ret;
 }
 
-void renderer_begin() {
+void lf_renderer_begin() {
     state.render.vert_count = 0;
     state.render.index_count = 0;
     state.render.tex_index = 0;
 }
-void flush() {
+void lf_flush() {
     if(state.render.vert_count <= 0) return;
 
     // Bind the vertex buffer & shader set the vertex data, bind the textures & draw
@@ -1541,7 +1539,7 @@ void lf_next_line() {
 }
 vec2s lf_text_dimension(const char* str) {
     LfFont font = state.font_stack ? *state.font_stack : state.theme.font;
-    LfTextProps props = text_render_simple((vec2s){0.0f, 0.0f}, str, font, state.theme.text_props.text_color, false);
+    LfTextProps props = text_render_simple((vec2s){0.0f, 0.0f}, str, font, state.theme.text_props.text_color, true);
 
     return (vec2s){props.width, props.height};
 }
@@ -1637,12 +1635,12 @@ LfTheme* lf_theme() {
 }
 
 void lf_begin() {
-    renderer_begin();
+    lf_renderer_begin();
 }
 void lf_end() {
     update_input();
     clear_events();
-    flush();
+    lf_flush();
 }
 void lf_input_text(LfInputField* input) {
     input_field(input, INPUT_TEXT);
@@ -1723,9 +1721,10 @@ void lf_rect(float width, float height, vec4s color) {
 }
 
 int map_vals(int value, int from_min, int from_max, int to_min, int to_max) {
-    return to_min + (value - from_min) * (to_max - to_min) / (from_max - from_min);
+    
+    return (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
 }
-void lf_slider_int(LfSlider* slider) {
+LfClickableItemState lf_slider_int(LfSlider* slider) {
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
@@ -1741,7 +1740,7 @@ void lf_slider_int(LfSlider* slider) {
 
     vec4s color = state.item_color_stack.a != -1 ? state.item_color_stack : props.color;
 
-    next_line_on_overflow( 
+    next_line_on_overflow(  
         (vec2s){slider_width + margin_right + margin_left, 
                 handle_size + margin_bottom + margin_top + border_width});
 
@@ -1754,6 +1753,11 @@ void lf_slider_int(LfSlider* slider) {
                                                        false, false);
    
     // Render the handle
+    if(!slider->_init) {
+        slider->_init = true;
+        slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
+                                          0, slider->width) - (handle_size + border_width) / 2.0f;
+    }
     LfClickableItemState handle = clickable_item((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size + border_width) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, props, color, border_width, false, false);
     
@@ -1778,16 +1782,17 @@ void lf_slider_int(LfSlider* slider) {
         } else if(lf_get_mouse_x() <= state.pos_ptr.x) {
             *(int32_t*)slider->val = slider->min;
             slider->handle_pos = 0;
-        } else if(lf_get_mouse_x() >= state.pos_ptr.x + slider_width - (handle_size + border_width * 2.0f)) {
+        } else if(lf_get_mouse_x() >= state.pos_ptr.x + slider_width) {
             *(int32_t*)slider->val = slider->max;
             slider->handle_pos = slider_width - (handle_size + border_width);
         }
     }
     state.pos_ptr.x += slider_width + margin_right + border_width;
     state.pos_ptr.y -= margin_top + border_width + (handle_size / 2.0f);
+    return handle;
 }
 
-void lf_progress_bar_int(LfSlider* slider) {
+LfClickableItemState lf_progress_bar_int(LfSlider* slider) {
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
@@ -1806,12 +1811,12 @@ void lf_progress_bar_int(LfSlider* slider) {
     state.pos_ptr.y += margin_top + border_width;
 
     // Render the slider 
-    lf_rect_render(state.pos_ptr, (vec2s){(float)slider->width, (float)height}, color);
+    LfClickableItemState bar = clickable_item(state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, border_width, false, false);
     
     // Check if the slider bar is pressed
-    uint32_t width = map_vals(*(int32_t*)slider->val, slider->min, slider->max, 
-                                          state.pos_ptr.x, state.pos_ptr.x + slider->width);
-    LfClickableItemState handle = clickable_item(state.pos_ptr, (vec2s){(float)width, (float)height}, props, (vec4s){0, 0, 0, 1}, 0, false, false);
+        slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
+                                          0, slider->width);
+    LfClickableItemState handle = clickable_item(state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, (vec4s){0, 0, 0, 1}, 0, false, false);
 
     if(handle == LF_CLICKED) {
         slider->held = true;
@@ -1834,6 +1839,7 @@ void lf_progress_bar_int(LfSlider* slider) {
     }
     state.pos_ptr.x += slider->width + margin_right + border_width;
     state.pos_ptr.y -= margin_top + border_width;
+    return bar;
 }
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical) {
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
