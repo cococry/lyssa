@@ -1,2 +1,2 @@
-# zyn-editor
-Zyn Editor
+# Lyssa
+Lyssa Music Player
