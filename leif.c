@@ -218,7 +218,6 @@ static LfClickableItemState     clickable_item(vec2s pos, vec2s size, LfUIElemen
 static LfTextProps              text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render);
 static void                     input_field(LfInputField* input, InputFieldType type);
 LfFont                          load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add);
-static bool                     hovered(vec2s pos, vec2s size);
 static void                     next_line_on_overflow(vec2s size);
 
 // Utility
@@ -558,7 +557,8 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
         return LF_IDLE;
     }
     /* Rendering a rect with the given proportions with different color based on if it is hoverd, clicked or idle */
-    bool is_hovered = hovered(pos, size);
+    bool is_hovered = lf_hovered(pos, size);
+    lf_rect_render((vec2s){pos.x - border_width, pos.y - border_width}, (vec2s){size.x + border_width * 2.0f, size.y + border_width * 2.0f}, props.border_color);
     if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
         if(click_color) {
             // Click color is 40 lighter than the base color for every value
@@ -993,7 +993,7 @@ int32_t int_max(int32_t a, int32_t b) {
     return (a > b) ? a : b;
 }
 
-bool hovered(vec2s pos, vec2s size) {
+bool lf_hovered(vec2s pos, vec2s size) {
     bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
         lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
     return hovered;
@@ -1523,6 +1523,7 @@ LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
     state.item_color_stack = (vec4s){-1.0f, -1.0f, -1.0f, -1.0f};
     state.text_color_stack = (vec4s){-1.0f, -1.0f, -1.0f, -1.0f};
     state.font_stack = NULL;
+    state.props_on_stack = false;
     return state.current_div.interact_state;
 }
 
@@ -1561,7 +1562,7 @@ void lf_text(const char* text) {
     float padding = props.padding;
     float margin_left = props.margin_left, margin_right = props.margin_right, 
         margin_top = props.margin_top, margin_bottom = props.margin_bottom;
-    vec4s text_color = state.text_color_stack.a != -1 ? state.text_color_stack : props.text_color;
+    vec4s text_color = props.text_color;
     vec4s color = state.item_color_stack.a != -1 ? state.item_color_stack : props.color;
     LfFont font = state.font_stack ? *state.font_stack : state.theme.font;
 
@@ -1578,9 +1579,6 @@ void lf_text(const char* text) {
     state.pos_ptr.y += margin_top;
 
     // Rendering a colored text box if a color is specified
-    if((state.item_color_stack.a != -1 && state.item_color_stack.a > 0) || (state.item_color_stack.a == -1 && props.color.a > 0)) {
-        lf_rect_render((vec2s){state.pos_ptr.x, state.pos_ptr.y + margin_top}, (vec2s){text_props.width + padding * 2.0f, text_props.height + padding * 2.0f}, color);
-    }
     // Rendering the text
     lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, 
                 state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right * 2.0f : -1, -1, -1, -1, -1, false, text_color);
@@ -1734,8 +1732,8 @@ void lf_slider_int(LfSlider* slider) {
     margin_top = props.margin_top, margin_bottom =props.margin_bottom; 
     float border_width = props.border_width;
     // constants
-    const int32_t slider_width = 200; // px
-    const int32_t slider_height = 5; // px
+    const int32_t slider_width = slider->width; // px
+    const int32_t slider_height = slider->height; // px
     const int32_t handle_size = 20; // px 
     // Get the height of the element
     const int32_t element_height = int_max(handle_size + border_width * 2, 
@@ -1751,7 +1749,7 @@ void lf_slider_int(LfSlider* slider) {
     state.pos_ptr.y += margin_top + border_width + (handle_size / 2.0f);
 
     // Render the slider 
-    LfClickableItemState slider_state = clickable_item(state.pos_ptr, (vec2s){slider_width, slider_height}, 
+    LfClickableItemState slider_state = clickable_item(state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                                        props, color, 0, 
                                                        false, false);
    
@@ -1789,6 +1787,54 @@ void lf_slider_int(LfSlider* slider) {
     state.pos_ptr.y -= margin_top + border_width + (handle_size / 2.0f);
 }
 
+void lf_progress_bar_int(LfSlider* slider) {
+    // Getting property data
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
+    float margin_left = props.margin_left, margin_right = props.margin_right,
+    margin_top = props.margin_top, margin_bottom =props.margin_bottom; 
+    float border_width = props.border_width;
+    // constants
+    const int32_t height = slider->height; // px
+
+    vec4s color = state.item_color_stack.a != -1 ? state.item_color_stack : props.color;
+
+    next_line_on_overflow( 
+        (vec2s){slider->width + margin_right + margin_left, 
+                height + margin_bottom + margin_top + border_width});
+
+    state.pos_ptr.x += margin_left + border_width;
+    state.pos_ptr.y += margin_top + border_width;
+
+    // Render the slider 
+    lf_rect_render(state.pos_ptr, (vec2s){(float)slider->width, (float)height}, color);
+    
+    // Check if the slider bar is pressed
+    uint32_t width = map_vals(*(int32_t*)slider->val, slider->min, slider->max, 
+                                          state.pos_ptr.x, state.pos_ptr.x + slider->width);
+    LfClickableItemState handle = clickable_item(state.pos_ptr, (vec2s){(float)width, (float)height}, props, (vec4s){0, 0, 0, 1}, 0, false, false);
+
+    if(handle == LF_CLICKED) {
+        slider->held = true;
+    }
+    if(slider->held && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+        slider->held = false;
+    }
+    if(slider->held) {
+        if(lf_get_mouse_x() >= state.pos_ptr.x && lf_get_mouse_x() <= state.pos_ptr.x + slider->width) {
+            slider->handle_pos = lf_get_mouse_x() - state.pos_ptr.x;
+            *(int32_t*)slider->val = map_vals(state.pos_ptr.x + slider->handle_pos, state.pos_ptr.x,  state.pos_ptr.x + slider->width, 
+                                              slider->min, slider->max);
+        } else if(lf_get_mouse_x() <= state.pos_ptr.x) {
+            *(int32_t*)slider->val = slider->min;
+            slider->handle_pos = 0;
+        } else if(lf_get_mouse_x() >= state.pos_ptr.x + slider->width) {
+            *(int32_t*)slider->val = slider->max;
+            slider->handle_pos = slider->width;
+        }
+    }
+    state.pos_ptr.x += slider->width + margin_right + border_width;
+    state.pos_ptr.y -= margin_top + border_width;
+}
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical) {
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;

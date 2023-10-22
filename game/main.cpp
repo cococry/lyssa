@@ -9,58 +9,48 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
+#define MINIAUDIO_IMPLEMENTATION
+#include "../vendor/miniaudio/miniaudio.h"
 #include "../leif.h"
 
 #define RGB_COLOR(r, g, b) (vec4s){LF_RGBA(r, g, b, 255.0f)}
 #define RGBA_COLOR(r, g, b, a) (vec4s){LF_RGBA(r, g, b, a)}
 
-enum class FileStatus {
-    None = 0,
-    FailedToOpen, 
-    FailedToCreate,
-    AlreadyExists, 
-    OpenSuccess,
-    CreationSucces
+struct SoundBuffer {
+    std::string path;
+    std::vector<std::string> files;
+    int32_t playingFileIndex = -1;
 };
 
-struct InputFieldState {
-    LfInputField input;
-    bool inputOpen = false;
-    FileStatus fileStatus = FileStatus::None;
+struct Sound {
+    ma_device device;
+    ma_decoder decoder;
+    bool isPlaying = false, isInit = false;
+    double lengthInSeconds = 0;
 
-    const float showCommentTextTime = 2.5f;
-    float showCommentTextTimer = 0.0f;
-    const uint32_t height = 60;
-    void init() {
-        char* buf = (char*)malloc(512);
-        memset(buf, 0, 512);
-
-        input = (LfInputField){.width = 400, .buf = buf, .placeholder = (char*)"File..."};
-    }
+    void init(const std::string& filepath);
+    double getPositionInSeoconds();
+    void uninit();
+    void play();
+    void stop();
 };
-
-typedef struct {
-    std::string buf;
-    std::string name;
-} FileBuffer;
-
 struct GlobalState {
     GLFWwindow* win;
     uint32_t winWidth, winHeight;
-
-    InputFieldState createFileMenu;
-    InputFieldState openFileMenu;
-
     float deltaTime, lastTime;
+    int32_t folderIndex = -1;
+    std::vector<SoundBuffer> openFolders = {};
+    LfInputField pathInput;
+    
+    ma_engine soundEngine;
 
-    std::vector<FileBuffer> fileBuffers;
-    std::vector<char*> bufferFileNames;
-    int32_t fileBufferIndex = -1;
+    LfFont headingFont;
 
-    int32_t textScrollOffset = 0;
-
-    LfFont codeFont;
+    Sound currentSound;
+    LfSlider soundProgressBar;
+    int32_t* soundProgressPosition;
+    float soundProgressUpdateTimer = 0.0f;
+    float soundProgressUpdateInterval = 1.0f;
 };
 
 static GlobalState state;
@@ -68,22 +58,61 @@ static GlobalState state;
 static void             winResizeCb(GLFWwindow* window, int32_t width, int32_t height);
 static void             initWin(uint32_t width, uint32_t height);
 
-static void             renderNewFileMenu();
-static void             renderOpenFileMenu();
+static void             renderFolderInputMenu();
+static void             renderFolderTabs();
+static void             renderFilesInCurrentFolder();
+static void             updateSoundProgress();
 
-static void             renderBuffersTab();
-static void             renderFileContentTab();
+static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
+    ma_decoder_read_pcm_frames(&state.currentSound.decoder, pOutput, frameCount, NULL);
+}
 
-static void             renderFileCommentsTab();
+void Sound::init(const std::string& filepath) {
+    if (ma_decoder_init_file(filepath.c_str(), NULL, &decoder) != MA_SUCCESS) {
+        std::cerr << "Failed to load Sound '" << filepath << "'.\n";
+        return;
+    }
 
-static FileStatus       handleCreateFile(const std::string& filepath);
-static FileStatus       handleOpenFile(const std::string& filepath);
+    ma_device_config deviceConfig = ma_device_config_init(ma_device_type_playback);
+    deviceConfig.playback.format = decoder.outputFormat;
+    deviceConfig.playback.channels = decoder.outputChannels;
+    deviceConfig.sampleRate = decoder.outputSampleRate;
+    deviceConfig.dataCallback = miniaudioDataCallback;
 
-static void             handleDeleteBuffer(uint32_t bufferIndex);
+    if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
+        return;
+    }
+    ma_uint64 lengthInFrames;
+    ma_decoder_get_length_in_pcm_frames(&decoder, &lengthInFrames);
+    lengthInSeconds = (double)lengthInFrames / decoder.outputSampleRate;
 
-static void             onMouseScroll(GLFWwindow* window, double xoffset, double yoffset);
+    isInit = true;
+}
 
-void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
+double Sound::getPositionInSeoconds() {
+    ma_uint64 cursorInFrames;
+    ma_decoder_get_cursor_in_pcm_frames(&decoder, &cursorInFrames);
+    return (double)cursorInFrames / decoder.outputSampleRate;
+}
+
+void Sound::uninit() {
+    ma_device_stop(&device);
+    ma_device_uninit(&device);
+    ma_decoder_uninit(&decoder);
+    isInit = false;
+}
+
+void Sound::play() {
+    ma_device_start(&device);
+    isPlaying = true;
+}
+
+void Sound::stop() {
+    ma_device_stop(&device);
+    isPlaying = false;
+}
+
+static void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
     lf_resize_display(width, height);
     glViewport(0, 0, width, height);
     state.winWidth = width;
@@ -93,12 +122,12 @@ void initWin(uint32_t width, uint32_t height) {
     state.winWidth = width;
     state.winHeight = height;
     if(!glfwInit()) {
-        std::cout << "Failed to initialize GLFW.\n";
+        std::cerr << "Failed to initialize GLFW.\n";
     }
 
     state.win = glfwCreateWindow(width, height, "ZynEd" ,NULL, NULL);
     if(!state.win) {
-        std::cout << "Failed to create GLFW window.\n";
+        std::cerr << "Failed to create GLFW window.\n";
     }
     glfwMakeContextCurrent(state.win);
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -111,160 +140,133 @@ void initWin(uint32_t width, uint32_t height) {
     glfwSetFramebufferSizeCallback(state.win, winResizeCb);
     glViewport(0, 0, width, height);
 
-    lf_add_scroll_callback((void*)onMouseScroll);
+    ma_result result = ma_engine_init(NULL, &state.soundEngine);
+    if (result != MA_SUCCESS) {
+        std::cerr << "Failed to initialize miniaudio.\n";
+    }
 
-    state.codeFont = lf_load_font("../game/fonts/Cascadia.ttf", 24);
-}
+    state.headingFont = lf_load_font("../game/fonts/poppins.ttf", 28);
 
-void renderNewFileMenu() { 
-    if(lf_button("New") == LF_CLICKED) {
-        state.createFileMenu.inputOpen = !state.createFileMenu.inputOpen;
-    }
-    if(state.createFileMenu.inputOpen) {
-        lf_input_text(&state.createFileMenu.input);
-        lf_set_item_color(RGB_COLOR(22, 181, 125)); 
-        if(lf_button_fixed("Create", 100, -1) == LF_CLICKED) {
-            state.createFileMenu.fileStatus = handleCreateFile(state.createFileMenu.input.buf);
-            state.createFileMenu.showCommentTextTimer = 0.0f;
-        }
-        lf_unset_item_color();
-    }
-}
 
-void renderOpenFileMenu() {
-    if(lf_button("Open") == LF_CLICKED) {
-        state.openFileMenu.inputOpen = !state.openFileMenu.inputOpen;
-    }
-    if(state.openFileMenu.inputOpen) {
-        lf_input_text(&state.openFileMenu.input);
-        LfUIElementProps props = lf_theme()->button_props;
-        if(lf_button("Open") == LF_CLICKED) {
-            lf_set_item_color(RGB_COLOR(46, 46, 179)); 
-            std::ifstream file(std::string(state.openFileMenu.input.buf));
-
-            state.openFileMenu.fileStatus = handleOpenFile(state.openFileMenu.input.buf);
-            state.openFileMenu.showCommentTextTimer = 0.0f;
-            lf_unset_item_color();
-            lf_pop_style_props();
-        }
-    }
+    state.soundProgressPosition = (int32_t*)malloc(sizeof(int32_t));
+    *state.soundProgressPosition = 0;
+    state.soundProgressBar = (LfSlider){.val = state.soundProgressPosition, .min = 0, .max = 100, .width = 600, .height = 20};
 }
-void renderBuffersTab() {
-    lf_next_line();
-    if(state.fileBuffers.size() > 1) { 
-        std::vector<const char*> filenames;
-        for(auto& fileBuffer : state.fileBuffers) {
-            filenames.push_back(fileBuffer.name.c_str());
-        }
-        int32_t clickedItem = lf_menu_item_list(filenames.data(), filenames.size(), state.fileBufferIndex, RGB_COLOR(189, 189, 189), [](uint32_t* item_index) {
-                LfUIElementProps props = lf_theme()->button_props;
-                props.margin_left = 0;
-                props.margin_right = 0;
-                lf_set_item_color(RGB_COLOR(0, 0, 0)); 
-                lf_set_text_color(RGB_COLOR(255, 255, 255));
-                lf_push_style_props(props); 
-                if(lf_button("X") == LF_CLICKED) {
-                handleDeleteBuffer(*item_index); 
-                }
-                lf_pop_style_props();
-                lf_unset_item_color();
-                lf_unset_text_color();
-                }, false);
-        if(clickedItem != -1)
-            state.fileBufferIndex = clickedItem;
-    }
-}
-void renderFileCommentsTab() {
-    // Create Button
-    if(state.createFileMenu.fileStatus != FileStatus::None && state.createFileMenu.showCommentTextTimer < state.createFileMenu.showCommentTextTime) {
-        state.createFileMenu.showCommentTextTimer += state.deltaTime;
-        lf_next_line();
-        if(state.createFileMenu.fileStatus == FileStatus::FailedToCreate) {
-            lf_set_text_color(RGB_COLOR(166, 0, 0));
-            lf_text("Failed to create file.");
-            lf_unset_text_color();
-        } else if(state.createFileMenu.fileStatus == FileStatus::AlreadyExists) {
-            lf_set_text_color(RGB_COLOR(166, 0, 0));
-            lf_text("File already exists.");
-            lf_unset_text_color();
-        }
-    }
-    // Open Button
-    if(state.openFileMenu.fileStatus != FileStatus:: None && state.openFileMenu.showCommentTextTimer < state.openFileMenu.showCommentTextTime) {
-        state.openFileMenu.showCommentTextTimer += state.deltaTime;
-        lf_next_line();
-        if(state.openFileMenu.fileStatus == FileStatus::FailedToOpen) {
-            lf_set_text_color(RGB_COLOR(166, 0, 0));
-            lf_text("Failed to open file.");
-            lf_unset_text_color();
-        }
-    }
-}
-
-void renderFileContentTab() {
-    if(state.fileBufferIndex != -1) {
-        lf_next_line();
-        FileBuffer& buffer = state.fileBuffers[state.fileBufferIndex];
-        const char* fileContent = buffer.buf.c_str();
-        lf_push_font(&state.codeFont);
-        lf_push_text_stop_y(state.winHeight);
-        lf_push_text_start_y(lf_get_ptr_y());
+void renderFolderInputMenu() {
+    {
         LfUIElementProps props = lf_theme()->text_props;
-        props.margin_top = state.codeFont.font_size;
-        props.margin_left = 10;
+        props.padding = 10;
         lf_push_style_props(props);
-        lf_set_ptr_y(lf_get_ptr_y() - state.textScrollOffset);
-        lf_text(fileContent);
+        lf_text("Sound Folder:");
         lf_pop_style_props();
-        lf_pop_text_stop_y();
-        lf_pop_text_start_y();
+    }
+    {
+        LfUIElementProps props = lf_theme()->inputfield_props;
+        props.border_width = 2;
+        lf_push_style_props(props);
+        lf_input_text(&state.pathInput);
+        lf_pop_style_props();
+    }
+    {
+        LfUIElementProps props = lf_theme()->button_props;
+        props.border_width = 2;
+        lf_push_style_props(props);
+        if(lf_button_fixed("Submit", 150, -1) == LF_CLICKED) {            
+            SoundBuffer buffer = {.path = std::string(state.pathInput.buf), .files = {}};
+            for (const auto & entry : std::filesystem::directory_iterator(std::string(state.pathInput.buf))) {
+                if (std::filesystem::is_regular_file(entry.path())) {
+                    buffer.files.push_back(entry.path().filename().string());
+                }
+            }
+
+            state.openFolders.push_back(buffer);
+            state.folderIndex++;
+        }
+        lf_pop_style_props();
+    }
+
+}
+void renderFolderTabs() {
+    if(state.folderIndex != -1) {
+        std::vector<const char*> openFoldersCstr = {};
+        for (uint32_t i = 0; i < state.openFolders.size(); i++) {
+            openFoldersCstr.push_back(state.openFolders[i].path.c_str());
+        }
+        lf_next_line();
+        uint32_t clickedIndex = lf_menu_item_list(openFoldersCstr.data(), openFoldersCstr.size(), state.folderIndex, RGB_COLOR(200, 200, 200), [](uint32_t* index){}, false);
+        if(clickedIndex != -1) {
+            state.folderIndex = clickedIndex;
+        }
+    }
+}
+void renderFilesInCurrentFolder() {
+    if(state.folderIndex != -1) {
+        const uint32_t margin = 10;
+        const uint32_t text_wrap_point = 500;
+        const uint32_t defaulTabWidth = 200;
+        lf_next_line();
+        LfUIElementProps props = lf_theme()->text_props;
+        props.margin_left = 10;
+        props.margin_top = 15;
+        lf_push_style_props(props);
+        lf_push_font(&state.headingFont);
+        lf_text("Files");
+        lf_pop_style_props();
         lf_pop_font();
+        lf_next_line();
+        lf_rect_render((vec2s){margin, lf_get_ptr_y()}, (vec2s){defaulTabWidth, 1}, (vec4s){RGB_COLOR(255, 255, 255)});
+        lf_set_ptr_y(lf_get_ptr_y() + 1 + margin);
+        std::vector<LfTextProps> textProps = {};
+        uint32_t tabWidth = defaulTabWidth;
+        for(auto& path : state.openFolders[state.folderIndex].files) {
+            LfTextProps props = lf_text_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, path.c_str(), lf_theme()->font, text_wrap_point, -1, -1, -1, -1, true, RGB_COLOR(255, 255, 255));
+            textProps.push_back(props);
+            if(props.width > tabWidth) {
+                tabWidth = props.width;
+            }
+        }
+        for(uint32_t i = 0; i < state.openFolders[state.folderIndex].files.size(); i++) { 
+            auto& buffer = state.openFolders[state.folderIndex];
+            auto& path = state.openFolders[state.folderIndex].files[i];
+            if(lf_hovered((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y()}, (vec2s){(float)tabWidth + margin, (float)lf_theme()->font.font_size + margin}) && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+                buffer.playingFileIndex = i;
+                if(state.currentSound.isPlaying) {
+                    state.currentSound.stop();
+                }
+                if(state.currentSound.isInit) {
+                    state.currentSound.uninit();
+                }
+                state.currentSound.init(buffer.path + "/" + buffer.files[buffer.playingFileIndex]);
+                state.currentSound.play();
+                state.soundProgressBar.max = state.currentSound.lengthInSeconds;
+            }
+            if(i == buffer.playingFileIndex) {
+                lf_rect_render((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y()}, (vec2s){(float)tabWidth + margin, (float)lf_theme()->font.font_size + margin}, RGB_COLOR(125, 125, 125));
+            }
+            lf_text_render((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y() + margin}, path.c_str(), lf_theme()->font, text_wrap_point, -1, -1, -1, -1, false, RGB_COLOR(255, 255, 255));
+            lf_set_ptr_y(lf_get_ptr_y() + lf_theme()->font.font_size + margin);
+        }
+        std::stringstream ss;
+        ss << state.currentSound.lengthInSeconds;
+        std::string str = ss.str();
+        lf_text(str.c_str());
     }
 }
-FileStatus handleCreateFile(const std::string& filepath) {
-    if(std::filesystem::exists(filepath)) {
-        std::cerr << "File '" << filepath << "' already exists.\n";
-        return FileStatus::AlreadyExists;
-    }
 
-    std::ofstream inputFile(filepath); 
-    if (!inputFile.is_open()) {
-        std::cerr << "Failed to create file '" << filepath  << "\n";
-        return FileStatus::FailedToCreate;
+void updateSoundProgress() {
+    if(state.folderIndex != -1) {
+        state.soundProgressUpdateTimer += state.deltaTime;
+        if(state.soundProgressUpdateTimer >= state.soundProgressUpdateInterval) {
+            *state.soundProgressPosition = state.currentSound.getPositionInSeoconds();
+            *(int32_t*)state.soundProgressBar.val = *state.soundProgressPosition;
+        }
     }
-    state.fileBufferIndex = state.fileBuffers.size();
-    state.fileBuffers.push_back((FileBuffer){.buf = "", .name = filepath});
-    return FileStatus::CreationSucces;
 }
-FileStatus handleOpenFile(const std::string& filepath) {
-    std::ifstream inputFile(filepath); 
-    if (!inputFile.is_open()) {
-        std::cerr << "Failed to read from file '" << filepath  << "\n";
-        return FileStatus::FailedToOpen;
-    }
-    std::stringstream buf;
-    buf << inputFile.rdbuf();
-    inputFile.close(); 
-    state.fileBufferIndex = state.fileBuffers.size();
-    state.fileBuffers.push_back((FileBuffer){.buf = buf.str(), .name = filepath});
-    return FileStatus::OpenSuccess;
-}
-void handleDeleteBuffer(uint32_t bufferIndex) {
-    auto it = state.fileBuffers.begin() + bufferIndex;
-    state.fileBuffers.erase(it);
-    state.fileBufferIndex--;
-    if(state.fileBufferIndex < 0) state.fileBufferIndex = 0;
-}
-
-void onMouseScroll(GLFWwindow* window, double xoffset, double yoffset) {
-    state.textScrollOffset += yoffset * state.codeFont.font_size;
-}
-
 int main(int argc, char* argv[]) {
     // Initialization
     initWin(1280, 720); 
-    state.createFileMenu.init();
-    state.openFileMenu.init();
+    char buf[512] = {0};
+    state.pathInput = (LfInputField){.width = 400, .buf = buf};
 
     while(!glfwWindowShouldClose(state.win)) { 
         // Delta-Time calculation
@@ -278,12 +280,12 @@ int main(int argc, char* argv[]) {
 
         lf_begin();
         lf_div_begin((vec2s){0.0f, 0.0f}, (vec2s){(float)state.winWidth, (float)state.winHeight});
-        lf_rect((float)state.winWidth, 60, RGBA_COLOR(31, 31, 31, 255));
-        renderNewFileMenu();
-        renderOpenFileMenu();
-        renderFileCommentsTab();
-        renderBuffersTab();
-        renderFileContentTab();
+
+        renderFolderInputMenu();
+        renderFolderTabs();
+        renderFilesInCurrentFolder();
+        lf_progress_bar_int(&state.soundProgressBar);
+        updateSoundProgress();
         lf_div_end();
 
         // Flush

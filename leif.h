@@ -48,6 +48,8 @@ typedef struct {
     int32_t handle_pos;
     float min, max;
     bool held, selcted;
+    uint32_t width;
+    uint32_t height;
 } LfSlider;
 
 typedef enum {
@@ -192,6 +194,8 @@ void lf_rect(float width, float height, vec4s color);
 
 void lf_slider_int(LfSlider* slider);
 
+void lf_progress_bar_int(LfSlider* slider);
+
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, 
@@ -224,3 +228,5 @@ void lf_pop_text_stop_x();
 void lf_pop_text_start_y();
 
 void lf_pop_text_stop_y();
+
+bool lf_hovered(vec2s pos, vec2s size);
