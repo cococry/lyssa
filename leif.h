@@ -141,6 +141,8 @@ void lf_div_end();
 
 LfClickableItemState lf_button(const char* text);
 
+LfClickableItemState lf_image_button(LfTexture img);
+
 LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t height);
  
 void lf_next_line();

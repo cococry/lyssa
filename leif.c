@@ -1464,6 +1464,39 @@ LfClickableItemState lf_button(const char* text) {
 
     return ret; 
 }
+LfClickableItemState lf_image_button(LfTexture img) {
+    // Retrieving the property data of the button
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    float padding = props.padding;
+    float margin_left = props.margin_left, margin_right = props.margin_right,
+        margin_top = props.margin_top, margin_bottom = props.margin_bottom; 
+    float border_width = props.border_width;
+
+    vec4s color = state.item_color_stack.a != -1 ? state.item_color_stack : state.theme.button_props.color;
+    vec4s text_color = state.text_color_stack.a != -1 ? state.text_color_stack : state.theme.button_props.text_color;
+    LfFont font = state.font_stack ? *state.font_stack : state.theme.font;
+
+    // If the button does not fit onto the current div, advance to the next line
+    next_line_on_overflow(
+        (vec2s){img.width + padding * 2.0f + margin_right + margin_left + border_width * 2.0f, 
+                    img.height + padding * 2.0f + margin_bottom + margin_top + border_width * 2.0f});
+
+    // Advancing the position pointer by the margins
+    state.pos_ptr.x += margin_left + border_width;
+    state.pos_ptr.y += margin_top + border_width;
+
+    // Rendering the button
+    LfClickableItemState ret = clickable_item(state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
+                                              props, color, border_width, true, true);
+    // Rendering the text of the button
+    lf_image_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (vec4s){1.0f, 1.0f, 1.0f, 1.0f}, img);
+
+    // Advancing the position pointer by the width of the button
+    state.pos_ptr.x += img.width + margin_right + padding * 2.0f + border_width;
+    state.pos_ptr.y -= margin_top + border_width;
+
+    return ret; 
+}
 LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t height) {
     // Retrieving the property data of the button
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;

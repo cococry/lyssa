@@ -42,6 +42,9 @@ struct Sound {
     
     double getPositionInSeconds();
     void setPositionInSeconds(double position);
+
+    void rewindSeconds(uint32_t seconds);
+    void fastForewardSeconds(uint32_t seconds);
 };
 struct GlobalState {
     GLFWwindow* win;
@@ -61,6 +64,8 @@ struct GlobalState {
     int32_t* soundProgressPosition;
     float soundProgressUpdateTimer = 0.0f;
     float soundProgressUpdateInterval = 1.0f;
+
+    LfTexture enterTexture, playTexture, pauseTexture, skipUpTexture, skipDownTexture;
 };
 
 static GlobalState state;
@@ -71,6 +76,7 @@ static void             initWin(uint32_t width, uint32_t height);
 static void             renderFolderInputMenu();
 static void             renderFolderTabs();
 static void             renderFilesInCurrentFolder();
+static void             renderSoundControls();
 static void             renderSoundProgressBar();
 static void             renderVolumeSlider();
 
@@ -147,6 +153,25 @@ void Sound::setPositionInSeconds(double position) {
     ma_device_start(&device);
 }
 
+void Sound::rewindSeconds(uint32_t seconds) {
+    if(*(int32_t*)state.soundProgressBar.val - seconds >= 0) {
+        *(int32_t*)state.soundProgressBar.val -= seconds;
+        setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
+    } else {
+        *(int32_t*)state.soundProgressBar.val = 0;
+        setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
+    }
+}
+void Sound::fastForewardSeconds(uint32_t seconds) {
+    if(*(int32_t*)state.soundProgressBar.val + seconds <= state.currentSound.lengthInSeconds) {
+        *(int32_t*)state.soundProgressBar.val += seconds;
+        setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
+    } else {
+        *(int32_t*)state.soundProgressBar.val = state.currentSound.lengthInSeconds;
+        setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
+    }
+}
+
 static int map_vals(int value, int from_min, int from_max, int to_min, int to_max) {
     return (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
 }
@@ -209,7 +234,7 @@ void renderFolderInputMenu() {
         LfUIElementProps props = lf_theme()->button_props;
         props.border_width = 2;
         lf_push_style_props(props);
-        if(lf_button_fixed("Load", 150, -1) == LF_CLICKED) {            
+        if(lf_image_button((LfTexture){.id = state.enterTexture.id, .width = 20, .height = 20}) == LF_CLICKED) {            
             SoundBuffer buffer = {.path = std::string(state.pathInput.buf), .files = {}};
             for (const auto & entry : std::filesystem::directory_iterator(std::string(state.pathInput.buf))) {
                 if (std::filesystem::is_regular_file(entry.path())) {
@@ -285,39 +310,83 @@ void renderFilesInCurrentFolder() {
         lf_set_ptr_y(lf_get_ptr_y() + lf_theme()->font.font_size + margin);
     }
 }
-void renderSoundProgressBar() {
-    if(state.currentSound.isInit) {
-        float ptr_x = lf_get_ptr_x();
-        float ptr_y = lf_get_ptr_y();
 
-        uint32_t progressBarX = (state.winWidth - state.soundProgressBar.width) * 0.5f;
-        lf_set_ptr_x(progressBarX);
-        lf_set_ptr_y(state.winHeight - state.soundProgressBar.height - lf_theme()->font.font_size * 2.0f);
-        LfClickableItemState progress_bar = lf_progress_bar_int(&state.soundProgressBar);
+void renderSoundControls() {
+    if(!state.currentSound.isInit) return;
 
-        if(progress_bar == LF_CLICKED) {
-            int32_t val = map_vals(lf_get_mouse_x(), 
-                    progressBarX, progressBarX + state.soundProgressBar.width,
-                    state.soundProgressBar.min, state.soundProgressBar.max);
-            if(val != *(int32_t*)state.soundProgressBar.val && val >= 0 && val <= state.currentSound.lengthInSeconds) {
-                *(int32_t*)state.soundProgressBar.val = val;            
-                state.currentSound.setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
-            }
-        }
-        std::stringstream ss;
-        ss << (uint32_t)state.currentSound.getPositionInSeconds();
-        ss << " / ";
-        ss << (uint32_t)state.currentSound.lengthInSeconds << "s";
-        std::string str = ss.str();
-        lf_next_line();
-        float textWidth = lf_text_dimension(str.c_str()).x;
-        lf_next_line();
-        lf_set_ptr_x((state.winWidth - textWidth) * 0.5f);
-        lf_text(str.c_str());
-
-        lf_set_ptr_x(ptr_x);
-        lf_set_ptr_y(ptr_y);
+    const uint32_t button_size = 25;
+    const uint32_t button_margin = 50;
+    const uint32_t button_margin_bottom = 10;
+    const uint32_t button_count = 3;
+    lf_set_ptr_x((state.winWidth - (button_size + button_margin + button_size + button_margin + button_size)) * 0.5f);
+    lf_set_ptr_y(state.winHeight - state.soundProgressBar.height - (lf_theme()->font.font_size * 2.0f + button_size + button_margin_bottom));
+    LfUIElementProps props = lf_theme()->button_props;
+    props.padding = 0;
+    props.margin_left = 0;
+    props.margin_right = 0;
+    props.border_width = 0;
+    props.border_color = RGBA_COLOR(0, 0, 0, 0);
+    lf_push_style_props(props);
+    lf_set_item_color((vec4s){0, 0, 0, 0});
+    if(lf_image_button((LfTexture){.id = state.skipDownTexture.id, .width = button_size, .height = button_size}) == LF_CLICKED) {
+        state.currentSound.rewindSeconds(5);
     }
+    lf_set_ptr_x(lf_get_ptr_x() + button_margin);
+    if(lf_image_button((LfTexture){.id = (state.currentSound.isPlaying ? state.pauseTexture.id : state.playTexture.id), .width = button_size, .height = button_size}) == LF_CLICKED) {
+        if(state.currentSound.isPlaying) 
+            state.currentSound.stop();
+        else 
+            state.currentSound.play();
+    }
+    lf_set_ptr_x(lf_get_ptr_x() + button_margin);
+    if(lf_image_button((LfTexture){.id = state.skipUpTexture.id, .width = button_size, .height = button_size}) == LF_CLICKED) {
+        state.currentSound.fastForewardSeconds(5);
+    } 
+    lf_set_ptr_x(lf_get_ptr_x() + button_margin);
+
+    lf_next_line();
+    lf_unset_item_color();
+    lf_pop_style_props();
+}
+void renderSoundProgressBar() {
+    if(!state.currentSound.isInit) return;
+    float ptr_x = lf_get_ptr_x();
+    float ptr_y = lf_get_ptr_y();
+
+    LfClickableItemState progressBar; 
+    uint32_t progressBarX = (state.winWidth - state.soundProgressBar.width - lf_theme()->slider_props.border_width) * 0.5f;
+    lf_set_ptr_x(progressBarX);
+    lf_set_ptr_y(state.winHeight - state.soundProgressBar.height - lf_theme()->font.font_size * 2.0f);
+    {
+        LfUIElementProps props = lf_theme()->slider_props;
+        props.margin_left = 0;
+        props.margin_right = 0;
+        lf_push_style_props(props);
+        progressBar = lf_progress_bar_int(&state.soundProgressBar);
+        lf_pop_style_props();
+    }
+    if(progressBar == LF_CLICKED) {
+        int32_t val = map_vals(lf_get_mouse_x(), 
+                progressBarX, progressBarX + state.soundProgressBar.width,
+                state.soundProgressBar.min, state.soundProgressBar.max);
+        if(val != *(int32_t*)state.soundProgressBar.val && val >= 0 && val <= state.currentSound.lengthInSeconds) {
+            *(int32_t*)state.soundProgressBar.val = val;            
+            state.currentSound.setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
+        }
+    }
+    std::stringstream ss;
+    ss << (uint32_t)state.currentSound.getPositionInSeconds();
+    ss << " / ";
+    ss << (uint32_t)state.currentSound.lengthInSeconds << "s";
+    std::string str = ss.str();
+    lf_next_line();
+    float textWidth = lf_text_dimension(str.c_str()).x;
+    lf_next_line();
+    lf_set_ptr_x((state.winWidth - textWidth) * 0.5f);
+    lf_text(str.c_str());
+
+    lf_set_ptr_x(ptr_x);
+    lf_set_ptr_y(ptr_y);
 }
 
 void renderVolumeSlider() {
@@ -375,22 +444,10 @@ void handleKeystrokes() {
             }
         }
         if(lf_key_went_down(GLFW_KEY_LEFT)) {
-            if(*(int32_t*)state.soundProgressBar.val - 5 >= 0) {
-                *(int32_t*)state.soundProgressBar.val -= 5;
-                state.currentSound.setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
-            } else {
-                *(int32_t*)state.soundProgressBar.val = 0;
-                state.currentSound.setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
-            }
+            state.currentSound.rewindSeconds(5);
         }
         if(lf_key_went_down(GLFW_KEY_RIGHT)) {
-            if(*(int32_t*)state.soundProgressBar.val + 5 <= state.currentSound.lengthInSeconds) {
-                *(int32_t*)state.soundProgressBar.val += 5;
-                state.currentSound.setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
-            } else {
-                *(int32_t*)state.soundProgressBar.val = state.currentSound.lengthInSeconds;
-                state.currentSound.setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
-            }
+            state.currentSound.fastForewardSeconds(5);
         }
     }
     if(lf_key_went_down(GLFW_KEY_TAB)) {
@@ -421,6 +478,14 @@ int main(int argc, char* argv[]) {
     char buf[512] = {0};
     state.pathInput = (LfInputField){.width = 400, .buf = buf};
 
+    // Loading Textures
+    state.enterTexture = lf_tex_create("../game/textures/enter.png", false, LF_TEX_FILTER_LINEAR);
+    state.playTexture = lf_tex_create("../game/textures/play.png", false, LF_TEX_FILTER_LINEAR);
+    state.pauseTexture = lf_tex_create("../game/textures/pause.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipUpTexture = lf_tex_create("../game/textures/skip_up.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipDownTexture = lf_tex_create("../game/textures/skip_down.png", false, LF_TEX_FILTER_LINEAR);
+
+
     while(!glfwWindowShouldClose(state.win)) { 
         // Delta-Time calculation
         float currentTime = glfwGetTime();
@@ -435,14 +500,15 @@ int main(int argc, char* argv[]) {
         lf_begin();
         lf_div_begin((vec2s){0.0f, 0.0f}, (vec2s){(float)state.winWidth, (float)state.winHeight});
         renderFolderInputMenu();
-        renderFolderTabs();
-        renderFilesInCurrentFolder();
-        renderVolumeSlider();
-        glEnable(GL_SCISSOR_TEST);
-        glScissor(0, 0, 200, 200);
 
+        renderFolderTabs();
+
+        renderFilesInCurrentFolder();
+
+        renderVolumeSlider();
+        
+        renderSoundControls();
         renderSoundProgressBar();
-        glDisable(GL_SCISSOR_TEST);
 
         lf_flush();
         lf_renderer_begin();
