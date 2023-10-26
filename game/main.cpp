@@ -23,7 +23,10 @@ struct SoundBuffer {
     int32_t selectedFileIndex = -1;
 
     uint32_t fileScrollOffset = 0;
-    uint32_t fileDisplayMax = 3;
+    uint32_t fileDisplayMax = 8;
+
+    void moveFileIndexUp(uint32_t n);
+    void moveFileIndexDown(uint32_t n);
 };
 
 struct Sound {
@@ -65,7 +68,8 @@ struct GlobalState {
     float soundProgressUpdateTimer = 0.0f;
     float soundProgressUpdateInterval = 1.0f;
 
-    LfTexture enterTexture, playTexture, pauseTexture, skipUpTexture, skipDownTexture;
+    LfTexture enterTexture, playTexture, pauseTexture, skipUpTexture, skipDownTexture,
+              skipSoundUpTexture, skipSoundDownTexture;
 };
 
 static GlobalState state;
@@ -86,6 +90,14 @@ static void             handleKeystrokes();
 
 static void             playFileWithIndex(uint32_t i);
 
+static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+    if(yoffset == -1) {
+        state.openFolders[state.folderIndex].moveFileIndexDown(1);
+    } else if(yoffset == 1) {
+        state.openFolders[state.folderIndex].moveFileIndexUp(1);
+    }
+}
+
 static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     ma_decoder_read_pcm_frames(&state.currentSound.decoder, pOutput, frameCount, NULL);
 
@@ -93,6 +105,24 @@ static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void*
     float* outputBuffer = (float*)pOutput;
     for (ma_uint32 i = 0; i < frameCount * pDevice->playback.channels; ++i) {
         outputBuffer[i] *= state.currentSound.volume / 100.0f;
+    }
+}
+
+void SoundBuffer::moveFileIndexUp(uint32_t n) {
+    if((int32_t)(selectedFileIndex - n) >= 0) {
+        if(selectedFileIndex == fileScrollOffset) {
+            fileScrollOffset -= n;
+        }
+        selectedFileIndex -= n;
+    }
+
+}
+void SoundBuffer::moveFileIndexDown(uint32_t n) {
+    if(selectedFileIndex + n < files.size()) {
+        selectedFileIndex += n;
+        if(selectedFileIndex == fileDisplayMax + fileScrollOffset) {
+            fileScrollOffset += n;
+        }
     }
 }
 
@@ -161,6 +191,9 @@ void Sound::rewindSeconds(uint32_t seconds) {
         *(int32_t*)state.soundProgressBar.val = 0;
         setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
     }
+    if(!isPlaying) {
+        stop();
+    }
 }
 void Sound::fastForewardSeconds(uint32_t seconds) {
     if(*(int32_t*)state.soundProgressBar.val + seconds <= state.currentSound.lengthInSeconds) {
@@ -169,6 +202,9 @@ void Sound::fastForewardSeconds(uint32_t seconds) {
     } else {
         *(int32_t*)state.soundProgressBar.val = state.currentSound.lengthInSeconds;
         setPositionInSeconds(*(int32_t*)state.soundProgressBar.val);
+    }
+    if(!isPlaying) {
+        stop();
     }
 }
 
@@ -214,6 +250,8 @@ void initWin(uint32_t width, uint32_t height) {
     *state.soundProgressPosition = 0;
     state.soundProgressBar = (LfSlider){.val = state.soundProgressPosition, .min = 0, .max = 100, .width = 600, .height = 20};
     state.volumeSlider = (LfSlider){.val = &state.currentSound.volume, .min = 0, .max = 100, .width = 200, .height = 10};
+
+    lf_add_scroll_callback((void*)scrollCallback);
 }
 void renderFolderInputMenu() {
     {
@@ -315,11 +353,17 @@ void renderSoundControls() {
     if(!state.currentSound.isInit) return;
 
     const uint32_t button_size = 25;
+    const uint32_t button_size_minor = 35;
     const uint32_t button_margin = 50;
     const uint32_t button_margin_bottom = 10;
-    const uint32_t button_count = 3;
-    lf_set_ptr_x((state.winWidth - (button_size + button_margin + button_size + button_margin + button_size)) * 0.5f);
+
+    lf_set_ptr_x((state.winWidth - (button_size_minor + button_margin + 
+                                    button_size + button_margin + 
+                                    button_size + button_margin + 
+                                    button_size + button_margin + 
+                                    button_size_minor)) * 0.5f);
     lf_set_ptr_y(state.winHeight - state.soundProgressBar.height - (lf_theme()->font.font_size * 2.0f + button_size + button_margin_bottom));
+
     LfUIElementProps props = lf_theme()->button_props;
     props.padding = 0;
     props.margin_left = 0;
@@ -328,21 +372,39 @@ void renderSoundControls() {
     props.border_color = RGBA_COLOR(0, 0, 0, 0);
     lf_push_style_props(props);
     lf_set_item_color((vec4s){0, 0, 0, 0});
+
+    if(lf_image_button((LfTexture){.id = state.skipSoundDownTexture.id, .width = button_size_minor, .height = button_size}) == LF_CLICKED) {
+        SoundBuffer& buffer = state.openFolders[state.folderIndex];
+        buffer.moveFileIndexUp(1);
+        playFileWithIndex(buffer.selectedFileIndex);
+    }
+    lf_set_ptr_x(lf_get_ptr_x() + button_margin);
+
     if(lf_image_button((LfTexture){.id = state.skipDownTexture.id, .width = button_size, .height = button_size}) == LF_CLICKED) {
         state.currentSound.rewindSeconds(5);
     }
+
     lf_set_ptr_x(lf_get_ptr_x() + button_margin);
+
     if(lf_image_button((LfTexture){.id = (state.currentSound.isPlaying ? state.pauseTexture.id : state.playTexture.id), .width = button_size, .height = button_size}) == LF_CLICKED) {
         if(state.currentSound.isPlaying) 
             state.currentSound.stop();
         else 
             state.currentSound.play();
     }
+
     lf_set_ptr_x(lf_get_ptr_x() + button_margin);
+
     if(lf_image_button((LfTexture){.id = state.skipUpTexture.id, .width = button_size, .height = button_size}) == LF_CLICKED) {
         state.currentSound.fastForewardSeconds(5);
     } 
     lf_set_ptr_x(lf_get_ptr_x() + button_margin);
+
+    if(lf_image_button((LfTexture){.id = state.skipSoundUpTexture.id, .width = button_size_minor, .height = button_size}) == LF_CLICKED) {
+        SoundBuffer& buffer = state.openFolders[state.folderIndex];
+        buffer.moveFileIndexDown(1);
+        playFileWithIndex(buffer.selectedFileIndex);
+    }
 
     lf_next_line();
     lf_unset_item_color();
@@ -413,23 +475,10 @@ void handleKeystrokes() {
     if(state.folderIndex == -1) return;
     SoundBuffer& buffer = state.openFolders[state.folderIndex];
     if(lf_key_went_down(GLFW_KEY_DOWN)) {
-        if(buffer.selectedFileIndex + 1 < buffer.fileDisplayMax) {
-            buffer.selectedFileIndex++;
-        } else {
-            if(buffer.selectedFileIndex + 1 < buffer.files.size()) {
-                buffer.fileScrollOffset++;
-                buffer.selectedFileIndex++;
-            }
-        }
+        buffer.moveFileIndexDown(1);
     }
     if(lf_key_went_down(GLFW_KEY_UP)) {
-        if(buffer.fileScrollOffset != 0 && buffer.selectedFileIndex == buffer.fileScrollOffset && buffer.selectedFileIndex - 1 >= 0) {
-            buffer.fileScrollOffset--;
-            buffer.selectedFileIndex--;
-        } else {
-            if(buffer.selectedFileIndex - 1 >= 0)
-                buffer.selectedFileIndex--;
-        }
+        buffer.moveFileIndexUp(1);
     }
     if(lf_key_went_down(GLFW_KEY_ENTER)) {
         if(buffer.selectedFileIndex != -1)
@@ -472,6 +521,7 @@ void playFileWithIndex(uint32_t i) {
     state.soundProgressBar.max = state.currentSound.lengthInSeconds;
 
 }
+
 int main(int argc, char* argv[]) {
     // Initialization
     initWin(1280, 720); 
@@ -484,6 +534,8 @@ int main(int argc, char* argv[]) {
     state.pauseTexture = lf_tex_create("../game/textures/pause.png", false, LF_TEX_FILTER_LINEAR);
     state.skipUpTexture = lf_tex_create("../game/textures/skip_up.png", false, LF_TEX_FILTER_LINEAR);
     state.skipDownTexture = lf_tex_create("../game/textures/skip_down.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipSoundUpTexture = lf_tex_create("../game/textures/skip_song_up.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipSoundDownTexture = lf_tex_create("../game/textures/skip_song_down.png", false, LF_TEX_FILTER_LINEAR);
 
 
     while(!glfwWindowShouldClose(state.win)) { 
