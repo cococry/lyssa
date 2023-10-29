@@ -22,11 +22,19 @@ struct SoundBuffer {
     int32_t playingFileIndex = -1;
     int32_t selectedFileIndex = -1;
 
+    int32_t selectedPlaylistIndex = -1;
+
     uint32_t fileScrollOffset = 0;
+    uint32_t playlistScrollOffset = 0;
+
     uint32_t fileDisplayMax = 8;
 
     void moveFileIndexUp(uint32_t n);
     void moveFileIndexDown(uint32_t n);
+
+    std::vector<std::string> playlist;
+
+    bool onPlaylistTab = false;
 };
 
 struct Sound {
@@ -91,6 +99,7 @@ static void             handleKeystrokes();
 static void             playFileWithIndex(uint32_t i);
 
 static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+    if(state.folderIndex == -1) return;
     if(yoffset == -1) {
         state.openFolders[state.folderIndex].moveFileIndexDown(1);
     } else if(yoffset == 1) {
@@ -109,19 +118,37 @@ static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void*
 }
 
 void SoundBuffer::moveFileIndexUp(uint32_t n) {
-    if((int32_t)(selectedFileIndex - n) >= 0) {
-        if(selectedFileIndex == fileScrollOffset) {
-            fileScrollOffset -= n;
+    if(!onPlaylistTab) {
+        if((int32_t)(selectedFileIndex - n) >= 0) {
+            if(selectedFileIndex == fileScrollOffset) {
+                fileScrollOffset -= n;
+            }
+            selectedFileIndex -= n;
         }
-        selectedFileIndex -= n;
+    } else {
+        if((int32_t)(selectedPlaylistIndex - n) >= 0) {
+            if(selectedPlaylistIndex == playlistScrollOffset) {
+                playlistScrollOffset -= n;
+            }
+            selectedPlaylistIndex -= n;
+        }
     }
 
 }
 void SoundBuffer::moveFileIndexDown(uint32_t n) {
-    if(selectedFileIndex + n < files.size()) {
-        selectedFileIndex += n;
-        if(selectedFileIndex == fileDisplayMax + fileScrollOffset) {
-            fileScrollOffset += n;
+    if(!onPlaylistTab) {
+        if(selectedFileIndex + n < files.size()) {
+            selectedFileIndex += n;
+            if(selectedFileIndex == fileDisplayMax + fileScrollOffset) {
+                fileScrollOffset += n;
+            }
+        }
+    } else {
+        if(selectedPlaylistIndex + n < playlist.size()) {
+            selectedPlaylistIndex += n;
+            if(selectedPlaylistIndex == fileDisplayMax + playlistScrollOffset) {
+                playlistScrollOffset += n;
+            }
         }
     }
 }
@@ -301,50 +328,96 @@ void renderFolderTabs() {
 }
 void renderFilesInCurrentFolder() {
     if(state.folderIndex == -1) return;
+    SoundBuffer& buffer = state.openFolders[state.folderIndex];
+
     const uint32_t margin = 10;
-    const uint32_t text_wrap_point = 500;
+    const uint32_t textWrapPoint = 500;
     const uint32_t defaulTabWidth = 200;
-    lf_next_line();
-    LfUIElementProps props = lf_theme()->text_props;
-    props.margin_left = 10;
-    props.margin_top = 15;
-    lf_push_style_props(props);
-    lf_push_font(&state.headingFont);
-    lf_text("Files");
-    lf_pop_style_props();
-    lf_pop_font();
-    lf_next_line();
-    std::vector<LfTextProps> textProps = {};
-    uint32_t tabWidth = defaulTabWidth;
+
+    uint32_t tabWidth = defaulTabWidth; 
+    std::vector<float> textWidths = {};
     for(auto& path : state.openFolders[state.folderIndex].files) {
-        LfTextProps props = lf_text_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, path.c_str(), lf_theme()->font, text_wrap_point, -1, -1, -1, -1, true, RGB_COLOR(255, 255, 255));
-        textProps.push_back(props);
-        if(props.width > tabWidth) {
-            tabWidth = props.width;
+        vec2s textDim = lf_text_dimension(path.c_str());
+        textWidths.push_back(textDim.x);
+        if(textDim.x > tabWidth) {
+            tabWidth = textDim.x;
         }
     }
+    {
+        lf_next_line();
+        LfUIElementProps props = lf_theme()->text_props;
+        props.margin_left = 10;
+        props.margin_top = 15;
+        props.padding = 10; 
+        vec2s textDim1 = lf_text_dimension("Files");
+        vec2s textDim2 = lf_text_dimension("Playlist");
+        lf_set_text_color((vec4s){1, 1, 1, 1});
+        lf_push_style_props(props);
+        lf_push_font(&state.headingFont);
+
+        lf_set_item_color(buffer.onPlaylistTab ? (vec4s){0, 0, 0, 0} : (vec4s){1, 1, 1, 0.3});
+        if(lf_button_fixed("Files", 150, -1) == LF_CLICKED) {
+            buffer.onPlaylistTab = false;
+        }
+        lf_unset_item_color();
+
+        lf_set_item_color(buffer.onPlaylistTab ? (vec4s){1, 1, 1, 0.3} : (vec4s){0, 0, 0, 0});
+        if(lf_button_fixed("Playlist", 150, -1) == LF_CLICKED) {
+            buffer.onPlaylistTab = true;
+        }
+        lf_unset_item_color();
+        lf_unset_text_color();
+        lf_pop_style_props();
+        lf_pop_font();
+    }
+    lf_next_line();
     lf_rect_render((vec2s){margin, lf_get_ptr_y()}, (vec2s){(float)tabWidth, 1}, (vec4s){RGB_COLOR(255, 255, 255)});
     lf_set_ptr_y(lf_get_ptr_y() + 1 + margin);
-    SoundBuffer& buffer = state.openFolders[state.folderIndex];
-    uint32_t iteratorEnd = buffer.files.size();
+    uint32_t iteratorEnd;
+    if(buffer.onPlaylistTab) 
+        iteratorEnd = buffer.playlist.size();
+    else 
+        iteratorEnd = buffer.files.size();
     if(iteratorEnd > buffer.fileDisplayMax) {
         iteratorEnd = buffer.fileDisplayMax;
     }
-    for(uint32_t i = buffer.fileScrollOffset; i < iteratorEnd + buffer.fileScrollOffset; i++) { 
-        std::string path = state.openFolders[state.folderIndex].files[i];
+    for(uint32_t i = ((buffer.onPlaylistTab) ? buffer.playlistScrollOffset : buffer.fileScrollOffset); i < iteratorEnd + 
+            (buffer.onPlaylistTab ? buffer.playlistScrollOffset : buffer.fileScrollOffset); i++) { 
+        float ptr_x = lf_get_ptr_x();
+        std::string path;
+        if(!buffer.onPlaylistTab)
+            path = buffer.files[i];
+        else
+            path = buffer.playlist[i];
         if(lf_hovered((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y()}, (vec2s){(float)tabWidth + margin, (float)lf_theme()->font.font_size + margin}) && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-            if(buffer.selectedFileIndex == i) {
+            if(buffer.onPlaylistTab ? buffer.selectedPlaylistIndex : buffer.selectedFileIndex == i) {
                 playFileWithIndex(i);
             }
             else
                 buffer.selectedFileIndex = i;
         }
-        if(i == buffer.playingFileIndex) {
+        if(buffer.playingFileIndex == i) {
             lf_rect_render((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y()}, (vec2s){(float)tabWidth + margin, (float)lf_theme()->font.font_size + margin}, RGBA_COLOR(125, 125, 125, 255));
-        } else if(i == buffer.selectedFileIndex) {
+        } else if((buffer.onPlaylistTab ? buffer.selectedPlaylistIndex : buffer.selectedFileIndex) == i) {
             lf_rect_render((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y()}, (vec2s){(float)tabWidth + margin, (float)lf_theme()->font.font_size + margin}, RGBA_COLOR(125, 125, 125, 125));
         }
-        lf_text_render((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y() + margin}, path.c_str(), lf_theme()->font, text_wrap_point, -1, -1, -1, -1, false, RGB_COLOR(255, 255, 255));
+        lf_text_render((vec2s){lf_get_ptr_x() + margin, lf_get_ptr_y() + margin}, path.c_str(), lf_theme()->font, textWrapPoint, -1, -1, -1, -1, false, RGB_COLOR(255, 255, 255));
+        lf_set_ptr_x(tabWidth + margin * 2);
+        if(!buffer.onPlaylistTab) {
+            if(lf_button_fixed("+", 2, 2) == LF_CLICKED) {
+                buffer.playlist.push_back(path);
+            }
+        } else {
+            if(lf_button_fixed("X", 2, 2) == LF_CLICKED) {
+                buffer.playlist.erase(buffer.playlist.begin() + i);
+                if(i == buffer.playingFileIndex) {
+                    state.currentSound.stop();
+                    state.currentSound.uninit();
+                    buffer.playingFileIndex = -1;
+                }
+            }
+        }
+        lf_set_ptr_x(ptr_x);
         lf_set_ptr_y(lf_get_ptr_y() + lf_theme()->font.font_size + margin);
     }
 }
@@ -376,7 +449,7 @@ void renderSoundControls() {
     if(lf_image_button((LfTexture){.id = state.skipSoundDownTexture.id, .width = button_size_minor, .height = button_size}) == LF_CLICKED) {
         SoundBuffer& buffer = state.openFolders[state.folderIndex];
         buffer.moveFileIndexUp(1);
-        playFileWithIndex(buffer.selectedFileIndex);
+        playFileWithIndex(buffer.onPlaylistTab ? buffer.playingFileIndex : buffer.selectedFileIndex);
     }
     lf_set_ptr_x(lf_get_ptr_x() + button_margin);
 
@@ -403,7 +476,7 @@ void renderSoundControls() {
     if(lf_image_button((LfTexture){.id = state.skipSoundUpTexture.id, .width = button_size_minor, .height = button_size}) == LF_CLICKED) {
         SoundBuffer& buffer = state.openFolders[state.folderIndex];
         buffer.moveFileIndexDown(1);
-        playFileWithIndex(buffer.selectedFileIndex);
+        playFileWithIndex(buffer.onPlaylistTab ? buffer.playingFileIndex : buffer.selectedFileIndex);
     }
 
     lf_next_line();
@@ -481,8 +554,13 @@ void handleKeystrokes() {
         buffer.moveFileIndexUp(1);
     }
     if(lf_key_went_down(GLFW_KEY_ENTER)) {
-        if(buffer.selectedFileIndex != -1)
-            playFileWithIndex(buffer.selectedFileIndex);
+        if(!buffer.onPlaylistTab) {
+            if(buffer.selectedFileIndex != -1) 
+                playFileWithIndex(buffer.selectedFileIndex);
+        } else {
+            if(buffer.selectedPlaylistIndex != -1) 
+                playFileWithIndex(buffer.selectedPlaylistIndex);
+        }
     }
     if(state.currentSound.isInit) {
         if(lf_key_went_down(GLFW_KEY_SPACE)) {
@@ -505,7 +583,15 @@ void handleKeystrokes() {
         } else {
             state.folderIndex = 0;
         }
-    }
+    } 
+    if(lf_key_went_down(GLFW_KEY_N)) {
+        SoundBuffer& buffer = state.openFolders[state.folderIndex];
+        if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) 
+            buffer.moveFileIndexUp(1);
+        else 
+            buffer.moveFileIndexDown(1);
+        playFileWithIndex(buffer.onPlaylistTab ? buffer.playingFileIndex : buffer.selectedFileIndex);
+    } 
 }
 void playFileWithIndex(uint32_t i) {
     SoundBuffer& buffer = state.openFolders[state.folderIndex];
@@ -516,7 +602,10 @@ void playFileWithIndex(uint32_t i) {
     if(state.currentSound.isInit) {
         state.currentSound.uninit();
     }
-    state.currentSound.init(buffer.path + "/" + buffer.files[buffer.playingFileIndex]);
+    if(!buffer.onPlaylistTab)
+        state.currentSound.init(buffer.path + "/" + buffer.files[buffer.playingFileIndex]);
+    else 
+        state.currentSound.init(buffer.path + "/" + buffer.playlist[buffer.playingFileIndex]);
     state.currentSound.play();
     state.soundProgressBar.max = state.currentSound.lengthInSeconds;
 
