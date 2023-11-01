@@ -41,6 +41,7 @@ typedef struct {
     void* val;
     char* placeholder;
     bool selected;
+    int32_t initial_width;
 } LfInputField;
 
 typedef struct {
@@ -54,10 +55,11 @@ typedef struct {
 } LfSlider;
 
 typedef enum {
-    LF_HOVERED = -1,
+    LF_RELEASED = -1,
     LF_IDLE = 0,
-    LF_CLICKED = 1, 
-    LF_HELD = 2,
+    LF_HOVERED = 1,
+    LF_CLICKED = 2, 
+    LF_HELD =32,
 } LfClickableItemState;
 
 
@@ -199,14 +201,16 @@ LfClickableItemState lf_slider_int(LfSlider* slider);
 
 LfClickableItemState lf_progress_bar_int(LfSlider* slider);
 
+LfClickableItemState lf_progress_stripe_int(LfSlider* slider);
+
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, 
         int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, bool no_render, vec4s color);
 
-void lf_rect_render(vec2s pos, vec2s size, vec4s color);
+void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width);
 
-void lf_image_render(vec2s pos, vec4s color, LfTexture tex);
+void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width);
 
 bool lf_point_intersects_aabb(vec2s p, LfAABB aabb);
 
@@ -235,4 +239,7 @@ void lf_pop_text_stop_y();
 bool lf_hovered(vec2s pos, vec2s size);
 
 void lf_flush();
+
 void lf_renderer_begin();
+
+bool lf_mouse_move_happend();
