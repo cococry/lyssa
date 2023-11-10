@@ -11,6 +11,36 @@
 #define LF_WHITE LF_RGBA(255.0f, 255.0f, 255.0f, 255.0f)
 #define LF_BLACK LF_RGBA(0.0f, 0.0f, 0.0f, 255.0f)
 
+// --- Events ---
+typedef struct {
+    int32_t keycode;
+    bool happened, pressed;
+} LfKeyEvent;
+
+typedef struct {
+    int32_t button_code;
+    bool happened, pressed;
+} LfMouseButtonEvent;
+
+typedef struct {
+    int32_t x, y;
+    bool happened;
+} LfCursorPosEvent;
+
+typedef struct {
+    int32_t xoffset, yoffset;
+    bool happened;
+} LfScrollEvent;
+
+typedef struct {
+    int32_t charcode;
+    bool happened;
+} LfCharEvent;
+
+typedef struct {
+    bool happened;
+} LfGuiReEstablishEvent;
+
 typedef struct {
     uint32_t id;
     uint32_t width, height;
@@ -36,12 +66,12 @@ typedef struct {
 } LfTextProps;
 
 typedef struct {
-    int32_t cursor_index, width, height, start_height;
+    int32_t cursor_index, width, height, start_height, start_width;
     char* buf;
     void* val;
     char* placeholder;
     bool selected;
-    int32_t initial_width;
+    bool expand_on_overflow;
 } LfInputField;
 
 typedef struct {
@@ -73,6 +103,7 @@ typedef struct {
     float margin_top; 
     float margin_bottom;
     float border_width;
+    float corner_radius;
 } LfUIElementProps;
 
 typedef struct {
@@ -181,21 +212,13 @@ void lf_input_float(LfInputField* input);
 
 void lf_set_text_wrap(bool wrap);
 
-void lf_set_item_color(vec4s color);
-
-void lf_unset_item_color();
-
-void lf_set_text_color(vec4s color);
-
-void lf_unset_text_color();
-
 void lf_push_font(LfFont* font);
 
 void lf_pop_font();
 
 void lf_checkbox(const char* text, bool* val, uint32_t tex);
 
-void lf_rect(float width, float height, vec4s color);
+void lf_rect(float width, float height, vec4s color, float corner_radius);
 
 LfClickableItemState lf_slider_int(LfSlider* slider);
 
@@ -208,9 +231,9 @@ int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selec
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, 
         int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, bool no_render, vec4s color);
 
-void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width);
+void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius);
 
-void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width);
+void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width, float corner_radius);
 
 bool lf_point_intersects_aabb(vec2s p, LfAABB aabb);
 
@@ -242,4 +265,14 @@ void lf_flush();
 
 void lf_renderer_begin();
 
-bool lf_mouse_move_happend();
+LfCursorPosEvent lf_mouse_move_event();
+
+LfMouseButtonEvent lf_mouse_button_event();
+
+LfScrollEvent lf_mouse_scroll_event();
+
+LfKeyEvent lf_key_event();
+
+LfCharEvent lf_char_event();
+
+LfGuiReEstablishEvent lf_gui_reastablish_event();
