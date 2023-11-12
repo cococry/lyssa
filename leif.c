@@ -363,7 +363,7 @@ void renderer_init() {
     glEnableVertexAttribArray(8);
     // Creating the shader for the batch renderer
     const char* vert_src =
-        "#version 330 core\n"
+        "#version 460 core\n"
         "layout (location = 0) in vec2 a_pos;\n"
         "layout (location = 1) in vec4 a_border_color;\n"
         "layout (location = 2) in float a_border_width;\n"
@@ -397,7 +397,7 @@ void renderer_init() {
         "}\n";
 
 
-    const char* frag_src = "#version 330 core\n"
+    const char* frag_src = "#version 460 core\n"
         "out vec4 o_color;\n"
         "in vec4 v_color;\n"
         "in float v_tex_index;\n"
@@ -450,7 +450,7 @@ void renderer_init() {
         "        } else {\n"
         "            fill_color = display_color.xyz;\n"
         "        }\n"
-        "        o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, smoothed_alpha), smoothed_alpha);\n"
+        "        o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, v_tex_index == -1 ? smoothed_alpha : display_color.a), smoothed_alpha);\n"
         "   } else {\n"
         "     vec4 fill_color = opaque_color;\n"
         "     if(v_border_width != 0.0f) {\n"
@@ -842,6 +842,7 @@ void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, floa
 
 void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width, float corner_radius) {
     // Offsetting the postion, so that pos is the top left of the rendered object
+    vec2s pos_initial = pos;
     pos = (vec2s){pos.x + tex.width / 2.0f, pos.y + tex.height / 2.0f};
 
     // Initializing texture coords data
@@ -915,8 +916,8 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
         memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
         vec2 pos_px_arr;
-        pos_px_arr[0] = (float)pos.y;
-        pos_px_arr[1] = (float)pos.x;
+        pos_px_arr[0] = (float)pos_initial.x;
+        pos_px_arr[1] = (float)pos_initial.y;
         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].corner_radius = corner_radius;
@@ -966,7 +967,7 @@ void input_field(LfInputField* input, InputFieldType type) {
             if(input->cursor_index - 1 >= 0)
                 input->cursor_index--;
         }
-        if(lf_key_went_down(GLFW_KEY_ENTER)) {
+        if(lf_key_went_down(GLFW_KEY_ENTER) && input->expand_on_overflow) {
             insert_i_str(input->buf, '\n', input->cursor_index);
             input->cursor_index++;
         }
@@ -1018,7 +1019,7 @@ void input_field(LfInputField* input, InputFieldType type) {
         input->height = text_props_post_input.height;
     }
     LfClickableItemState item = clickable_item(state.pos_ptr,
-                                               (vec2s){(input->expand_on_overflow ? input->width : width) + padding * 2.0f, input->height + padding * 2.0f},
+                                               (vec2s){input->width + padding * 2.0f, input->height + padding * 2.0f},
                                                 props, color, border_width, false,false);
 
     // Handeling selecting the input field
@@ -1099,8 +1100,18 @@ void remove_i_str(char *str, int32_t index) {
     }
 }
 void insert_i_str(char *str, char ch, int32_t index) {
-    str[strlen(str)] = ch;
-    str[strlen(str) + 1] = '\0';
+     int len = strlen(str);
+
+    if (index < 0 || index > len) {
+        LF_ERROR("Invalid string index for inserting.");;
+        return;
+    }
+
+    for (int i = len; i > index; i--) {
+        str[i] = str[i - 1];
+    }
+
+    str[index] = ch;
 }
 int32_t int_max(int32_t a, int32_t b) {
     return (a > b) ? a : b;
