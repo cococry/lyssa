@@ -676,7 +676,7 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
     return LF_IDLE;
 }
 LfTextProps text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render) {
-    return lf_text_render(pos, text, font, -1, -1, -1, -1, -1, no_render, font_color);
+    return lf_text_render(pos, text, font, -1, -1, -1, -1, -1, -1, no_render, font_color);
 }
 
 #ifdef LF_GLFW
@@ -1008,7 +1008,7 @@ void input_field(LfInputField* input, InputFieldType type) {
     }
 
     LfTextProps text_props_post_input = lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding},
-                                                    input->buf, font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, true, text_color);
+                                                    input->buf, font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, -1, true, text_color);
     // Rendering the input field
     int32_t width = text_props_post_input.width > input->width ? text_props_post_input.width : input->width;
 
@@ -1033,7 +1033,7 @@ void input_field(LfInputField* input, InputFieldType type) {
     // Rendering the text in the input field
     LfTextProps text_props_rendered = lf_text_render((vec2s){(state.pos_ptr.x + padding),
         state.pos_ptr.y + padding}, input->buf,
-                                                     font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, false, text_color);
+                                                     font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, -1, false, text_color);
 
     // Handleing the cursor indicator
     if(input->selected) {
@@ -1046,7 +1046,7 @@ void input_field(LfInputField* input, InputFieldType type) {
 
         LfTextProps cursor_pos_props = lf_text_render((vec2s){(float)text_props_rendered.start_x,
             state.pos_ptr.y + padding}, cursor_slice,
-                                                      font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, true, text_color);
+                                                      font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, -1, true, text_color);
 
         // Rendering the cursor indicator
         lf_rect_render((vec2s){(strlen(input->buf) != 0) ? cursor_pos_props.end_x : state.pos_ptr.x + padding,
@@ -1056,7 +1056,7 @@ void input_field(LfInputField* input, InputFieldType type) {
         // Rendering the placeholder
         lf_text_render((vec2s){(state.pos_ptr.x + padding),
         state.pos_ptr.y + padding},
-                    !input->placeholder ? "Type..." : input->placeholder, font, -1, -1, -1, -1, -1, false, text_color);
+                    !input->placeholder ? "Type..." : input->placeholder, font, -1, -1, -1, -1, -1, -1, false, text_color);
     }
     // Advancing the position pointer by the size of the inputf ield
     state.pos_ptr.x += input->width + margin_right + padding * 2.0f + border_width;
@@ -1145,7 +1145,7 @@ int32_t closes_num_in_arr(int arr[], int n, int target) {
     }
     return closest;
 }
-LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, bool no_render, 
+LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, 
                         vec4s color) {
     if(state.text_start_x_stack != -2) {
         start_point_x = state.text_start_x_stack;
@@ -1191,6 +1191,8 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
     int32_t height = get_max_char_height_font(font);
     float width = 0;
     int32_t char_count = 0;
+
+    int32_t wrap_count = 0;
     
     while(*str) { 
         bool skip = false;
@@ -1206,6 +1208,13 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
             if(*str == ' ') {
                 skip = true; 
             }
+            if(max_wrap_count != -1)
+                wrap_count++; 
+        }
+
+        if(wrap_count >= max_wrap_count && max_wrap_count != -1) { 
+            ret.reached_max_wraps = true;
+            break;
         }
         if(!skip) {
             // Retrieving the vertex data of the current character & submitting it to the batch 
@@ -1306,6 +1315,7 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
     ret.char_count = i - first_char_index; 
     ret.reached_stop = (x > stop_point_x);
     ret.end_x = x;
+    ret.end_y = y;
     return ret;
 }
 
@@ -1744,7 +1754,7 @@ void lf_text(const char* text) {
     // Advancing to the next line if the the text does not fit on the current div
     LfTextProps text_props = lf_text_render(state.pos_ptr, text, font, 
                                         state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right * 2.0 : -1,
-                                         -1, -1, -1, 1, true, text_color);
+                                         -1, -1, -1, 1, -1, true, text_color);
     next_line_on_overflow(
         (vec2s){text_props.width + padding * 2.0f + margin_left + margin_right,
                     text_props.height + padding * 2.0f + margin_top + margin_bottom});
@@ -1756,7 +1766,7 @@ void lf_text(const char* text) {
     // Rendering a colored text box if a color is specified
     // Rendering the text
     lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, 
-                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right * 2.0f : -1, -1, -1, -1, -1, false, text_color);
+                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right * 2.0f : -1, -1, -1, -1, -1, -1, false, text_color);
 
     // Advancing the position pointer by the width of the text
     state.pos_ptr.x += text_props.width + margin_right + padding;

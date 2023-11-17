@@ -31,7 +31,8 @@
 
 enum class GuiTab {
     Dashboard = 0, 
-    CreatePlaylist
+    CreatePlaylist,
+    OnPlaylist
 };
 
 enum class FileStatus {
@@ -95,6 +96,8 @@ struct GlobalState {
     LfTexture backTexture, musicNoteTexture;
 
     CreatePlaylistState createPlaylistTab;
+
+    int32_t currentPlaylist = -1;
 };
 
 static GlobalState state;
@@ -108,8 +111,11 @@ static void             loadPlaylists();
 
 static void             renderDashboard();
 static void             renderCreatePlaylist();
+static void             renderOnPlaylist();
 
-static FileStatus        createPlaylist(const std::string& name);
+static void             backButtonTo(GuiTab tab);
+
+static FileStatus       createPlaylist(const std::string& name);
 
 template<typename T>
 static bool elementInVector(const std::vector<T>& v, const T& e) {
@@ -236,7 +242,7 @@ void initUI() {
     state.h6Font = lf_load_font("../game/fonts/inter-bold.ttf", 28);
 
     state.backTexture = lf_tex_create("../game/textures/back.png", false, LF_TEX_FILTER_LINEAR);
-    state.musicNoteTexture = lf_tex_create("../game/textures/music.png", false, LF_TEX_FILTER_LINEAR);
+    state.musicNoteTexture = lf_tex_create("../game/textures/music1.png", false, LF_TEX_FILTER_LINEAR);
 
 }
 
@@ -244,21 +250,21 @@ void handleKeystrokes() {
 }
 
 void loadPlaylists() { 
-     for (const auto& entry : std::filesystem::directory_iterator(LYSSA_DIR)) {
-        if (entry.is_directory()) {
+     for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
+        if (folder.is_directory()) {
             bool alreadyLoaded = false;
             for(auto& playlist : state.playlists) {
-                if(playlist.path == entry.path().string()) {
+                if(playlist.path == folder.path().string()) {
                     alreadyLoaded = true;
                     break;
                 }
             }
             if(alreadyLoaded) continue;
 
-            std::ifstream metadata(entry.path().string() + "/.metadata");
+            std::ifstream metadata(folder.path().string() + "/.metadata");
 
             if(!metadata.is_open()) {
-                std::cerr << "Error opening the metadata of playlist on path: " << entry.path().string() << "\n";
+                std::cerr << "Error opening the metadata of playlist on path: " << folder.path().string() << "\n";
                 continue;
             }
             std::string name;
@@ -286,10 +292,10 @@ void loadPlaylists() {
             metadata.close();
 
             Playlist playlist;
-            playlist.path = entry.path().string();
+            playlist.path = folder.path().string();
             playlist.name = name;
             uint32_t fileIndex = 0;
-            for(const auto& file : std::filesystem::directory_iterator(entry.path())) {
+            for(const auto& file : std::filesystem::directory_iterator(folder.path())) {
                 if(file.is_regular_file()) {                    
                     auto it = std::find(fileIndices.begin(), fileIndices.end(), fileIndex);
                     if(it != fileIndices.end()) {
@@ -304,7 +310,6 @@ void loadPlaylists() {
 }
 
 void renderDashboard() {
-
     lf_div_begin((vec2s){20, 50}, (vec2s){(float)state.winWidth, (float)state.winHeight});
 
     lf_push_font(&state.h1Font);
@@ -364,26 +369,118 @@ void renderDashboard() {
             lf_pop_style_props();
         }
     } else {
+        /* Render the List of Playlists */ 
+
+        // Constants
         const uint32_t width = 140;
         const uint32_t height = 180;
-        const float screenMargin = 50, elementMargin = 20, imageMargin = 10;
+        const float screenMargin = 50, padding = 20, imageMargin = 10;
+
         float posX = screenMargin;
-        float posY = lf_get_ptr_y() + elementMargin;
-        for(auto& playlist : state.playlists) {
-            if(posX + width + elementMargin >= state.winWidth - screenMargin) {
-                posY += height + elementMargin;
+        float posY = lf_get_ptr_y() + padding;
+        for(uint32_t i = 0; i < state.playlists.size(); i++) {
+            auto& playlist = state.playlists[i];
+
+            // Retrieving the displayed Name of the playlist 
+            std::string displayName;
+            float containerWidth;
+            {
+                LfTextProps textProps = lf_text_render((vec2s){posX + imageMargin, posY + imageMargin + width}, 
+                        playlist.name.c_str(), 
+                        lf_theme()->font, posX + width - (imageMargin * 2.0f),
+                        -1, -1, -1, -1, 2, 
+                        true, 
+                        (vec4s){1, 1, 1, 1});
+                LfTextProps textPropsNoLimit = lf_text_render((vec2s){posX + imageMargin, posY + imageMargin + width}, 
+                        playlist.name.c_str(), 
+                        lf_theme()->font, posX + width - (imageMargin * 2.0f),
+                        -1, -1, -1, -1, -1, 
+                        true, (vec4s){1, 1, 1, 1});
+
+                // Displayed name is equal to every character of the playlist name that can fit onto the container
+                displayName = playlist.name.substr(0, textProps.char_count);
+
+                // Adding a "..." indicator if necessarry
+                if(textProps.reached_max_wraps && textPropsNoLimit.end_y >= posY + imageMargin + width) {
+                    if(displayName.length() >= 3)
+                        displayName = displayName.substr(0, displayName.length() - 3) + "...";
+                }
+                // Getting the coontainer width
+                containerWidth = (textProps.width > width) ? textProps.width : width;
+            }
+
+
+
+            // Moving the Y position down if necessarry
+            if(posX + containerWidth + padding >= state.winWidth - screenMargin) {
+                posY += height + padding * 2.0f;
                 posX = screenMargin;
-            } 
-            lf_rect_render((vec2s){posX, posY}, (vec2s){width, height}, RGB_COLOR(25, 25, 25), (vec4s){0, 0, 0, 0}, 0.0f, 5);
-            lf_image_render((vec2s){posX + imageMargin, posY + imageMargin}, RGB_COLOR(255, 255, 255), (LfTexture){.id = state.musicNoteTexture.id, .width = (uint32_t)(width - (imageMargin * 2.0f)), .height = (uint32_t)(width - (imageMargin * 2.0f))}, (vec4s){0, 0, 0, 0}, 0.0f, 5);
-            std::cout << playlist.name << "\n";
-            lf_text_render((vec2s){posX + imageMargin, posY + imageMargin + width}, playlist.name.c_str(), lf_theme()->font, -1, -1, -1, -1, -1, false, (vec4s){1, 1, 1, 1});
-            posX += width + elementMargin;
+            }
+            
+            bool hovered = lf_hovered((vec2s){posX, posY}, (vec2s){containerWidth, height});
+
+            // Container
+            lf_rect_render((vec2s){posX, posY}, (vec2s){containerWidth, height + (float)lf_theme()->font.font_size}, hovered ? RGB_COLOR(35, 35, 35) : RGB_COLOR(25, 25, 25), (vec4s){0, 0, 0, 0}, 0.0f, 5);
+
+            // Image
+            lf_image_render((vec2s){posX + imageMargin, posY + imageMargin}, RGB_COLOR(255, 255, 255),
+                    (LfTexture){.id = state.musicNoteTexture.id, .width = (uint32_t)(width - (imageMargin * 2.0f)), .height = (uint32_t)(width - (imageMargin * 2.0f))}, (vec4s){0, 0, 0, 0}, 0.0f, 5);
+
+            // Name
+            lf_text_render((vec2s){posX + imageMargin, posY + imageMargin + width}, displayName.c_str(), lf_theme()->font, posX + (width) - (imageMargin * 2.0f), -1, -1, -1, -1, 2, false, (vec4s){1, 1, 1, 1});
+
+            // If the user clicked on the playlist
+            if(hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+               state.currentTab = GuiTab::OnPlaylist;
+               state.currentPlaylist = i; 
+            }
+            posX += width + padding;
         }
     }
     lf_div_end();
 }
 
+void renderOnPlaylist() {
+    lf_div_begin((vec2s){20, 50}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+    if(state.currentPlaylist == -1) return;
+
+    auto& currentPlaylist = state.playlists[state.currentPlaylist];
+    // Title 
+    {
+        lf_push_font(&state.h1Font);
+        LfUIElementProps props = lf_theme()->text_props;
+        props.text_color = LYSSA_BLUE;
+        lf_push_style_props(props);
+        lf_text(currentPlaylist.name.c_str());
+        lf_pop_style_props();
+    }
+    
+    backButtonTo(GuiTab::Dashboard);
+
+    lf_div_end();
+}
+
+void backButtonTo(GuiTab tab) {
+    const uint32_t marginBottom = 50, width = 20, height = 40;
+    lf_next_line();
+
+    float ptr_y = lf_get_ptr_y();
+
+    lf_set_ptr_y(state.winHeight - marginBottom - height * 2);
+    LfUIElementProps props = lf_theme()->button_props;
+    props.color = (vec4s){0, 0, 0, 0};
+    props.border_width = 0;
+    lf_push_style_props(props);
+
+    if(lf_image_button((LfTexture){.id = state.backTexture.id, .width = width, .height = height}) == LF_CLICKED) {
+        state.currentTab = tab;
+        loadPlaylists();
+    }
+
+    lf_pop_style_props();
+
+    lf_set_ptr_y(ptr_y);
+}
 void renderCreatePlaylist() {
     lf_div_begin((vec2s){20, 50}, (vec2s){(float)state.winWidth, (float)state.winHeight});
     
@@ -428,6 +525,7 @@ void renderCreatePlaylist() {
        }
        lf_pop_style_props();
     }
+
     // File Status Message
     if(state.createPlaylistTab.createFileStatus != FileStatus::None) {
         if(state.createPlaylistTab.createFileMessageTimer < state.createPlaylistTab.createFileMessageShowTime) {
@@ -457,22 +555,9 @@ void renderCreatePlaylist() {
             lf_pop_font();
         }
     }
-    // Back Button
-    {
-        lf_next_line();
-        float ptr_y = lf_get_ptr_y();
-        lf_set_ptr_y(state.winHeight - 50 - 40 * 2);
-        LfUIElementProps props = lf_theme()->button_props;
-        props.color = (vec4s){0, 0, 0, 0};
-        props.border_width = 0;
-        lf_push_style_props(props);
-        if(lf_image_button((LfTexture){.id = state.backTexture.id, .width = 20, .height = 40}) == LF_CLICKED) {
-            state.currentTab = GuiTab::Dashboard;
-            loadPlaylists();
-        }
-        lf_pop_style_props();
-        lf_set_ptr_y(ptr_y);
-    }
+
+    backButtonTo(GuiTab::Dashboard);
+
     lf_div_end();
 }
 
@@ -534,6 +619,9 @@ int main(int argc, char* argv[]) {
                 break;
             case GuiTab::CreatePlaylist:
                 renderCreatePlaylist();
+                break;
+            case GuiTab::OnPlaylist:
+                renderOnPlaylist();
                 break;
         }
         lf_div_end();

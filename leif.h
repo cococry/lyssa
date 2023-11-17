@@ -61,8 +61,8 @@ typedef enum {
 typedef struct {
     float width, height;
     uint32_t char_count;
-    bool reached_stop;
-    int32_t end_x, start_x;
+    bool reached_stop, reached_max_wraps;
+    int32_t end_x, start_x, end_y;
 } LfTextProps;
 
 typedef struct {
@@ -229,7 +229,7 @@ LfClickableItemState lf_progress_stripe_int(LfSlider* slider);
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, 
-        int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, bool no_render, vec4s color);
+        int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius);
 
