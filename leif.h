@@ -233,6 +233,8 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius);
 
+void lf_rect_gradient_render(vec2s pos, vec2s size, vec4s top_color, vec4s bottom_color);
+
 void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width, float corner_radius);
 
 bool lf_point_intersects_aabb(vec2s p, LfAABB aabb);
@@ -276,3 +278,19 @@ LfKeyEvent lf_key_event();
 LfCharEvent lf_char_event();
 
 LfGuiReEstablishEvent lf_gui_reastablish_event();
+
+void lf_set_cull_start_x(float x);
+
+void lf_set_cull_start_y(float y);
+
+void lf_set_cull_end_x(float x);
+
+void lf_set_cull_end_y(float y);
+
+void lf_unset_cull_start_x();
+
+void lf_unset_cull_start_y();
+
+void lf_unset_cull_end_x();
+
+void lf_unset_cull_end_y();

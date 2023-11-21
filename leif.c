@@ -81,10 +81,12 @@ typedef struct {
     vec4 color; // 16 Bytes
     vec2 texcoord; // 8 Bytes
     float tex_index; // 4 Bytes
-    vec2 scale;
-    vec2 pos_px;
-    float corner_radius;
-} Vertex; // 72 Bytes per vertex
+    vec2 scale; // 8 Bytes
+    vec2 pos_px; // 8 Bytes
+    float corner_radius; // 4 Bytes
+    float is_gradient; // 4 Bytes
+    vec2 min_coord, max_coord; // 16 Bytes
+} Vertex; // 92 Bytes per vertex
 
 typedef struct {
     LfAABB aabb;
@@ -143,14 +145,14 @@ typedef struct {
     InputState input;
     LfTheme theme;
 
-    LfDiv current_div;
-    int32_t current_line_height;
-    vec2s pos_ptr; 
+    LfDiv current_div, prev_div;
+    int32_t current_line_height, prev_line_height;
+    vec2s pos_ptr, prev_pos_ptr; 
 
 
     // Pushable variables
-    LfFont* font_stack;
-    LfUIElementProps props_stack;
+    LfFont* font_stack, *prev_font_stack;
+    LfUIElementProps props_stack, prev_props_stack;
     bool props_on_stack;
     int32_t text_start_x_stack, text_stop_x_stack, 
         text_start_y_stack, text_stop_y_stack;
@@ -162,7 +164,8 @@ typedef struct {
     LfScrollEvent scr_ev;
     LfCharEvent ch_ev;
     LfGuiReEstablishEvent gui_re_ev;
-
+    
+    vec2s cull_start, cull_end;
 } LfState;
 
 typedef enum {
@@ -361,6 +364,16 @@ void renderer_init() {
 
     glVertexAttribPointer(8, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(intptr_t*)offsetof(Vertex, corner_radius));
     glEnableVertexAttribArray(8);
+
+    glVertexAttribPointer(9, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(intptr_t*)offsetof(Vertex, is_gradient));
+    glEnableVertexAttribArray(9);
+
+    glVertexAttribPointer(10, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(intptr_t*)offsetof(Vertex, min_coord));
+    glEnableVertexAttribArray(10);
+
+    glVertexAttribPointer(11, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(intptr_t*)offsetof(Vertex, max_coord));
+    glEnableVertexAttribArray(11);
+
     // Creating the shader for the batch renderer
     const char* vert_src =
         "#version 460 core\n"
@@ -373,6 +386,9 @@ void renderer_init() {
         "layout (location = 6) in vec2 a_scale;\n"
         "layout (location = 7) in vec2 a_pos_px;\n"
         "layout (location = 8) in float a_corner_radius;\n"
+        "layout (location = 9) in float a_is_gradient;\n"
+        "layout (location = 10) in vec2 a_min_coord;\n"
+        "layout (location = 11) in vec2 a_max_coord;\n"
 
         "uniform mat4 u_proj;\n"
         "out vec4 v_border_color;\n"
@@ -382,7 +398,10 @@ void renderer_init() {
         "out float v_tex_index;\n"
         "flat out vec2 v_scale;\n"
         "flat out vec2 v_pos_px;\n"
+        "flat out float v_is_gradient;\n"
         "out float v_corner_radius;\n"
+        "out vec2 v_min_coord;\n"
+        "out vec2 v_max_coord;\n"
 
         "void main() {\n"
             "v_color = a_color;\n"
@@ -393,6 +412,9 @@ void renderer_init() {
             "v_scale = a_scale;\n"
             "v_pos_px = a_pos_px;\n"
             "v_corner_radius = a_corner_radius;\n"
+            "v_is_gradient = a_is_gradient;\n"
+            "v_min_coord = a_min_coord;\n"
+            "v_max_coord = a_max_coord;\n"
             "gl_Position = u_proj * vec4(a_pos.x, a_pos.y, 0.0f, 1.0);\n"
         "}\n";
 
@@ -406,65 +428,88 @@ void renderer_init() {
         "in vec2 v_texcoord;\n"
         "flat in vec2 v_scale;\n"
         "flat in vec2 v_pos_px;\n"
+        "flat in float v_is_gradient;\n"
         "in float v_corner_radius;\n"
         "uniform sampler2D u_textures[32];\n"
         "uniform vec2 u_screen_size;\n"
+        "in vec2 v_min_coord;\n"
+        "in vec2 v_max_coord;\n"
 
         "float rounded_box_sdf(vec2 center_pos, vec2 size, float radius) {\n"
         "    return length(max(abs(center_pos)-size+radius,0.0))-radius;\n"
         "}\n"
 
         "void main() {\n"
-        "    vec2 size = v_scale;\n"
-        "    vec4 opaque_color, display_color;\n"
-        "    if(v_tex_index == -1) {\n"
-        "        opaque_color = v_color;\n"
-        "    } else {\n"
-        "        opaque_color = texture(u_textures[int(v_tex_index)], v_texcoord) * v_color;\n"
-        "    }\n"
-        "   if(v_corner_radius != 0.0f) {"
-        "        display_color = opaque_color;\n"
+        "     if(u_screen_size.y - gl_FragCoord.y < v_min_coord.y && v_min_coord.y != -1) {\n"
+        "         discard;\n"
+        "     }\n"
+        "     if(u_screen_size.y - gl_FragCoord.y > v_max_coord.y && v_max_coord.y != -1) {\n"
+        "         discard;\n"
+        "     }\n"
+        "     if(u_screen_size.x - gl_FragCoord.y < v_min_coord.x && v_min_coord.x != -1) {\n"
+        "         discard;\n"
+        "     }\n"
+        "     if(u_screen_size.x - gl_FragCoord.y > v_max_coord.x && v_max_coord.x != -1) {\n"
+        "         discard;\n"
+        "     }\n"
+        "     if(v_is_gradient == 1) {\n"
+        "         float normalized_y = gl_FragCoord.y / u_screen_size.y;\n"
+        
+        "         normalized_y *= u_screen_size.x / u_screen_size.y;\n"
+        "         vec4 blended_color = mix(v_color, v_border_color, normalized_y);\n"
+        "         o_color = blended_color;\n"
+        "     } else {\n"
+        "       vec2 size = v_scale;\n"
+        "       vec4 opaque_color, display_color;\n"
+        "       if(v_tex_index == -1) {\n"
+        "         opaque_color = v_color;\n"
+        "       } else {\n"
+        "         opaque_color = texture(u_textures[int(v_tex_index)], v_texcoord) * v_color;\n"
+        "       }\n"
+        "       if(v_corner_radius != 0.0f) {"
+        "         display_color = opaque_color;\n"
 
-        "        vec2 location = vec2(v_pos_px.x, -v_pos_px.y);\n"
-        "        location.y += u_screen_size.y - size.y;\n"
-
-        "        float edge_softness = 1.0f;\n"
-
-        "        float radius = v_corner_radius * 2.0f;\n"
-
-        "        float distance = rounded_box_sdf(gl_FragCoord.xy - location - (size/2.0f), size / 2.0f, radius);\n"
-
-        "        float smoothed_alpha = 1.0f-smoothstep(0.0f, edge_softness * 2.0f,distance);\n"
-
-
-        "        vec3 fill_color;\n"
-        "        if(v_border_width != 0.0f) {\n"
-        "            vec2 location_border = vec2(location.x + v_border_width, location.y + v_border_width);\n"
-        "            vec2 size_border = vec2(size.x - v_border_width * 2, size.y - v_border_width * 2);\n"
-        "            float distance_border = rounded_box_sdf(gl_FragCoord.xy - location_border - (size_border / 2.0f), size_border / 2.0f, radius);\n"
-        "            if(distance_border <= 0.0f) {\n"
-        "                fill_color = display_color.xyz;\n"
-        "            } else {\n"
-        "                fill_color = v_border_color.xyz;\n"
-        "            }\n"
-        "        } else {\n"
-        "            fill_color = display_color.xyz;\n"
-        "        }\n"
-        "        o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, v_tex_index == -1 ? smoothed_alpha : display_color.a), smoothed_alpha);\n"
-        "   } else {\n"
-        "     vec4 fill_color = opaque_color;\n"
-        "     if(v_border_width != 0.0f) {\n"
         "         vec2 location = vec2(v_pos_px.x, -v_pos_px.y);\n"
         "         location.y += u_screen_size.y - size.y;\n"
-        "         vec2 location_border = vec2(location.x + v_border_width, location.y + v_border_width);\n"
-        "         vec2 size_border = vec2(v_scale.x - v_border_width * 2, v_scale.y - v_border_width * 2);\n"
-        "         float distance_border = rounded_box_sdf(gl_FragCoord.xy - location_border - (size_border / 2.0f), size_border / 2.0f, v_corner_radius);\n"
-        "         if(distance_border > 0.0f) {\n"
-        "             fill_color = v_border_color;\n"
-                "}\n"
+
+        "         float edge_softness = 1.0f;\n"
+
+        "         float radius = v_corner_radius * 2.0f;\n"
+
+        "         float distance = rounded_box_sdf(gl_FragCoord.xy - location - (size/2.0f), size / 2.0f, radius);\n"
+
+        "         float smoothed_alpha = 1.0f-smoothstep(0.0f, edge_softness * 2.0f,distance);\n"
+
+
+        "         vec3 fill_color;\n"
+        "         if(v_border_width != 0.0f) {\n"
+        "             vec2 location_border = vec2(location.x + v_border_width, location.y + v_border_width);\n"
+        "             vec2 size_border = vec2(size.x - v_border_width * 2, size.y - v_border_width * 2);\n"
+        "             float distance_border = rounded_box_sdf(gl_FragCoord.xy - location_border - (size_border / 2.0f), size_border / 2.0f, radius);\n"
+        "             if(distance_border <= 0.0f) {\n"
+        "                 fill_color = display_color.xyz;\n"
+        "             } else {\n"
+        "                 fill_color = v_border_color.xyz;\n"
+        "             }\n"
+        "         } else {\n"
+        "             fill_color = display_color.xyz;\n"
+        "         }\n"
+        "         o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, v_tex_index == -1 ? smoothed_alpha : display_color.a), smoothed_alpha);\n"
+        "     } else {\n"
+        "       vec4 fill_color = opaque_color;\n"
+        "       if(v_border_width != 0.0f) {\n"
+        "           vec2 location = vec2(v_pos_px.x, -v_pos_px.y);\n"
+        "           location.y += u_screen_size.y - size.y;\n"
+        "           vec2 location_border = vec2(location.x + v_border_width, location.y + v_border_width);\n"
+        "           vec2 size_border = vec2(v_scale.x - v_border_width * 2, v_scale.y - v_border_width * 2);\n"
+        "           float distance_border = rounded_box_sdf(gl_FragCoord.xy - location_border - (size_border / 2.0f), size_border / 2.0f, v_corner_radius);\n"
+        "           if(distance_border > 0.0f) {\n"
+        "               fill_color = v_border_color;\n"
+                    "}\n"
+        "       }\n"
+        "       o_color = fill_color;\n"
         "     }\n"
-        "     o_color = fill_color;\n"
-        "   }\n"
+        " }\n"
         "}\n";
     state.render.shader = shader_prg_create(vert_src, frag_src);
 
@@ -835,6 +880,97 @@ void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, floa
         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].corner_radius = corner_radius;
+        state.render.verts[state.render.vert_count].is_gradient = 0;
+
+        vec2 cull_start_arr;
+        cull_start_arr[0] = state.cull_start.x;
+        cull_start_arr[1] = state.cull_start.y;
+        vec2 cull_end_arr;
+        cull_end_arr[0] = state.cull_end.x;
+        cull_end_arr[1] = state.cull_end.y;
+        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+
+        state.render.vert_count++;
+    }
+    state.render.index_count += 6;
+}
+
+void lf_rect_gradient_render(vec2s pos, vec2s size, vec4s top_color, vec4s bottom_color) {
+ // Offsetting the postion, so that pos is the top left of the rendered object
+    vec2s pos_initial = pos;
+    pos = (vec2s){pos.x + size.x / 2.0f, pos.y + size.y / 2.0f};
+
+    // Initializing texture coords data
+    vec2s texcoords[4] = {
+        (vec2s){1.0f, 1.0f},
+        (vec2s){1.0f, 0.0f},
+        (vec2s){0.0f, 0.0f},
+        (vec2s){0.0f, 1.0f},
+    };
+    // Calculating the transform matrix
+    mat4 translate; 
+    mat4 scale;
+    mat4 transform;
+    vec3 pos_xyz = {pos.x, pos.y, 0.0f};
+    vec3 size_xyz = {size.x, size.y, 0.0f};
+    glm_translate_make(translate, pos_xyz);
+    glm_scale_make(scale, size_xyz);
+    glm_mat4_mul(translate,scale,transform);
+
+    // Adding the vertices to the batch renderer
+    for(uint32_t i = 0; i < 4; i++) {
+        if(state.render.vert_count >= MAX_RENDER_BATCH) {
+            lf_flush();
+            lf_renderer_begin();
+        }
+        vec4 result;
+        glm_mat4_mulv(transform, state.render.vert_pos[i].raw, result);
+        state.render.verts[state.render.vert_count].pos[0] = result[0];
+        state.render.verts[state.render.vert_count].pos[1] = result[1];
+        vec4 border_color_arr;
+        border_color_arr[0] = top_color.r;
+        border_color_arr[1] = top_color.g;
+        border_color_arr[2] = top_color.b;
+        border_color_arr[3] = top_color.a;
+        memcpy(state.render.verts[state.render.vert_count].border_color, border_color_arr, sizeof(vec4));
+
+        state.render.verts[state.render.vert_count].border_width = 0.0f; 
+
+        vec4 color_arr;
+        color_arr[0] = bottom_color.r;
+        color_arr[1] = bottom_color.g;
+        color_arr[2] = bottom_color.b;
+        color_arr[3] = bottom_color.a;
+        memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
+        vec2 texcoord_arr;
+        texcoord_arr[0] = texcoords[i].x;
+        texcoord_arr[1] = texcoords[i].y;
+        memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+        state.render.verts[state.render.vert_count].tex_index = -1;
+
+        vec2 scale_arr;
+        scale_arr[0] = size.x;
+        scale_arr[1] = size.y;
+        memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
+
+        vec2 pos_px_arr;
+        pos_px_arr[0] = (float)pos_initial.x;
+        pos_px_arr[1] = (float)pos_initial.y;
+        memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
+
+        state.render.verts[state.render.vert_count].corner_radius = 0.0f;
+        state.render.verts[state.render.vert_count].is_gradient = 1;
+
+        vec2 cull_start_arr;
+        cull_start_arr[0] = state.cull_start.x;
+        cull_start_arr[1] = state.cull_start.y;
+        vec2 cull_end_arr;
+        cull_end_arr[0] = state.cull_end.x;
+        cull_end_arr[1] = state.cull_end.y;
+        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+
         state.render.vert_count++;
     }
     state.render.index_count += 6;
@@ -921,6 +1057,16 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].corner_radius = corner_radius;
+        state.render.verts[state.render.vert_count].is_gradient = 0;
+
+        vec2 cull_start_arr;
+        cull_start_arr[0] = state.cull_start.x;
+        cull_start_arr[1] = state.cull_start.y;
+        vec2 cull_end_arr;
+        cull_end_arr[0] = state.cull_end.x;
+        cull_end_arr[1] = state.cull_end.y;
+        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
         state.render.vert_count++;
     } 
@@ -1125,7 +1271,7 @@ bool lf_hovered(vec2s pos, vec2s size) {
 
 void next_line_on_overflow(vec2s size) {
     // If the object does not fit in the area of the current div, advance to the next line
-    if(state.pos_ptr.x - state.current_div.aabb.pos.x + size.x >= state.current_div.aabb.size.x) {
+    if(state.pos_ptr.x - state.current_div.aabb.pos.x + size.x > state.current_div.aabb.size.x) {
         lf_next_line();
     }
     if(size.y > state.current_line_height) {
@@ -1291,6 +1437,16 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
                         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
                         state.render.verts[state.render.vert_count].corner_radius = 0;
+                        state.render.verts[state.render.vert_count].is_gradient = 0;
+
+                        vec2 cull_start_arr;
+                        cull_start_arr[0] = state.cull_start.x;
+                        cull_start_arr[1] = state.cull_start.y;
+                        vec2 cull_end_arr;
+                        cull_end_arr[0] = state.cull_end.x;
+                        cull_end_arr[1] = state.cull_end.y;
+                        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+                        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
                         state.render.vert_count++;
                     }
@@ -1414,7 +1570,10 @@ LfTheme lf_default_theme(const char* font_path, uint32_t font_size) {
     // The default theme of Leif
     LfTheme theme = {0};
     theme.div_props = (LfUIElementProps){
-        .color = (vec4s){LF_RGBA(45, 45, 45, 255)}, 
+        .color = (vec4s){LF_RGBA(45, 45, 45, 255)},
+        .border_color = (vec4s){0, 0, 0, 0}, 
+        .border_width = 0.0f, 
+        .corner_radius = 0.0f, 
     };
     float global_padding = 10;
     float global_margin = 5;
@@ -1670,9 +1829,6 @@ LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t he
 
     // If the button does not fit onto the current div, advance to the next line
     LfTextProps text_props = text_render_simple(state.pos_ptr, text, font, text_color, true);
-    if(state.pos_ptr.y + ((height == -1) ? text_props.height : height) + padding * 2.0f + margin_bottom + margin_top >= state.current_div.aabb.size.y) {
-        return LF_IDLE; 
-    }
     next_line_on_overflow(
         (vec2s){((width == -1) ? text_props.width : width + padding * 2.0f) + margin_right + margin_left,
             ((height == -1) ? text_props.height : height) + padding * 2.0f + margin_bottom + margin_top}); 
@@ -1700,11 +1856,22 @@ LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t he
 
 LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
     // Re-initializing the div 
+    state.prev_div = state.current_div;
+    state.prev_pos_ptr = state.pos_ptr;
+    state.prev_font_stack = state.font_stack;
+    state.prev_props_stack = state.props_stack;
+    state.prev_line_height = state.current_line_height;
+
     state.current_div.aabb.size = size;
     state.current_div.aabb.pos = pos;
     state.current_div.init = true;
     state.current_div.interact_state = LF_IDLE; 
     state.pos_ptr = pos;
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.div_props;
+    state.current_div.interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
+                                                      (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, false);
+    state.cull_start = (vec2s){-1, -1};
+    state.cull_end = (vec2s){-1, -1};
     state.current_line_height = 0;
     state.font_stack = NULL;
     state.props_on_stack = false;
@@ -1714,7 +1881,11 @@ LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
 
 void lf_div_end() {
     // Un-initializing the div
-    state.current_div.init = false;
+    state.pos_ptr = state.prev_pos_ptr; 
+    state.current_div = state.prev_div;
+    state.font_stack = state.prev_font_stack;
+    state.props_stack = state.prev_props_stack;
+    state.current_line_height = state.prev_line_height;
 }
 
 void lf_next_line() {
@@ -2130,4 +2301,36 @@ LfCharEvent lf_char_event() {
 
 LfGuiReEstablishEvent lf_gui_reastablish() {
     return state.gui_re_ev;
+}
+
+void lf_set_cull_end_x(float x) {
+    state.cull_end.x = x; 
+}
+
+void lf_set_cull_end_y(float y) {
+    state.cull_end.y = y; 
+}
+
+void lf_set_cull_start_x(float x) {
+    state.cull_start.x = x;
+}
+
+void lf_set_cull_start_y(float y) {
+    state.cull_start.y = y;
+}
+
+void lf_unset_cull_start_x() {
+    state.cull_start.x = -1;
+}
+
+void lf_unset_cull_start_y() {
+    state.cull_start.y = -1;
+}
+
+void lf_unset_cull_end_x() {
+    state.cull_end.x = -1;
+}
+
+ void lf_unset_cull_end_y() {
+    state.cull_end.y = -1;
 }
