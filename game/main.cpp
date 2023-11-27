@@ -444,6 +444,9 @@ void renderDashboard() {
             if(hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
                state.currentTab = GuiTab::OnPlaylist;
                state.currentPlaylist = i; 
+               for(auto& playlist : state.playlists[state.currentPlaylist].musicFiles) {
+                   std::cout << playlist << "\n";
+               }
             }
             posX += width + padding;
         }
@@ -467,6 +470,7 @@ void renderCreatePlaylist() {
         lf_next_line();
         LfUIElementProps props = lf_theme()->inputfield_props;
         props.padding = 15; 
+        props.border_width = 1;
         props.color = (vec4s){0, 0, 0, 0};
         props.border_color = (vec4s){1, 1, 1, 1};
         props.corner_radius = 10;
@@ -619,14 +623,30 @@ void renderOnPlaylist() {
             lf_pop_font();
         }
         lf_next_line();
+
+        {
+            LfUIElementProps props = lf_theme()->text_props;
+            props.margin_bottom = 20;
+            lf_push_style_props(props);
+            lf_text("#");
+
+            lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension("#").x + lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
+            lf_text("Title");
+            lf_pop_style_props();
+        }
+
+        lf_rect_render((vec2s){DIV_START_X, lf_get_ptr_y() + lf_theme()->font.font_size + 5}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 1}, RGB_COLOR(190, 190, 190), (vec4s){0, 0, 0, 0}, 0.0f, 0.0f);
+        lf_next_line();
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
             const std::string& file = currentPlaylist.musicFiles[i];
             {
+                std::stringstream indexSS;
+                indexSS << i;
+                std::string indexStr = indexSS.str();
+                lf_text(indexStr.c_str());
+                lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension(indexStr.c_str()).x + lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
                 std::filesystem::path fsPath(file);
                 std::string filename = fsPath.filename().string();
-                LfUIElementProps props = lf_theme()->text_props;
-                props.margin_top = 20;
-                props.margin_bottom = 20;
                 lf_text(filename.c_str());
                 lf_next_line();
             }
@@ -653,6 +673,7 @@ void renderPlaylistAddFromFile() {
         lf_next_line();
         LfUIElementProps props = lf_theme()->inputfield_props;
         props.padding = 15; 
+        props.border_width = 1;
         props.color = (vec4s){0, 0, 0, 0};
         props.border_color = (vec4s){1, 1, 1, 1};
         props.corner_radius = 10;
@@ -811,19 +832,21 @@ void renderPlaylistAddFromFolder() {
                     LfUIElementProps props = lf_theme()->text_props;
                     props.margin_left = margin;
                     lf_push_style_props(props);
-                    bool hovered = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size});
+                    bool hovered_text_div = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size});
                     lf_button(fileName.c_str());
-                    if(hovered && !isFileInPlaylist(file, state.currentPlaylist)) {
-                        lf_pop_style_props();
-                        vec2s scale = (vec2s){20, 20};
-                        float padding = 10;
-                        vec2s pos = (vec2s){lf_get_ptr_x() + 20, lf_get_ptr_y() + scale.y / 2.0f};
-                        bool hovered = lf_hovered((vec2s){pos.x - padding, pos.y - padding}, (vec2s){scale.x + padding * 2.0f, scale.y + padding * 2.0f});
-                        lf_image_render(pos, LYSSA_GREEN, (LfTexture){.id = state.addTexture.id, .width = (uint32_t)scale.x, .height = (uint32_t)scale.y}, RGBA_COLOR(0, 0,0 ,0), 0, 0);
-                        if(hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-                            addFileToPlaylist(file, state.currentPlaylist);
-                        } 
-                    } else if(isFileInPlaylist(file, state.currentPlaylist)){
+                    if(!isFileInPlaylist(file, state.currentPlaylist)) {
+                        if(hovered_text_div) {
+                            lf_pop_style_props();
+                            vec2s scale = (vec2s){20, 20};
+                            float padding = 10;
+                            vec2s pos = (vec2s){lf_get_ptr_x() + 20, lf_get_ptr_y() + scale.y / 2.0f};
+                            bool hovered_image = lf_hovered((vec2s){pos.x - padding, pos.y - padding}, (vec2s){scale.x + padding * 2.0f, scale.y + padding * 2.0f});
+                            lf_image_render(pos, LYSSA_GREEN, (LfTexture){.id = state.addTexture.id, .width = (uint32_t)scale.x, .height = (uint32_t)scale.y}, RGBA_COLOR(0, 0,0 ,0), 0, 0);
+                            if(hovered_image && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+                                addFileToPlaylist(file, state.currentPlaylist);
+                            } 
+                        }
+                    } else {
                         vec2s scale = (vec2s){20, 20};
                         vec2s pos = (vec2s){lf_get_ptr_x() + 20, lf_get_ptr_y() + scale.y / 2.0f};
                         lf_image_render(pos, RGB_COLOR(255, 255, 255), (LfTexture){.id = state.tickTexture.id, .width = (uint32_t)scale.x, .height = (uint32_t)scale.y}, RGBA_COLOR(0, 0,0 ,0), 0, 0);
@@ -951,12 +974,14 @@ FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
 
     if(std::find(playlist.musicFiles.begin(), playlist.musicFiles.end(), path) != playlist.musicFiles.end()) return FileStatus::AlreadyExists;
 
-    std::ofstream metadata(playlist.path + "/.metadata", std::ios::app | std::ios::binary);
+    std::ofstream metadata(playlist.path + "/.metadata", std::ios::app);
 
     if(!metadata.is_open()) return FileStatus::Failed;
 
     std::ifstream playlistFile(path);
     if(!playlistFile.good()) return FileStatus::Failed;
+
+    metadata.seekp(0, std::ios::end);
 
     metadata << "\"" << path << "\" ";
     playlist.musicFiles.push_back(path);
