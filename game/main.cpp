@@ -69,6 +69,7 @@ struct Sound {
 struct Playlist {
     std::vector<std::string> musicFiles;
     std::string name, path;
+    int32_t playingFile = -1;
 };
 
 struct CreatePlaylistState {
@@ -168,6 +169,7 @@ static FileStatus               addFileToPlaylist(const std::string& path, uint3
 static bool                     isFileInPlaylist(const std::string& path, uint32_t playlistIndex);
 static void                     loadPlaylists();
 static std::vector<std::string> loadFilesFromFolder(const std::filesystem::path& folderPath);
+static void                     playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex);
 
 template<typename T>
 static bool elementInVector(const std::vector<T>& v, const T& e) {
@@ -640,6 +642,19 @@ void renderOnPlaylist() {
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
             const std::string& file = currentPlaylist.musicFiles[i];
             {
+                bool hovered_text_div = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size});
+                float selectedAlpha = 0;
+                if(hovered_text_div) {
+                    if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+                        playlistPlayFileWithIndex(i, state.currentPlaylist);
+                    }
+                    selectedAlpha = 60;
+                }
+                if(currentPlaylist.playingFile == i) {
+                    selectedAlpha = 80;
+                }
+                lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size + 2}, RGBA_COLOR(255, 255, 255, selectedAlpha), 
+                        (vec4s){0, 0, 0, 0}, 0.0f, 0.0f);
                 std::stringstream indexSS;
                 indexSS << i;
                 std::string indexStr = indexSS.str();
@@ -1028,17 +1043,11 @@ void loadPlaylists() {
                 }
                 if (line.find("files:") != std::string::npos) {
                     // If the line contains "files:", extract paths from the rest of the line
-                    std::istringstream iss(line.substr(line.find("files:") + 6));
+                    std::istringstream iss(line.substr(line.find("files:") + std::string("files:").length()));
                     std::string path;
 
                     while (iss >> std::quoted(path)) {
-                        // Extract only the filename from the path
-                        size_t lastSlashPos = path.find_last_of('/');
-                        if (lastSlashPos != std::string::npos) {
-                            files.push_back(path.substr(lastSlashPos + 1));
-                        } else {
-                            files.push_back(path);
-                        }
+                        files.push_back(path);
                     }
                 }
             }
@@ -1066,6 +1075,20 @@ std::vector<std::string> loadFilesFromFolder(const std::filesystem::path& folder
     return files;
 }
 
+void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
+    Playlist& playlist = state.playlists[playlistIndex];
+    playlist.playingFile = i;
+
+    if(state.currentSound.isPlaying)
+        state.currentSound.stop();
+
+    if(state.currentSound.isInit)
+        state.currentSound.uninit();
+
+    state.currentSound.init(playlist.musicFiles[i]);
+    state.currentSound.play();
+
+}
 int main(int argc, char* argv[]) {
     // Initialization 
     initWin(1280, 720); 
