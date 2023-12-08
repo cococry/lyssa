@@ -21,6 +21,9 @@
 #include <GLFW/glfw3.h>
 #endif /* ifdef */
 
+#define MAX(a, b) a > b ? a : b
+#define MIN(a, b) a < b ? a : b
+
 #define LF_TRACE(...) { printf("Leif: [TRACE]: "); printf(__VA_ARGS__); printf("\n"); } 
 #ifdef LF_DEBUG
 #define LF_DEBUG(...) { printf("Leif: [DEBUG]: "); printf(__VA_ARGS__); printf("\n"); } 
@@ -89,9 +92,15 @@ typedef struct {
 } Vertex; // 92 Bytes per vertex
 
 typedef struct {
+    uint32_t id;
+
     LfAABB aabb;
-    bool init;
     LfClickableItemState interact_state;
+    LfUIElementProps props;
+
+    bool init;
+
+    vec2s total_area;
 } LfDiv;
 
 typedef struct {
@@ -145,14 +154,14 @@ typedef struct {
     InputState input;
     LfTheme theme;
 
-    LfDiv current_div, prev_div;
+    LfDiv current_div, selected_div, selected_div_tmp, prev_div;
     int32_t current_line_height, prev_line_height;
     vec2s pos_ptr, prev_pos_ptr; 
 
 
     // Pushable variables
     LfFont* font_stack, *prev_font_stack;
-    LfUIElementProps props_stack, prev_props_stack;
+    LfUIElementProps props_stack, div_props, prev_props_stack;
     bool props_on_stack;
     int32_t text_start_x_stack, text_stop_x_stack, 
         text_start_y_stack, text_stop_y_stack;
@@ -166,6 +175,10 @@ typedef struct {
     LfGuiReEstablishEvent gui_re_ev;
     
     vec2s cull_start, cull_end;
+
+    float div_scrolls[32];
+
+    uint32_t div_count, div_index_ptr;
 } LfState;
 
 typedef enum {
@@ -193,6 +206,7 @@ static LfTextProps              text_render_simple(vec2s pos, const char* text, 
 static void                     input_field(LfInputField* input, InputFieldType type);
 LfFont                          load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add);
 static void                     next_line_on_overflow(vec2s size);
+static bool                     area_hovered(vec2s pos, vec2s size);
 
 // Utility
 static int32_t                  closes_num_in_arr(int arr[], int n, int target);
@@ -494,7 +508,10 @@ void renderer_init() {
         "         } else {\n"
         "             fill_color = display_color.xyz;\n"
         "         }\n"
-        "         o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, v_tex_index == -1 ? smoothed_alpha : display_color.a), smoothed_alpha);\n"
+        "         if(v_border_width != 0.0f)\n" 
+        "           o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, v_tex_index == -1 ? smoothed_alpha : display_color.a), smoothed_alpha);\n"
+        "         else\n" 
+        "           o_color = mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, display_color.a), smoothed_alpha);\n"
         "     } else {\n"
         "       vec4 fill_color = opaque_color;\n"
         "       if(v_border_width != 0.0f) {\n"
@@ -666,10 +683,13 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
         LF_ERROR("Trying to render without div context. Call lf_div_begin()");
         return LF_IDLE;
     }
+
     /* Rendering a rect with the given proportions with different color based on if it is hoverd, clicked or idle */
     bool is_hovered = lf_hovered(pos, size);
     if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
-        lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
+        vec4s hover_color_rgb = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
+                                                color.b - 20, color.a - 20)};
+        lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
         return LF_RELEASED;
     }
     if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -688,19 +708,23 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
                 click_color.a = 1.0;
             lf_rect_render(pos, size, click_color, props.border_color, border_width, props.corner_radius);
         } else {
-            lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
+            vec4s hover_color_rgb = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
+                                                color.b - 20, color.a - 20)};
+            lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
         }
         return LF_CLICKED;
     }
     if(is_hovered && lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT)) {
-        lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
+            vec4s hover_color_rgb = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
+                                                color.b - 20, color.a - 20)};
+        lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
         return LF_HELD;
     }
     if(is_hovered && (!lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && !lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT))) {
         if(hover_color) {
             // Hover color is 20 darker than the base color for every value
             vec4s hover_color = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
-                                                    color.b - 20, color.a - 20)};
+                                                color.b - 20, color.a - 20)};
             // Clamping the color
             if(hover_color.r > 1.0)
                 hover_color.r = 1.0;
@@ -781,6 +805,18 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     state.scr_ev.happened = true;
     state.scr_ev.xoffset = xoffset;
     state.scr_ev.yoffset = yoffset;
+
+
+    if(yoffset == -1) {
+        if(state.selected_div.total_area.y > (state.selected_div.aabb.size.y + state.selected_div.aabb.pos.y)) {
+            state.div_scrolls[state.selected_div.id] -= LF_SCROLL_AMOUNT;
+        } 
+    } else if (yoffset == 1) {
+        if(state.div_scrolls[state.selected_div.id] < 0) {
+            state.div_scrolls[state.selected_div.id] += LF_SCROLL_AMOUNT;
+        }        
+    }
+
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
@@ -1265,7 +1301,7 @@ int32_t int_max(int32_t a, int32_t b) {
 
 bool lf_hovered(vec2s pos, vec2s size) {
     bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
-        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && state.selected_div.id == state.div_index_ptr - 1;
     return hovered;
 }
 
@@ -1277,6 +1313,12 @@ void next_line_on_overflow(vec2s size) {
     if(size.y > state.current_line_height) {
         state.current_line_height = size.y;
     }
+}
+
+bool area_hovered(vec2s pos, vec2s size) {
+    bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
+    return hovered;
 }
 
 int32_t closes_num_in_arr(int arr[], int n, int target) {
@@ -1644,6 +1686,17 @@ LfTheme lf_default_theme(const char* font_path, uint32_t font_size) {
         .border_width = 4,
         .corner_radius = 0
     };
+    theme.scrollbar_props = (LfUIElementProps){ 
+        .color = (vec4s){LF_RGBA(100, 100, 100, 255)}, 
+        .border_color = (vec4s){LF_BLACK},
+        .padding = 0,
+        .margin_left = 0, 
+        .margin_right = 10, 
+        .margin_top = 10, 
+        .margin_bottom = 0, 
+        .border_width = 0,
+        .corner_radius = 2
+    };
     theme.font = load_font(font_path, font_size, 1024, 1024, 256, 5); 
     return theme;
 }
@@ -1657,6 +1710,7 @@ void lf_resize_display(uint32_t display_width, uint32_t display_height) {
 
     state.current_div.aabb.size.x = state.dsp_w;
     state.current_div.aabb.size.y = state.dsp_h;
+
 }
 
 void set_projection_matrix() { 
@@ -1855,43 +1909,91 @@ LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t he
 }
 
 LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
-    // Re-initializing the div 
     state.prev_div = state.current_div;
     state.prev_pos_ptr = state.pos_ptr;
     state.prev_font_stack = state.font_stack;
     state.prev_props_stack = state.props_stack;
     state.prev_line_height = state.current_line_height;
 
-    state.current_div.aabb.size = size;
-    state.current_div.aabb.pos = pos;
-    state.current_div.init = true;
-    state.current_div.interact_state = LF_IDLE; 
-    state.pos_ptr = pos;
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.div_props;
-    state.current_div.interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
-                                                      (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, false);
-    state.cull_start = (vec2s){-1, -1};
-    state.cull_end = (vec2s){-1, -1};
+    state.div_props = props;
+    LfDiv div = state.selected_div;
+    div.aabb.size = (vec2s){size.x, size.y};
+    div.aabb.pos = pos;
+    div.init = true;
+    div.id = state.div_index_ptr;
+    state.current_div.interact_state = LF_IDLE;
+    state.pos_ptr = (vec2s){pos.x + props.padding, pos.y + props.padding};
+
+    state.current_div = div;
+
+    div.interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
+                                                      (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, 0, false, false);
+    // Culling & Scrolling
+
+    state.cull_start = (vec2s){-1, pos.y + props.padding};
+    state.cull_end = (vec2s){-1, pos.y + size.y};
+    lf_set_ptr_y(state.div_scrolls[state.div_index_ptr++]);
+
+    // Reseting the div parameters
+    state.current_div = div;
     state.current_line_height = 0;
     state.font_stack = NULL;
     state.props_on_stack = false;
 
+    if(area_hovered(pos, size)) {
+        state.selected_div_tmp = div;
+    }
+
     return state.current_div.interact_state;
 }
-
 void lf_div_end() {
-    // Un-initializing the div
-    state.pos_ptr = state.prev_pos_ptr; 
+    state.pos_ptr = state.prev_pos_ptr;
     state.current_div = state.prev_div;
     state.font_stack = state.prev_font_stack;
     state.props_stack = state.prev_props_stack;
     state.current_line_height = state.prev_line_height;
+    // Scrollbar
+    if(state.div_index_ptr - 1 == state.selected_div.id) {
+        LfUIElementProps props = lf_theme()->scrollbar_props;
+        state.selected_div.total_area = state.pos_ptr; 
+
+        float total_area = state.selected_div.total_area.y - state.div_scrolls[state.selected_div.id];
+        float visible_area = state.selected_div.aabb.size.y + state.selected_div.aabb.pos.y;
+
+        if(total_area > visible_area) 
+        {
+            const float scrollbar_width = 10;
+            const float min_scrollbar_width = 10;
+
+            float area_mapped = visible_area/total_area; 
+            float scroll_mapped = (-1 * state.div_scrolls[state.selected_div.id])/total_area;
+
+            // Limiting the scrollbar height 
+            float scrollbar_height = (state.selected_div.aabb.size.y*area_mapped - props.margin_top * 2) > min_scrollbar_width ? 
+                (state.selected_div.aabb.size.y*area_mapped - props.margin_top * 2) : min_scrollbar_width;
+
+            clickable_item(
+                (vec2s){
+                    state.selected_div.aabb.pos.x + state.selected_div.aabb.size.x - scrollbar_width - props.margin_right,
+                    (state.selected_div.aabb.pos.y + props.margin_top + state.selected_div.aabb.size.y*scroll_mapped) <  visible_area - scrollbar_height ? 
+                    (state.selected_div.aabb.pos.y + props.margin_top + state.selected_div.aabb.size.y*scroll_mapped) : visible_area - scrollbar_height}, 
+                (vec2s){
+                    scrollbar_width, 
+                    scrollbar_height}, 
+                props,
+                props.color, props.border_width, false, true);
+        }
+    }
+    // Un-initializing the div
+    state.cull_start = (vec2s){-1, -1};
+    state.cull_end = (vec2s){-1, -1};   
 }
 
 void lf_next_line() {
     // Advancing the position pointer by the current line height
     state.pos_ptr.y += state.current_line_height;
-    state.pos_ptr.x = state.current_div.aabb.pos.x;
+    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.padding;    
     state.current_line_height = 0;
     state.gui_re_ev.happened = true;
 }
@@ -1993,9 +2095,12 @@ LfTheme* lf_theme() {
 }
 
 void lf_begin() {
+    state.pos_ptr = (vec2s){0, 0};
     lf_renderer_begin();
 }
 void lf_end() {
+    state.selected_div = state.selected_div_tmp;
+    state.div_index_ptr = 0;
     update_input();
     clear_events();
     lf_flush();
@@ -2065,7 +2170,6 @@ void lf_rect(float width, float height, vec4s color, float corner_radius) {
 }
 
 int map_vals(int value, int from_min, int from_max, int to_min, int to_max) {
-    
     return (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
 }
 LfClickableItemState lf_slider_int(LfSlider* slider) {
@@ -2310,7 +2414,6 @@ void lf_set_cull_end_x(float x) {
 void lf_set_cull_end_y(float y) {
     state.cull_end.y = y; 
 }
-
 void lf_set_cull_start_x(float x) {
     state.cull_start.x = x;
 }

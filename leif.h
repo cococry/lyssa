@@ -11,6 +11,8 @@
 #define LF_WHITE LF_RGBA(255.0f, 255.0f, 255.0f, 255.0f)
 #define LF_BLACK LF_RGBA(0.0f, 0.0f, 0.0f, 255.0f)
 
+#define LF_SCROLL_AMOUNT 20
+
 // --- Events ---
 typedef struct {
     int32_t keycode;
@@ -89,7 +91,7 @@ typedef enum {
     LF_IDLE = 0,
     LF_HOVERED = 1,
     LF_CLICKED = 2, 
-    LF_HELD =32,
+    LF_HELD = 3,
 } LfClickableItemState;
 
 
@@ -112,7 +114,7 @@ typedef struct {
 
 typedef struct {
     LfUIElementProps button_props, div_props, text_props, image_props, 
-                     inputfield_props, checkbox_props, slider_props;
+                     inputfield_props, checkbox_props, slider_props, scrollbar_props;
     LfFont font;
 } LfTheme;
 
