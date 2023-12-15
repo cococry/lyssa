@@ -5,13 +5,17 @@
 #include <cglm/struct.h>
 
 #define LF_RGBA(r, g, b, a) r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f
+#define LF_ZTO_TO_RGBA(r, g, b, a) r * 255.0f, g * 255.0f, b * 255.0f, a * 255.0f
+
 #define LF_RED LF_RGBA(255.0f, 0.0f, 0.0f, 255.0f)
 #define LF_GREEN LF_RGBA(0.0f, 255.0f, 0.0f, 255.0f)
 #define LF_BLUE LF_RGBA(0.0f, 0.0f, 255.0f, 255.0f)
 #define LF_WHITE LF_RGBA(255.0f, 255.0f, 255.0f, 255.0f)
 #define LF_BLACK LF_RGBA(0.0f, 0.0f, 0.0f, 255.0f)
 
+#define LF_COLOR_BRIGHTNESS(color, brightness) (vec4s){LF_RGBA(color.r * (float)brightness, color.g * (float)brightness, color.b * (float)brightness, color.a)}
 #define LF_SCROLL_AMOUNT 20
+#define LF_MAX_DIVS 64
 
 // --- Events ---
 typedef struct {
@@ -118,6 +122,19 @@ typedef struct {
     LfFont font;
 } LfTheme;
 
+typedef struct {
+    int32_t id;
+
+    LfAABB aabb;
+    LfClickableItemState interact_state;
+    LfUIElementProps props;
+
+    bool init;
+    float scroll;
+
+    vec2s total_area;
+} LfDiv;
+
 typedef void (*LfMenuItemCallback)(uint32_t*);
 
 void lf_init_glfw(uint32_t display_width, uint32_t display_height, const char* font_path, LfTheme* theme, void* glfw_window);
@@ -172,6 +189,8 @@ double lf_get_mouse_scroll_y();
 
 LfClickableItemState lf_div_begin(vec2s pos, vec2s size);
 
+LfClickableItemState lf_div_begin_id(vec2s pos, vec2s size, uint32_t id);
+
 void lf_div_end();
 
 LfClickableItemState lf_button(const char* text);
@@ -189,6 +208,10 @@ float lf_get_text_end(const char* str, float start_x);
 void lf_text(const char* text);
 
 vec2s lf_get_div_size();
+
+LfDiv lf_get_current_div();
+
+LfDiv lf_get_selected_div();
 
 void lf_set_ptr_x(float x);
 
@@ -234,8 +257,6 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
         int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius);
-
-void lf_rect_gradient_render(vec2s pos, vec2s size, vec4s top_color, vec4s bottom_color);
 
 void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width, float corner_radius);
 

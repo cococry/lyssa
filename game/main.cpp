@@ -798,8 +798,9 @@ void renderPlaylistAddFromFolder() {
     lf_next_line();
     // Folder Tabs
     {
+
         for(uint32_t i = 0; i < state.playlistAddFromFolderTab.loadedFolders.size(); i++) {
-            auto& folder = state.playlistAddFromFolderTab.loadedFolders[i];
+            Folder& folder = state.playlistAddFromFolderTab.loadedFolders[i];
             std::filesystem::path folderPath = folder.path;
             std::string folderName = folderPath.filename();
             LfUIElementProps props = lf_theme()->button_props;
@@ -816,13 +817,43 @@ void renderPlaylistAddFromFolder() {
             lf_pop_style_props();
         }
         lf_next_line();
+        if(state.playlistAddFromFolderTab.folderIndex != -1)
         {
+            Folder& selectedFolder = state.playlistAddFromFolderTab.loadedFolders[state.playlistAddFromFolderTab.folderIndex];
             LfUIElementProps props = lf_theme()->div_props;
             props.color = RGB_COLOR(60, 60, 60);
             props.corner_radius = 10;
             lf_push_style_props(props);
-            lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 500});
-            lf_text("Hello");
+            lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 400});
+            for(auto& file : selectedFolder.files) {
+                std::string filename = std::filesystem::path(file).filename();
+                {
+                    LfUIElementProps btn_props = lf_theme()->text_props;
+                    lf_push_style_props(btn_props);
+                    lf_button(filename.c_str());
+                    lf_pop_style_props();
+                }
+
+                if(lf_hovered((vec2s){lf_get_current_div().aabb.pos.x, lf_get_ptr_y()}, (vec2s){lf_get_current_div().aabb.size.x, (float)lf_theme()->font.font_size}))
+                {
+                    LfUIElementProps img_props = lf_theme()->button_props;
+                    props.padding = 0;
+                    props.color = (vec4s){(vec4s){0.0f, 0.0f, 0.0f, 0.0f}};
+                    props.border_width = 0;
+                    props.margin_top = lf_theme()->font.font_size / 2.0f;
+                    props.margin_bottom = 0;
+                    lf_push_style_props(props);
+                    if(!isFileInPlaylist(file, state.currentPlaylist)) {
+                        if(lf_image_button((LfTexture){.id = state.addTexture.id, .width = 20, .height = 20}) == LF_CLICKED) {
+                            addFileToPlaylist(file, state.currentPlaylist);
+                        }
+                    } else {
+                        lf_image_button((LfTexture){.id = state.tickTexture.id, .width = 20, .height = 20});
+                    }
+                    lf_pop_style_props();
+                }
+                lf_next_line();
+            }
             lf_div_end();
             lf_pop_style_props();
         }
@@ -885,7 +916,7 @@ void renderFileOrFolderPopup() {
         lf_push_style_props(bprops);
 
         // Make the buttons stretch the entire div
-        float halfDivWidth = lf_get_div_size().x / 2.0f - bprops.padding * 2.0f - bprops.border_width * 2.0f  - (bprops.margin_left + bprops.margin_right) - props.padding;
+        float halfDivWidth = lf_get_div_size().x / 2.0f - bprops.padding * 2.0f - bprops.border_width * 2.0f  - (bprops.margin_left + bprops.margin_right) - props.padding - props.corner_radius;
         if(lf_button_fixed("From File", halfDivWidth, -1) == LF_CLICKED) {
             state.currentTab = GuiTab::PlaylistAddFromFile;
             state.popups[(int32_t)PopupID::FileOrFolderPopup].render = false;
@@ -1100,6 +1131,7 @@ int main(int argc, char* argv[]) {
     state.popups.reserve((int32_t)PopupID::PopupCount);
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
 
+    uint32_t index = 0;
     while(!glfwWindowShouldClose(state.win)) { 
         // Delta-Time calculation
         float currentTime = glfwGetTime();
@@ -1112,7 +1144,7 @@ int main(int argc, char* argv[]) {
 
 
         lf_begin();
-        switch(state.currentTab) {
+        /*switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
                 break;
@@ -1137,8 +1169,16 @@ int main(int argc, char* argv[]) {
             if(popup.render) {
                 popup.renderCb();
             }
-        } 
+        }*/ 
         lf_end();
+
+        LfUIElementProps props = lf_theme()->div_props;
+        props.color = RGB_COLOR(60, 60, 60);
+        lf_push_style_props(props);
+        lf_div_begin_id((vec2s){100, 100}, (vec2s){300, 300}, index);
+        lf_text("Hello");
+        lf_div_end();
+        lf_pop_style_props();
         
         glfwPollEvents();
         glfwSwapBuffers(state.win);

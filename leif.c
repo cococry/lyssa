@@ -87,21 +87,8 @@ typedef struct {
     vec2 scale; // 8 Bytes
     vec2 pos_px; // 8 Bytes
     float corner_radius; // 4 Bytes
-    float is_gradient; // 4 Bytes
     vec2 min_coord, max_coord; // 16 Bytes
-} Vertex; // 92 Bytes per vertex
-
-typedef struct {
-    uint32_t id;
-
-    LfAABB aabb;
-    LfClickableItemState interact_state;
-    LfUIElementProps props;
-
-    bool init;
-
-    vec2s total_area;
-} LfDiv;
+} Vertex; // 88 Bytes per vertex
 
 typedef struct {
     bool keys[MAX_KEYS];
@@ -154,7 +141,7 @@ typedef struct {
     InputState input;
     LfTheme theme;
 
-    LfDiv current_div, selected_div, selected_div_tmp, prev_div;
+    LfDiv current_div, prev_div;
     int32_t current_line_height, prev_line_height;
     vec2s pos_ptr, prev_pos_ptr; 
 
@@ -176,9 +163,10 @@ typedef struct {
     
     vec2s cull_start, cull_end;
 
-    float div_scrolls[32];
+    LfDiv divs[LF_MAX_DIVS];
+    LfDiv id_divs[LF_MAX_DIVS];
 
-    uint32_t div_count, div_index_ptr;
+    uint32_t div_id_count, div_index_ptr, selected_div_id;
 } LfState;
 
 typedef enum {
@@ -379,9 +367,6 @@ void renderer_init() {
     glVertexAttribPointer(8, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(intptr_t*)offsetof(Vertex, corner_radius));
     glEnableVertexAttribArray(8);
 
-    glVertexAttribPointer(9, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(intptr_t*)offsetof(Vertex, is_gradient));
-    glEnableVertexAttribArray(9);
-
     glVertexAttribPointer(10, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(intptr_t*)offsetof(Vertex, min_coord));
     glEnableVertexAttribArray(10);
 
@@ -400,7 +385,6 @@ void renderer_init() {
         "layout (location = 6) in vec2 a_scale;\n"
         "layout (location = 7) in vec2 a_pos_px;\n"
         "layout (location = 8) in float a_corner_radius;\n"
-        "layout (location = 9) in float a_is_gradient;\n"
         "layout (location = 10) in vec2 a_min_coord;\n"
         "layout (location = 11) in vec2 a_max_coord;\n"
 
@@ -426,7 +410,6 @@ void renderer_init() {
             "v_scale = a_scale;\n"
             "v_pos_px = a_pos_px;\n"
             "v_corner_radius = a_corner_radius;\n"
-            "v_is_gradient = a_is_gradient;\n"
             "v_min_coord = a_min_coord;\n"
             "v_max_coord = a_max_coord;\n"
             "gl_Position = u_proj * vec4(a_pos.x, a_pos.y, 0.0f, 1.0);\n"
@@ -442,7 +425,6 @@ void renderer_init() {
         "in vec2 v_texcoord;\n"
         "flat in vec2 v_scale;\n"
         "flat in vec2 v_pos_px;\n"
-        "flat in float v_is_gradient;\n"
         "in float v_corner_radius;\n"
         "uniform sampler2D u_textures[32];\n"
         "uniform vec2 u_screen_size;\n"
@@ -466,52 +448,38 @@ void renderer_init() {
         "     if(u_screen_size.x - gl_FragCoord.y > v_max_coord.x && v_max_coord.x != -1) {\n"
         "         discard;\n"
         "     }\n"
-        "     if(v_is_gradient == 1) {\n"
-        "         float normalized_y = gl_FragCoord.y / u_screen_size.y;\n"
-        
-        "         normalized_y *= u_screen_size.x / u_screen_size.y;\n"
-        "         vec4 blended_color = mix(v_color, v_border_color, normalized_y);\n"
-        "         o_color = blended_color;\n"
+        "     vec2 size = v_scale;\n"
+        "     vec4 opaque_color, display_color;\n"
+        "     if(v_tex_index == -1) {\n"
+        "       opaque_color = v_color;\n"
         "     } else {\n"
-        "       vec2 size = v_scale;\n"
-        "       vec4 opaque_color, display_color;\n"
-        "       if(v_tex_index == -1) {\n"
-        "         opaque_color = v_color;\n"
+        "       opaque_color = texture(u_textures[int(v_tex_index)], v_texcoord) * v_color;\n"
+        "     }\n"
+        "     if(v_corner_radius != 0.0f) {"
+        "       display_color = opaque_color;\n"
+        "       vec2 location = vec2(v_pos_px.x, -v_pos_px.y);\n"
+        "       location.y += u_screen_size.y - size.y;\n"
+        "       float edge_softness = 1.0f;\n"
+        "       float radius = v_corner_radius * 2.0f;\n"
+        "       float distance = rounded_box_sdf(gl_FragCoord.xy - location - (size/2.0f), size / 2.0f, radius);\n"
+        "       float smoothed_alpha = 1.0f-smoothstep(0.0f, edge_softness * 2.0f,distance);\n"
+        "       vec3 fill_color;\n"
+        "       if(v_border_width != 0.0f) {\n"
+        "           vec2 location_border = vec2(location.x + v_border_width, location.y + v_border_width);\n"
+        "           vec2 size_border = vec2(size.x - v_border_width * 2, size.y - v_border_width * 2);\n"
+        "           float distance_border = rounded_box_sdf(gl_FragCoord.xy - location_border - (size_border / 2.0f), size_border / 2.0f, radius);\n"
+        "           if(distance_border <= 0.0f) {\n"
+        "               fill_color = display_color.xyz;\n"
+        "           } else {\n"
+        "               fill_color = v_border_color.xyz;\n"
+        "           }\n"
         "       } else {\n"
-        "         opaque_color = texture(u_textures[int(v_tex_index)], v_texcoord) * v_color;\n"
+        "           fill_color = display_color.xyz;\n"
         "       }\n"
-        "       if(v_corner_radius != 0.0f) {"
-        "         display_color = opaque_color;\n"
-
-        "         vec2 location = vec2(v_pos_px.x, -v_pos_px.y);\n"
-        "         location.y += u_screen_size.y - size.y;\n"
-
-        "         float edge_softness = 1.0f;\n"
-
-        "         float radius = v_corner_radius * 2.0f;\n"
-
-        "         float distance = rounded_box_sdf(gl_FragCoord.xy - location - (size/2.0f), size / 2.0f, radius);\n"
-
-        "         float smoothed_alpha = 1.0f-smoothstep(0.0f, edge_softness * 2.0f,distance);\n"
-
-
-        "         vec3 fill_color;\n"
-        "         if(v_border_width != 0.0f) {\n"
-        "             vec2 location_border = vec2(location.x + v_border_width, location.y + v_border_width);\n"
-        "             vec2 size_border = vec2(size.x - v_border_width * 2, size.y - v_border_width * 2);\n"
-        "             float distance_border = rounded_box_sdf(gl_FragCoord.xy - location_border - (size_border / 2.0f), size_border / 2.0f, radius);\n"
-        "             if(distance_border <= 0.0f) {\n"
-        "                 fill_color = display_color.xyz;\n"
-        "             } else {\n"
-        "                 fill_color = v_border_color.xyz;\n"
-        "             }\n"
-        "         } else {\n"
-        "             fill_color = display_color.xyz;\n"
-        "         }\n"
-        "         if(v_border_width != 0.0f)\n" 
-        "           o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, v_tex_index == -1 ? smoothed_alpha : display_color.a), smoothed_alpha);\n"
-        "         else\n" 
-        "           o_color = mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, display_color.a), smoothed_alpha);\n"
+        "       if(v_border_width != 0.0f)\n" 
+        "         o_color =  mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, smoothed_alpha), smoothed_alpha);\n"
+        "       else\n" 
+        "         o_color = mix(vec4(0.0f, 0.0f, 0.0f, 0.0f), vec4(fill_color, display_color.a), smoothed_alpha);\n"
         "     } else {\n"
         "       vec4 fill_color = opaque_color;\n"
         "       if(v_border_width != 0.0f) {\n"
@@ -525,7 +493,6 @@ void renderer_init() {
                     "}\n"
         "       }\n"
         "       o_color = fill_color;\n"
-        "     }\n"
         " }\n"
         "}\n";
     state.render.shader = shader_prg_create(vert_src, frag_src);
@@ -684,63 +651,28 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
         return LF_IDLE;
     }
 
-    /* Rendering a rect with the given proportions with different color based on if it is hoverd, clicked or idle */
+    vec4s color_rgb = (vec4s){LF_ZTO_TO_RGBA(color.r, color.g, color.b, color.a)};
+    vec4s hover_color_rgb = hover_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.1) : color; 
+    vec4s held_color_rgb = click_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.2) : color; 
+
     bool is_hovered = lf_hovered(pos, size);
     if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
-        vec4s hover_color_rgb = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
-                                                color.b - 20, color.a - 20)};
-        lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
+        lf_rect_render(pos, size, hover_color_rgb, props.border_color, border_width, props.corner_radius);
         return LF_RELEASED;
     }
     if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-        if(click_color) {
-            // Click color is 40 lighter than the base color for every value
-            vec4s click_color = (vec4s){LF_RGBA(color.r + 40, color.g + 40,
-                                                color.b + 40, color.a + 40)};
-            // Clamping the color
-            if(click_color.r > 1.0)
-                click_color.r = 1.0;
-            if(click_color.g > 1.0)
-                click_color.g = 1.0;
-            if(click_color.b > 1.0)
-                click_color.b = 1.0;
-            if(click_color.a > 1.0)
-                click_color.a = 1.0;
-            lf_rect_render(pos, size, click_color, props.border_color, border_width, props.corner_radius);
-        } else {
-            vec4s hover_color_rgb = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
-                                                color.b - 20, color.a - 20)};
-            lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
-        }
+        lf_rect_render(pos, size, held_color_rgb, props.border_color, border_width, props.corner_radius);
         return LF_CLICKED;
     }
     if(is_hovered && lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT)) {
-            vec4s hover_color_rgb = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
-                                                color.b - 20, color.a - 20)};
-        lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
+        lf_rect_render(pos, size, held_color_rgb, props.border_color, border_width, props.corner_radius);
         return LF_HELD;
     }
     if(is_hovered && (!lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && !lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT))) {
-        if(hover_color) {
-            // Hover color is 20 darker than the base color for every value
-            vec4s hover_color = (vec4s){LF_RGBA(color.r - 20, color.g - 20,
-                                                color.b - 20, color.a - 20)};
-            // Clamping the color
-            if(hover_color.r > 1.0)
-                hover_color.r = 1.0;
-            if(hover_color.g > 1.0)
-                hover_color.g = 1.0;
-            if(hover_color.b > 1.0)
-                hover_color.b = 1.0;
-            if(hover_color.a > 1.0)
-                hover_color.a = 1.0;
-            lf_rect_render(pos, size, hover_color, props.border_color, border_width, props.corner_radius);
-        } else {
-            lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
-        }
+        lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
         return LF_HOVERED;
     }
-    // Rendering with base color if idle
+
     lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
     return LF_IDLE;
 }
@@ -806,34 +738,37 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     state.scr_ev.xoffset = xoffset;
     state.scr_ev.yoffset = yoffset;
 
-
+    if(state.div_index_ptr > LF_MAX_DIVS - 1) return;
+    
+    LfDiv* selected_div = &state.divs[state.selected_div_id];
     if(yoffset == -1) {
-        if(state.selected_div.total_area.y > (state.selected_div.aabb.size.y + state.selected_div.aabb.pos.y)) {
-            state.div_scrolls[state.selected_div.id] -= LF_SCROLL_AMOUNT;
+        if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) {
+            selected_div->scroll -= LF_SCROLL_AMOUNT;
         } 
     } else if (yoffset == 1) {
-        if(state.div_scrolls[state.selected_div.id] < 0) {
-            state.div_scrolls[state.selected_div.id] += LF_SCROLL_AMOUNT;
+        if(selected_div->scroll < 0) {
+            selected_div->scroll += LF_SCROLL_AMOUNT;
         }        
     }
 
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
+    LfMouse* mouse = &state.input.mouse;
     // Setting the position values 
-    state.input.mouse.xpos = xpos;
-    state.input.mouse.ypos = ypos;
+    mouse->xpos = xpos;
+    mouse->ypos = ypos;
 
-    if(state.input.mouse.first_mouse_press) {
-        state.input.mouse.xpos_last = xpos;
-        state.input.mouse.ypos_last = ypos;
-        state.input.mouse.first_mouse_press = false;
+    if(mouse->first_mouse_press) {
+        mouse->xpos_last = xpos;
+        mouse->ypos_last = ypos;
+        mouse->first_mouse_press = false;
     }
     // Delta mouse positions 
-    state.input.mouse.xpos_delta = state.input.mouse.xpos - state.input.mouse.xpos_last;
-    state.input.mouse.ypos_delta = state.input.mouse.ypos - state.input.mouse.ypos_last;
-    state.input.mouse.xpos_last = xpos;
-    state.input.mouse.ypos_last = ypos;
+    mouse->xpos_delta = mouse->xpos - mouse->xpos_last;
+    mouse->ypos_delta = mouse->ypos - mouse->ypos_last;
+    mouse->xpos_last = xpos;
+    mouse->ypos_last = ypos;
 
     // Calling User defined callbacks
     for(uint32_t i = 0; i < state.input.cursor_pos_cb_count; i++) {
@@ -884,127 +819,32 @@ void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, floa
         glm_mat4_mulv(transform, state.render.vert_pos[i].raw, result);
         state.render.verts[state.render.vert_count].pos[0] = result[0];
         state.render.verts[state.render.vert_count].pos[1] = result[1];
-        vec4 border_color_arr;
-        border_color_arr[0] = border_color.x;
-        border_color_arr[1] = border_color.y;
-        border_color_arr[2] = border_color.z;
-        border_color_arr[3] = border_color.w;
+
+        vec4 border_color_arr = (vec4){border_color.r, border_color.g, border_color.b, border_color.a};
         memcpy(state.render.verts[state.render.vert_count].border_color, border_color_arr, sizeof(vec4));
 
         state.render.verts[state.render.vert_count].border_width = border_width; 
 
-        vec4 color_arr;
-        color_arr[0] = color.r;
-        color_arr[1] = color.g;
-        color_arr[2] = color.b;
-        color_arr[3] = color.a;
+        vec4 color_arr = (vec4){color.r, color.g, color.b, color.a};
         memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-        vec2 texcoord_arr;
-        texcoord_arr[0] = texcoords[i].x;
-        texcoord_arr[1] = texcoords[i].y;
+
+        vec2 texcoord_arr = (vec2){texcoords[i].x, texcoords[i].y};
         memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+
         state.render.verts[state.render.vert_count].tex_index = -1;
 
-        vec2 scale_arr;
-        scale_arr[0] = size.x;
-        scale_arr[1] = size.y;
+        vec2 scale_arr = (vec2){size.x, size.y};
         memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
-        vec2 pos_px_arr;
-        pos_px_arr[0] = (float)pos_initial.x;
-        pos_px_arr[1] = (float)pos_initial.y;
+        vec2 pos_px_arr = (vec2){(float)pos_initial.x, (float)pos_initial.y};
         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].corner_radius = corner_radius;
-        state.render.verts[state.render.vert_count].is_gradient = 0;
 
-        vec2 cull_start_arr;
-        cull_start_arr[0] = state.cull_start.x;
-        cull_start_arr[1] = state.cull_start.y;
-        vec2 cull_end_arr;
-        cull_end_arr[0] = state.cull_end.x;
-        cull_end_arr[1] = state.cull_end.y;
+        vec2 cull_start_arr = (vec2){state.cull_start.x, state.cull_start.y};
         memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
-        state.render.vert_count++;
-    }
-    state.render.index_count += 6;
-}
-
-void lf_rect_gradient_render(vec2s pos, vec2s size, vec4s top_color, vec4s bottom_color) {
- // Offsetting the postion, so that pos is the top left of the rendered object
-    vec2s pos_initial = pos;
-    pos = (vec2s){pos.x + size.x / 2.0f, pos.y + size.y / 2.0f};
-
-    // Initializing texture coords data
-    vec2s texcoords[4] = {
-        (vec2s){1.0f, 1.0f},
-        (vec2s){1.0f, 0.0f},
-        (vec2s){0.0f, 0.0f},
-        (vec2s){0.0f, 1.0f},
-    };
-    // Calculating the transform matrix
-    mat4 translate; 
-    mat4 scale;
-    mat4 transform;
-    vec3 pos_xyz = {pos.x, pos.y, 0.0f};
-    vec3 size_xyz = {size.x, size.y, 0.0f};
-    glm_translate_make(translate, pos_xyz);
-    glm_scale_make(scale, size_xyz);
-    glm_mat4_mul(translate,scale,transform);
-
-    // Adding the vertices to the batch renderer
-    for(uint32_t i = 0; i < 4; i++) {
-        if(state.render.vert_count >= MAX_RENDER_BATCH) {
-            lf_flush();
-            lf_renderer_begin();
-        }
-        vec4 result;
-        glm_mat4_mulv(transform, state.render.vert_pos[i].raw, result);
-        state.render.verts[state.render.vert_count].pos[0] = result[0];
-        state.render.verts[state.render.vert_count].pos[1] = result[1];
-        vec4 border_color_arr;
-        border_color_arr[0] = top_color.r;
-        border_color_arr[1] = top_color.g;
-        border_color_arr[2] = top_color.b;
-        border_color_arr[3] = top_color.a;
-        memcpy(state.render.verts[state.render.vert_count].border_color, border_color_arr, sizeof(vec4));
-
-        state.render.verts[state.render.vert_count].border_width = 0.0f; 
-
-        vec4 color_arr;
-        color_arr[0] = bottom_color.r;
-        color_arr[1] = bottom_color.g;
-        color_arr[2] = bottom_color.b;
-        color_arr[3] = bottom_color.a;
-        memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-        vec2 texcoord_arr;
-        texcoord_arr[0] = texcoords[i].x;
-        texcoord_arr[1] = texcoords[i].y;
-        memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
-        state.render.verts[state.render.vert_count].tex_index = -1;
-
-        vec2 scale_arr;
-        scale_arr[0] = size.x;
-        scale_arr[1] = size.y;
-        memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
-
-        vec2 pos_px_arr;
-        pos_px_arr[0] = (float)pos_initial.x;
-        pos_px_arr[1] = (float)pos_initial.y;
-        memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
-
-        state.render.verts[state.render.vert_count].corner_radius = 0.0f;
-        state.render.verts[state.render.vert_count].is_gradient = 1;
-
-        vec2 cull_start_arr;
-        cull_start_arr[0] = state.cull_start.x;
-        cull_start_arr[1] = state.cull_start.y;
-        vec2 cull_end_arr;
-        cull_end_arr[0] = state.cull_end.x;
-        cull_end_arr[1] = state.cull_end.y;
-        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+        vec2 cull_end_arr = (vec2){state.cull_end.x, state.cull_end.y};
         memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
         state.render.vert_count++;
@@ -1059,49 +899,32 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
         vec4 result;
         glm_mat4_mulv(transform, state.render.vert_pos[i].raw, result);
         memcpy(state.render.verts[state.render.vert_count].pos, result, sizeof(vec2));
-        vec4 border_color_arr;
-        border_color_arr[0] = border_color.x;
-        border_color_arr[1] = border_color.y;
-        border_color_arr[2] = border_color.z;
-        border_color_arr[3] = border_color.w;
+
+        vec4 border_color_arr = (vec4){border_color.r, border_color.g, border_color.b, border_color.a};
         memcpy(state.render.verts[state.render.vert_count].border_color, border_color_arr, sizeof(vec4));
 
         state.render.verts[state.render.vert_count].border_width = border_width; 
 
-        vec4 color_arr;
-        color_arr[0] = color.r;
-        color_arr[1] = color.g;
-        color_arr[2] = color.b;
-        color_arr[3] = color.a;
+        vec4 color_arr = (vec4){color.r, color.g, color.b, color.a};
         memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
 
-        vec2 texcoord_arr;
-        texcoord_arr[0] = texcoords[i].x;
-        texcoord_arr[1] = texcoords[i].y;
+        vec2 texcoord_arr = (vec2){texcoords[i].x, texcoords[i].y};
         memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].tex_index = tex_index;
 
-        vec2 scale_arr;
-        scale_arr[0] = (float)tex.width;
-        scale_arr[1] = (float)tex.height;
+        vec2 scale_arr = (vec2){(float)tex.width, (float)tex.height};
         memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
-        vec2 pos_px_arr;
-        pos_px_arr[0] = (float)pos_initial.x;
-        pos_px_arr[1] = (float)pos_initial.y;
+        vec2 pos_px_arr = (vec2){(float)pos_initial.x, (float)pos_initial.y};
         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].corner_radius = corner_radius;
-        state.render.verts[state.render.vert_count].is_gradient = 0;
 
-        vec2 cull_start_arr;
-        cull_start_arr[0] = state.cull_start.x;
-        cull_start_arr[1] = state.cull_start.y;
-        vec2 cull_end_arr;
-        cull_end_arr[0] = state.cull_end.x;
-        cull_end_arr[1] = state.cull_end.y;
+        vec2 cull_start_arr = (vec2){state.cull_start.x, state.cull_start.y};
         memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+
+        vec2 cull_end_arr = (vec2){state.cull_end.x, state.cull_end.y};
         memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
         state.render.vert_count++;
@@ -1301,7 +1124,7 @@ int32_t int_max(int32_t a, int32_t b) {
 
 bool lf_hovered(vec2s pos, vec2s size) {
     bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
-        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && state.selected_div.id == state.div_index_ptr - 1;
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && state.selected_div_id == state.current_div.id;
     return hovered;
 }
 
@@ -1447,46 +1270,32 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
                             lf_flush();
                             lf_renderer_begin();
                         }
-                        vec2 verts_arr;
-                        verts_arr[0] = verts[i].x;
-                        verts_arr[1] = verts[i].y;
+                        vec2 verts_arr = (vec2){verts[i].x, verts[i].y};
                         memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
 
                         vec4 border_color = {0, 0, 0, 0};
                         memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
+
                         state.render.verts[state.render.vert_count].border_width = 0;
 
-                        vec4 color_arr;
-                        color_arr[0] = color.r;
-                        color_arr[1] = color.g;
-                        color_arr[2] = color.b;
-                        color_arr[3] = color.a;
+                        vec4 color_arr = (vec4){color.r, color.g, color.b, color.a};
                         memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-                        vec2 texcoord_arr;
-                        texcoord_arr[0] = texcoords[i].x;
-                        texcoord_arr[1] = texcoords[i].y;
+
+                        vec2 texcoord_arr = (vec2){texcoords[i].x, texcoords[i].y};
                         memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+
                         state.render.verts[state.render.vert_count].tex_index = tex_index;
 
-                        vec2 scale_arr;
-                        scale_arr[0] = 0;
-                        scale_arr[1] = 0;
+                        vec2 scale_arr = (vec2){0, 0};
                         memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
-                        vec2 pos_px_arr;
-                        pos_px_arr[0] = 0;
-                        pos_px_arr[1] = 0;
+                        vec2 pos_px_arr = (vec2){0, 0};
                         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
                         state.render.verts[state.render.vert_count].corner_radius = 0;
-                        state.render.verts[state.render.vert_count].is_gradient = 0;
 
-                        vec2 cull_start_arr;
-                        cull_start_arr[0] = state.cull_start.x;
-                        cull_start_arr[1] = state.cull_start.y;
-                        vec2 cull_end_arr;
-                        cull_end_arr[0] = state.cull_end.x;
-                        cull_end_arr[1] = state.cull_end.y;
+                        vec2 cull_start_arr = (vec2){state.cull_start.x, state.cull_start.y};
+                        vec2 cull_end_arr = (vec2){state.cull_end.x, state.cull_end.y};
                         memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
                         memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
@@ -1691,8 +1500,8 @@ LfTheme lf_default_theme(const char* font_path, uint32_t font_size) {
         .border_color = (vec4s){LF_BLACK},
         .padding = 0,
         .margin_left = 0, 
-        .margin_right = 10, 
-        .margin_top = 10, 
+        .margin_right = 5, 
+        .margin_top = 5, 
         .margin_bottom = 0, 
         .border_width = 0,
         .corner_radius = 2
@@ -1851,8 +1660,8 @@ LfClickableItemState lf_image_button(LfTexture img) {
 
     // If the button does not fit onto the current div, advance to the next line
     next_line_on_overflow(
-        (vec2s){img.width + padding * 2.0f + margin_right + margin_left, 
-                    img.height + padding * 2.0f + margin_bottom + margin_top});
+        (vec2s){img.width + padding * 2.0f, 
+                    img.height + padding * 2.0f});
 
     // Advancing the position pointer by the margins
     state.pos_ptr.x += margin_left;
@@ -1909,21 +1718,27 @@ LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t he
 }
 
 LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
-    state.prev_div = state.current_div;
+    if(state.div_index_ptr > LF_MAX_DIVS - 1) {
+        LF_ERROR("Reached maximum div count.");
+        return LF_IDLE;
+    }
     state.prev_pos_ptr = state.pos_ptr;
     state.prev_font_stack = state.font_stack;
     state.prev_props_stack = state.props_stack;
     state.prev_line_height = state.current_line_height;
+    state.prev_div = state.current_div;
 
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.div_props;
     state.div_props = props;
-    LfDiv div = state.selected_div;
+
+    LfDiv div = state.divs[state.div_index_ptr];
     div.aabb.size = (vec2s){size.x, size.y};
     div.aabb.pos = pos;
     div.init = true;
     div.id = state.div_index_ptr;
-    state.current_div.interact_state = LF_IDLE;
-    state.pos_ptr = (vec2s){pos.x + props.padding, pos.y + props.padding};
+
+    state.pos_ptr = (vec2s){pos.x + props.padding + props.corner_radius + props.border_width, 
+                            pos.y + props.padding + props.corner_radius + props.border_width};
 
     state.current_div = div;
 
@@ -1933,67 +1748,114 @@ LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
 
     state.cull_start = (vec2s){-1, pos.y + props.padding};
     state.cull_end = (vec2s){-1, pos.y + size.y};
-    lf_set_ptr_y(state.div_scrolls[state.div_index_ptr++]);
+    lf_set_ptr_y(state.divs[state.div_index_ptr].scroll);
 
-    // Reseting the div parameters
     state.current_div = div;
+
+    state.divs[state.div_index_ptr++] = div;
+
     state.current_line_height = 0;
     state.font_stack = NULL;
     state.props_on_stack = false;
 
-    if(area_hovered(pos, size)) {
-        state.selected_div_tmp = div;
+    return state.current_div.interact_state;
+}
+LfClickableItemState lf_div_begin_id(vec2s pos, vec2s size, uint32_t id) {
+    if(state.div_index_ptr > LF_MAX_DIVS - 1) {
+        LF_ERROR("Reached maximum div count.");
+        return LF_IDLE;
     }
+    state.prev_pos_ptr = state.pos_ptr;
+    state.prev_font_stack = state.font_stack;
+    state.prev_props_stack = state.props_stack;
+    state.prev_line_height = state.current_line_height;
+    state.prev_div = state.current_div;
+
+    bool div_exists = false;
+    for(uint32_t i = 0; i < state.div_id_count; i++) {
+        if(state.id_divs[i].id == id) {
+            div_exists = true;
+            break;
+        }
+    }
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.div_props;
+    state.div_props = props;
+
+    LfDiv div = state.divs[state.div_index_ptr];
+    div.aabb.size = (vec2s){size.x, size.y};
+    div.aabb.pos = pos;
+    div.init = true;
+    div.id = id;
+
+    state.pos_ptr = (vec2s){pos.x + props.padding + props.corner_radius + props.border_width, 
+                            pos.y + props.padding + props.corner_radius + props.border_width};
+
+    state.current_div = div;
+
+    div.interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
+                                                      (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, 0, false, false);
+    // Culling & Scrolling
+
+    state.cull_start = (vec2s){-1, pos.y + props.padding};
+    state.cull_end = (vec2s){-1, pos.y + size.y};
+    lf_set_ptr_y(state.divs[state.div_index_ptr++].scroll);
+
+    state.current_div = div;
+
+    if(!div_exists)
+        state.id_divs[state.div_id_count++] = div;
+
+    state.current_line_height = 0;
+    state.font_stack = NULL;
+    state.props_on_stack = false;
 
     return state.current_div.interact_state;
 }
-void lf_div_end() {
-    state.pos_ptr = state.prev_pos_ptr;
-    state.current_div = state.prev_div;
-    state.font_stack = state.prev_font_stack;
-    state.props_stack = state.prev_props_stack;
-    state.current_line_height = state.prev_line_height;
-    // Scrollbar
-    if(state.div_index_ptr - 1 == state.selected_div.id) {
+static void draw_scrollbar_on(uint32_t div_id) {
+    if(state.current_div.id == div_id) {
+        LfDiv* selected = &state.divs[div_id];
         LfUIElementProps props = lf_theme()->scrollbar_props;
-        state.selected_div.total_area = state.pos_ptr; 
-
-        float total_area = state.selected_div.total_area.y - state.div_scrolls[state.selected_div.id];
-        float visible_area = state.selected_div.aabb.size.y + state.selected_div.aabb.pos.y;
-
-        if(total_area > visible_area) 
-        {
+        selected->total_area = state.pos_ptr;
+        float total_area = selected->total_area.y - selected->scroll;
+        float visible_area = selected->aabb.size.y + selected->aabb.pos.y - ((state.div_props.corner_radius + state.div_props.padding) / 2.0f);
+        if(total_area > visible_area) {
             const float scrollbar_width = 10;
-            const float min_scrollbar_width = 10;
+            const float min_scrollbar_height = 10;
 
             float area_mapped = visible_area/total_area; 
-            float scroll_mapped = (-1 * state.div_scrolls[state.selected_div.id])/total_area;
-
-            // Limiting the scrollbar height 
-            float scrollbar_height = (state.selected_div.aabb.size.y*area_mapped - props.margin_top * 2) > min_scrollbar_width ? 
-                (state.selected_div.aabb.size.y*area_mapped - props.margin_top * 2) : min_scrollbar_width;
-
+            float scroll_mapped = (-1 * selected->scroll)/total_area;
+            float scrollbar_height = (selected->aabb.size.y*area_mapped - props.margin_top * 2) > min_scrollbar_height ? 
+                (selected->aabb.size.y*area_mapped - props.margin_top * 2) : min_scrollbar_height;
+            
             clickable_item(
                 (vec2s){
-                    state.selected_div.aabb.pos.x + state.selected_div.aabb.size.x - scrollbar_width - props.margin_right,
-                    (state.selected_div.aabb.pos.y + props.margin_top + state.selected_div.aabb.size.y*scroll_mapped) <  visible_area - scrollbar_height ? 
-                    (state.selected_div.aabb.pos.y + props.margin_top + state.selected_div.aabb.size.y*scroll_mapped) : visible_area - scrollbar_height}, 
+                    selected->aabb.pos.x + selected->aabb.size.x - scrollbar_width - props.margin_right - state.div_props.padding - state.div_props.corner_radius,
+                    (selected->aabb.pos.y + selected->aabb.size.y*scroll_mapped + props.margin_top + state.div_props.padding + state.div_props.corner_radius) < visible_area - scrollbar_height ? 
+                    (selected->aabb.pos.y + selected->aabb.size.y*scroll_mapped + props.margin_top + state.div_props.padding + state.div_props.corner_radius) : visible_area - scrollbar_height}, 
                 (vec2s){
                     scrollbar_width, 
                     scrollbar_height}, 
                 props,
                 props.color, props.border_width, false, true);
-        }
+        } 
     }
-    // Un-initializing the div
+}
+void lf_div_end() {
+    draw_scrollbar_on(state.selected_div_id);
+
+    state.pos_ptr = state.prev_pos_ptr;
+    state.font_stack = state.prev_font_stack;
+    state.props_stack = state.prev_props_stack;
+    state.current_line_height = state.prev_line_height;
+    state.current_div = state.prev_div;
     state.cull_start = (vec2s){-1, -1};
-    state.cull_end = (vec2s){-1, -1};   
+    state.cull_end = (vec2s){-1, -1};
 }
 
 void lf_next_line() {
     // Advancing the position pointer by the current line height
     state.pos_ptr.y += state.current_line_height;
-    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.padding;    
+    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.padding + state.div_props.corner_radius + state.div_props.border_width;    
     state.current_line_height = 0;
     state.gui_re_ev.happened = true;
 }
@@ -2084,7 +1946,7 @@ void lf_image(LfTexture tex) {
     state.pos_ptr.y += margin_top;
 
     // Rendering the image
-    lf_image_render(state.pos_ptr, color, tex, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
+    lf_image_render(state.pos_ptr, color, tex, props.border_color, props.border_width, props.corner_radius);
 
     // Advancing the position pointer by the width of the image
     state.pos_ptr.x += tex.width + margin_right;
@@ -2097,9 +1959,29 @@ LfTheme* lf_theme() {
 void lf_begin() {
     state.pos_ptr = (vec2s){0, 0};
     lf_renderer_begin();
+    LfUIElementProps props = lf_theme()->div_props; 
+    props.color = (vec4s){0, 0, 0, 0};
+    lf_push_style_props(props);
+    lf_div_begin((vec2s){0, 0}, (vec2s){(float)state.dsp_w, (float)state.dsp_h});
+    lf_div_end();
+    lf_pop_style_props();
 }
 void lf_end() {
-    state.selected_div = state.selected_div_tmp;
+    for (int i = 0; i < state.div_id_count; i++) {
+        state.divs[state.div_index_ptr - 1 + i] = state.id_divs[i];
+    }
+    for(uint32_t i = 0; i < 1; i++) {
+        printf("Div: %i\n", state.divs[i].id);
+    }
+    for(int32_t i = state.div_index_ptr - 1; i >= 0; i--) {
+        LfDiv* div = &state.divs[i];
+        if(area_hovered(div->aabb.pos, div->aabb.size)) {
+            state.selected_div_id = div->id;
+            break;
+        }
+    }
+
+    printf("Selected: %i\n", state.selected_div_id);
     state.div_index_ptr = 0;
     update_input();
     clear_events();
@@ -2436,4 +2318,12 @@ void lf_unset_cull_end_x() {
 
  void lf_unset_cull_end_y() {
     state.cull_end.y = -1;
+}
+
+LfDiv lf_get_current_div() {
+    return state.current_div;
+}
+
+LfDiv lf_get_selected_div() {
+    return state.divs[state.selected_div_id];
 }
