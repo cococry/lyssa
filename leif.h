@@ -123,14 +123,13 @@ typedef struct {
 } LfTheme;
 
 typedef struct {
-    int32_t id;
+    int32_t id, scroll_id;
 
     LfAABB aabb;
     LfClickableItemState interact_state;
     LfUIElementProps props;
 
     bool init;
-    float scroll;
 
     vec2s total_area;
 } LfDiv;

@@ -164,9 +164,9 @@ typedef struct {
     vec2s cull_start, cull_end;
 
     LfDiv divs[LF_MAX_DIVS];
-    LfDiv id_divs[LF_MAX_DIVS];
+    vec2s div_scrolls[LF_MAX_DIVS];
 
-    uint32_t div_id_count, div_index_ptr, selected_div_id;
+    uint32_t div_index_ptr, selected_div_id, div_count;
 } LfState;
 
 typedef enum {
@@ -195,6 +195,8 @@ static void                     input_field(LfInputField* input, InputFieldType 
 LfFont                          load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add);
 static void                     next_line_on_overflow(vec2s size);
 static bool                     area_hovered(vec2s pos, vec2s size);
+static float                    get_div_scroll(LfDiv div);
+static void                     change_div_scroll(LfDiv div, int32_t change);
 
 // Utility
 static int32_t                  closes_num_in_arr(int arr[], int n, int target);
@@ -741,15 +743,17 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     if(state.div_index_ptr > LF_MAX_DIVS - 1) return;
     
     LfDiv* selected_div = &state.divs[state.selected_div_id];
+    float scroll = get_div_scroll(*selected_div);
     if(yoffset == -1) {
         if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) {
-            selected_div->scroll -= LF_SCROLL_AMOUNT;
+            change_div_scroll(*selected_div, -LF_SCROLL_AMOUNT);
         } 
     } else if (yoffset == 1) {
-        if(selected_div->scroll < 0) {
-            selected_div->scroll += LF_SCROLL_AMOUNT;
+        if(get_div_scroll(*selected_div)) {
+            change_div_scroll(*selected_div, LF_SCROLL_AMOUNT);
         }        
     }
+    printf("Scrolling: %f\n", scroll);
 
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
@@ -820,31 +824,31 @@ void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, floa
         state.render.verts[state.render.vert_count].pos[0] = result[0];
         state.render.verts[state.render.vert_count].pos[1] = result[1];
 
-        vec4 border_color_arr = (vec4){border_color.r, border_color.g, border_color.b, border_color.a};
+        const vec4 border_color_arr = {border_color.r, border_color.g, border_color.b, border_color.a};
         memcpy(state.render.verts[state.render.vert_count].border_color, border_color_arr, sizeof(vec4));
 
         state.render.verts[state.render.vert_count].border_width = border_width; 
 
-        vec4 color_arr = (vec4){color.r, color.g, color.b, color.a};
+        const vec4 color_arr = {color.r, color.g, color.b, color.a};
         memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
 
-        vec2 texcoord_arr = (vec2){texcoords[i].x, texcoords[i].y};
+        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
         memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].tex_index = -1;
 
-        vec2 scale_arr = (vec2){size.x, size.y};
+        const vec2 scale_arr = {size.x, size.y};
         memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
-        vec2 pos_px_arr = (vec2){(float)pos_initial.x, (float)pos_initial.y};
+        const vec2 pos_px_arr = {(float)pos_initial.x, (float)pos_initial.y};
         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].corner_radius = corner_radius;
 
-        vec2 cull_start_arr = (vec2){state.cull_start.x, state.cull_start.y};
+        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
         memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
 
-        vec2 cull_end_arr = (vec2){state.cull_end.x, state.cull_end.y};
+        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
         memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
         state.render.vert_count++;
@@ -900,31 +904,31 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
         glm_mat4_mulv(transform, state.render.vert_pos[i].raw, result);
         memcpy(state.render.verts[state.render.vert_count].pos, result, sizeof(vec2));
 
-        vec4 border_color_arr = (vec4){border_color.r, border_color.g, border_color.b, border_color.a};
+        const vec4 border_color_arr = {border_color.r, border_color.g, border_color.b, border_color.a};
         memcpy(state.render.verts[state.render.vert_count].border_color, border_color_arr, sizeof(vec4));
 
         state.render.verts[state.render.vert_count].border_width = border_width; 
 
-        vec4 color_arr = (vec4){color.r, color.g, color.b, color.a};
+        const vec4 color_arr = {color.r, color.g, color.b, color.a};
         memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
 
-        vec2 texcoord_arr = (vec2){texcoords[i].x, texcoords[i].y};
+        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
         memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].tex_index = tex_index;
 
-        vec2 scale_arr = (vec2){(float)tex.width, (float)tex.height};
+        const vec2 scale_arr = {(float)tex.width, (float)tex.height};
         memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
-        vec2 pos_px_arr = (vec2){(float)pos_initial.x, (float)pos_initial.y};
+        vec2 pos_px_arr = {(float)pos_initial.x, (float)pos_initial.y};
         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
         state.render.verts[state.render.vert_count].corner_radius = corner_radius;
 
-        vec2 cull_start_arr = (vec2){state.cull_start.x, state.cull_start.y};
+        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
         memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
 
-        vec2 cull_end_arr = (vec2){state.cull_end.x, state.cull_end.y};
+        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
         memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
         state.render.vert_count++;
@@ -1143,7 +1147,23 @@ bool area_hovered(vec2s pos, vec2s size) {
         lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
     return hovered;
 }
+float get_div_scroll(LfDiv div) {
+    for(uint32_t i = 0; i < state.div_count; i++) {
+        if(state.div_scrolls[i].y == div.scroll_id) {
+            return state.div_scrolls[i].x;
+        }
+    }
+    return -1;
+}
 
+void change_div_scroll(LfDiv div, int32_t change) {
+    for(uint32_t i = 0; i < state.div_count; i++) {
+        if(state.div_scrolls[i].y == div.scroll_id) {
+            state.div_scrolls[i].x += change;
+            return;
+        }
+    }
+}
 int32_t closes_num_in_arr(int arr[], int n, int target) {
     int32_t closest = 0;
     int32_t min_diff = INT_MAX;
@@ -1270,36 +1290,37 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
                             lf_flush();
                             lf_renderer_begin();
                         }
-                        vec2 verts_arr = (vec2){verts[i].x, verts[i].y};
+                        const vec2 verts_arr = {verts[i].x, verts[i].y};
                         memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
 
-                        vec4 border_color = {0, 0, 0, 0};
+                        const vec4 border_color = {0, 0, 0, 0};
                         memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
 
                         state.render.verts[state.render.vert_count].border_width = 0;
 
-                        vec4 color_arr = (vec4){color.r, color.g, color.b, color.a};
+                        const vec4 color_arr = {color.r, color.g, color.b, color.a};
                         memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
 
-                        vec2 texcoord_arr = (vec2){texcoords[i].x, texcoords[i].y};
+                        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
                         memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
 
                         state.render.verts[state.render.vert_count].tex_index = tex_index;
 
-                        vec2 scale_arr = (vec2){0, 0};
+                        const vec2 scale_arr = {0, 0};
                         memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
-                        vec2 pos_px_arr = (vec2){0, 0};
+                        const vec2 pos_px_arr = {0, 0};
                         memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
                         state.render.verts[state.render.vert_count].corner_radius = 0;
 
-                        vec2 cull_start_arr = (vec2){state.cull_start.x, state.cull_start.y};
-                        vec2 cull_end_arr = (vec2){state.cull_end.x, state.cull_end.y};
+                        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
+                        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
                         memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
                         memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
                         state.render.vert_count++;
+        lf_pop_style_props();
                     }
                     state.render.index_count += 6;
 
@@ -1398,6 +1419,8 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, const char* f
     } else {
         state.theme = lf_default_theme(font_path, 24);
     }
+
+    memset(state.div_scrolls, -1, sizeof(state.div_scrolls));
 
     // Setting glfw callbacks
     glfwSetKeyCallback((GLFWwindow*)state.window_handle, glfw_key_callback);
@@ -1736,6 +1759,7 @@ LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
     div.aabb.pos = pos;
     div.init = true;
     div.id = state.div_index_ptr;
+    div.scroll_id = state.div_index_ptr;
 
     state.pos_ptr = (vec2s){pos.x + props.padding + props.corner_radius + props.border_width, 
                             pos.y + props.padding + props.corner_radius + props.border_width};
@@ -1746,13 +1770,20 @@ LfClickableItemState lf_div_begin(vec2s pos, vec2s size) {
                                                       (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, 0, false, false);
     // Culling & Scrolling
 
+    float div_scroll = state.div_scrolls[state.div_index_ptr].x;
+
+    if(div_scroll == -1) {
+        state.div_scrolls[state.div_count++] = (vec2s){0, div.scroll_id};
+        div_scroll = 0;
+    }
     state.cull_start = (vec2s){-1, pos.y + props.padding};
     state.cull_end = (vec2s){-1, pos.y + size.y};
-    lf_set_ptr_y(state.divs[state.div_index_ptr].scroll);
+    lf_set_ptr_y(div_scroll);
 
     state.current_div = div;
 
     state.divs[state.div_index_ptr++] = div;
+
 
     state.current_line_height = 0;
     state.font_stack = NULL;
@@ -1771,13 +1802,6 @@ LfClickableItemState lf_div_begin_id(vec2s pos, vec2s size, uint32_t id) {
     state.prev_line_height = state.current_line_height;
     state.prev_div = state.current_div;
 
-    bool div_exists = false;
-    for(uint32_t i = 0; i < state.div_id_count; i++) {
-        if(state.id_divs[i].id == id) {
-            div_exists = true;
-            break;
-        }
-    }
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.div_props;
     state.div_props = props;
 
@@ -1785,7 +1809,8 @@ LfClickableItemState lf_div_begin_id(vec2s pos, vec2s size, uint32_t id) {
     div.aabb.size = (vec2s){size.x, size.y};
     div.aabb.pos = pos;
     div.init = true;
-    div.id = id;
+    div.id = state.div_index_ptr;
+    div.scroll_id = id;
 
     state.pos_ptr = (vec2s){pos.x + props.padding + props.corner_radius + props.border_width, 
                             pos.y + props.padding + props.corner_radius + props.border_width};
@@ -1796,14 +1821,20 @@ LfClickableItemState lf_div_begin_id(vec2s pos, vec2s size, uint32_t id) {
                                                       (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, 0, false, false);
     // Culling & Scrolling
 
+    float div_scroll = get_div_scroll(state.current_div);
+
+    if(div_scroll == -1) {
+        state.div_scrolls[state.div_count++] = (vec2s){0, div.id};
+        div_scroll = 0;
+    }
     state.cull_start = (vec2s){-1, pos.y + props.padding};
     state.cull_end = (vec2s){-1, pos.y + size.y};
-    lf_set_ptr_y(state.divs[state.div_index_ptr++].scroll);
+    lf_set_ptr_y(div_scroll);
 
     state.current_div = div;
 
-    if(!div_exists)
-        state.id_divs[state.div_id_count++] = div;
+    state.divs[state.div_index_ptr++] = div;
+
 
     state.current_line_height = 0;
     state.font_stack = NULL;
@@ -1814,16 +1845,17 @@ LfClickableItemState lf_div_begin_id(vec2s pos, vec2s size, uint32_t id) {
 static void draw_scrollbar_on(uint32_t div_id) {
     if(state.current_div.id == div_id) {
         LfDiv* selected = &state.divs[div_id];
+        float scroll = get_div_scroll(*selected);
         LfUIElementProps props = lf_theme()->scrollbar_props;
         selected->total_area = state.pos_ptr;
-        float total_area = selected->total_area.y - selected->scroll;
+        float total_area = selected->total_area.y - scroll;
         float visible_area = selected->aabb.size.y + selected->aabb.pos.y - ((state.div_props.corner_radius + state.div_props.padding) / 2.0f);
         if(total_area > visible_area) {
             const float scrollbar_width = 10;
             const float min_scrollbar_height = 10;
 
             float area_mapped = visible_area/total_area; 
-            float scroll_mapped = (-1 * selected->scroll)/total_area;
+            float scroll_mapped = (-1 * scroll)/total_area;
             float scrollbar_height = (selected->aabb.size.y*area_mapped - props.margin_top * 2) > min_scrollbar_height ? 
                 (selected->aabb.size.y*area_mapped - props.margin_top * 2) : min_scrollbar_height;
             
@@ -1967,12 +1999,6 @@ void lf_begin() {
     lf_pop_style_props();
 }
 void lf_end() {
-    for (int i = 0; i < state.div_id_count; i++) {
-        state.divs[state.div_index_ptr - 1 + i] = state.id_divs[i];
-    }
-    for(uint32_t i = 0; i < 1; i++) {
-        printf("Div: %i\n", state.divs[i].id);
-    }
     for(int32_t i = state.div_index_ptr - 1; i >= 0; i--) {
         LfDiv* div = &state.divs[i];
         if(area_hovered(div->aabb.pos, div->aabb.size)) {
@@ -1981,7 +2007,6 @@ void lf_end() {
         }
     }
 
-    printf("Selected: %i\n", state.selected_div_id);
     state.div_index_ptr = 0;
     update_input();
     clear_events();
