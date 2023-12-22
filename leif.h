@@ -7,11 +7,12 @@
 #define LF_RGBA(r, g, b, a) r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f
 #define LF_ZTO_TO_RGBA(r, g, b, a) r * 255.0f, g * 255.0f, b * 255.0f, a * 255.0f
 
-#define LF_RED LF_RGBA(255.0f, 0.0f, 0.0f, 255.0f)
-#define LF_GREEN LF_RGBA(0.0f, 255.0f, 0.0f, 255.0f)
-#define LF_BLUE LF_RGBA(0.0f, 0.0f, 255.0f, 255.0f)
-#define LF_WHITE LF_RGBA(255.0f, 255.0f, 255.0f, 255.0f)
-#define LF_BLACK LF_RGBA(0.0f, 0.0f, 0.0f, 255.0f)
+#define LF_RED (vec4s){LF_RGBA(255.0f, 0.0f, 0.0f, 255.0f)}
+#define LF_GREEN (vec4s){LF_RGBA(0.0f, 255.0f, 0.0f, 255.0f)}
+#define LF_BLUE (vec4s){LF_RGBA(0.0f, 0.0f, 255.0f, 255.0f)}
+#define LF_WHITE (vec4s){LF_RGBA(255.0f, 255.0f, 255.0f, 255.0f)}
+#define LF_BLACK (vec4s){LF_RGBA(0.0f, 0.0f, 0.0f, 255.0f)}
+#define LF_NO_COLOR (vec4s){LF_RGBA(0.0f, 0.0f, 0.0f, 0.0f)}
 
 #define LF_COLOR_BRIGHTNESS(color, brightness) (vec4s){LF_RGBA(color.r * (float)brightness, color.g * (float)brightness, color.b * (float)brightness, color.a)}
 #define LF_SCROLL_AMOUNT 20
@@ -88,6 +89,8 @@ typedef struct {
     bool held, selcted;
     uint32_t width;
     uint32_t height;
+    uint32_t handle_size;
+    vec4s handle_color;
 } LfSlider;
 
 typedef enum {
@@ -127,7 +130,6 @@ typedef struct {
 
     LfAABB aabb;
     LfClickableItemState interact_state;
-    LfUIElementProps props;
 
     bool init;
 
@@ -250,7 +252,7 @@ LfClickableItemState lf_progress_bar_int(LfSlider* slider);
 
 LfClickableItemState lf_progress_stripe_int(LfSlider* slider);
 
-int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, vec4s selected_color, LfMenuItemCallback per_cb, bool vertical);
+int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, 
         int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);
@@ -316,3 +318,6 @@ void lf_unset_cull_start_y();
 void lf_unset_cull_end_x();
 
 void lf_unset_cull_end_y();
+
+void lf_dropdown_menu(const char** items, uint32_t item_count, uint32_t width, uint32_t height, int32_t* selected_index, bool* opened);
+

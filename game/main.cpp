@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -824,7 +826,7 @@ void renderPlaylistAddFromFolder() {
             props.color = RGB_COLOR(60, 60, 60);
             props.corner_radius = 10;
             lf_push_style_props(props);
-            lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 400});
+            lf_div_begin_id((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 400}, state.playlistAddFromFolderTab.folderIndex);
             for(auto& file : selectedFolder.files) {
                 std::string filename = std::filesystem::path(file).filename();
                 {
@@ -921,6 +923,7 @@ void renderFileOrFolderPopup() {
             state.currentTab = GuiTab::PlaylistAddFromFile;
             state.popups[(int32_t)PopupID::FileOrFolderPopup].render = false;
         }
+        lf_push_style_props(bprops);
         if(lf_button_fixed("From Folder", halfDivWidth, -1) == LF_CLICKED) {
             state.currentTab = GuiTab::PlaylistAddFromFolder;
             state.popups[(int32_t)PopupID::FileOrFolderPopup].render = false;
@@ -1096,6 +1099,7 @@ std::string formatDurationToMins(int32_t duration) {
             << std::setw(2) << std::setfill('0') << seconds;
     return format.str();
 }
+
 int main(int argc, char* argv[]) {
     // Initialization 
     initWin(1280, 720); 
@@ -1133,13 +1137,43 @@ int main(int argc, char* argv[]) {
 
     uint32_t index = 0;
 
-    char bufPapa[512] = {0};
-    LfInputField input = (LfInputField){ 
-        .width = 600, 
-        .buf = bufPapa, 
-        .placeholder = (char*)"Eingabe"
+
+    uint32_t val = 0;
+    LfSlider slider = (LfSlider){
+        .val = &val, 
+        .min = 0, 
+        .max = -1, 
+        .width = 600,
+        .handle_size = 18, 
+        .handle_color = RGB_COLOR(240, 30, 20)
     };
 
+    const char* items[20] = {
+        "option 1",
+        "option 2",
+        "option 3",
+        "option 4",
+        "option 5",
+        "option 6",
+        "option 7",
+        "option 8",
+        "option 9",
+        "option 10",
+        "option 11",
+        "option 12",
+        "option 13",
+        "option 14",
+        "option 15",
+        "option 16",
+        "option 17",
+        "option 18",
+        "option 19",
+        "option 20",
+    };
+    int32_t selected_index = 0;
+    int32_t selected_index2 = 0;
+    bool dropdown_opened = false;
+    bool dropdown_opened2 = false;
     while(!glfwWindowShouldClose(state.win)) { 
         // Delta-Time calculation
         float currentTime = glfwGetTime();
@@ -1151,6 +1185,7 @@ int main(int argc, char* argv[]) {
         glClearColor(LF_RGBA(0, 0, 0, 255));
 
 
+        lf_begin();
         /*switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
@@ -1176,66 +1211,19 @@ int main(int argc, char* argv[]) {
             if(popup.render) {
                 popup.renderCb();
             }
-        }
-       */ 
-        {
+        }*/
 
-        }
-       
-        lf_begin();
-        
-       
-        lf_div_begin((vec2s){0,0},(vec2s){(float)state.winWidth,(float)state.winHeight});
-        {
-            LfUIElementProps props = lf_theme()->button_props;
-            props.color = RGB_COLOR(200,60,60);
-            props.border_width = 0;
-            props.corner_radius = 5;
-            props.margin_top = 15;
-            props.margin_top = 0; 
-            props.margin_left = 0;
-            props.margin_right = 0;
-            props.margin_bottom = 0;
-            lf_push_style_props(props);
-            lf_set_ptr_x(state.winWidth - lf_text_dimension("X").x - lf_theme()->button_props.padding * 2.0f);
-            if(lf_button("X") == LF_CLICKED) {
-                glfwSetWindowShouldClose(state.win, true);
-            }
-            lf_pop_style_props();
-        }
 
-        lf_set_ptr_x((state.winWidth - 600) / 2.0f);
-        lf_set_ptr_y(150);
-        {
-            LfUIElementProps props = lf_theme()->inputfield_props;
-            props.color = RGBA_COLOR(0, 0, 0, 0);
-            props.border_width = 1;
-            props.border_color = RGB_COLOR(120, 120, 120);
-            props.corner_radius = 8;
-            props.padding = 20;
-            props.margin_top = 15;
-            props.text_color = RGB_COLOR(255, 255, 255);
-            lf_push_style_props(props);
-            float ptr_y = lf_get_ptr_y();
-            lf_input_text(&input);
-            lf_set_ptr_y(ptr_y);
-            lf_pop_style_props();
-        }
 
-        // Submit Knopf
-        {
-            LfUIElementProps props = lf_theme()->button_props;
-            props.color = LYSSA_GREEN;
-            props.corner_radius = 4;
-            lf_push_style_props(props);
-            lf_set_ptr_y(150 + ((lf_theme()->font.font_size + 20 * 2) - 25 + props.padding * 2.0f) / 2.0f);
-            lf_button_fixed("+", 25, 25);
-            lf_pop_style_props();
-        }
-        
-        lf_div_end();
+        LfUIElementProps props = lf_theme()->button_props;
+        props.border_width = 0;
+        props.corner_radius = 5;
+        lf_push_style_props(props);
+        lf_dropdown_menu(items, 20, 200, 400, &selected_index, &dropdown_opened);
+        lf_dropdown_menu(items, 20, 200, 400, &selected_index2, &dropdown_opened2);
+        lf_pop_style_props();
+
         lf_end();
-
         glfwPollEvents();
         glfwSwapBuffers(state.win);
 
