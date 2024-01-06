@@ -1,2 +1,2 @@
 test:
-	g++ main.cpp  -std=c++17 -O3 -ffast-math -I../vendor/stb_image/ -I../vendor/stb_truetype/ -I../vendor/ ../vendor/stb_image/stb_image.c ../vendor/glad/src/glad.c ../leif.c -I../ -o ../bin/game `pkg-config --cflags glfw3` -lglfw -I../vendor/glad/include/ -DLF_GLFW -DGLFW_INCLUDE_NONE -lm  
+	g++ main.cpp  -std=c++17 -O3 -ffast-math -I../vendor/stb_image/ -I../vendor/stb_truetype/ -I../vendor/ ../vendor/stb_image/stb_image.c ../vendor/glad/src/glad.c ../leif.c -I../ -o ../bin/game `pkg-config --cflags glfw3` -lglfw -I../vendor/glad/include/ -DLF_GLFW -DGLFW_INCLUDE_NONE -lm  -ltag

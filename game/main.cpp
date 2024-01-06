@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <filesystem>
 #include <sstream>
@@ -11,9 +12,18 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include "../leif.h"
+
 #define MINIAUDIO_IMPLEMENTATION
 #include "../vendor/miniaudio/miniaudio.h"
-#include "../leif.h"
+
+#include <taglib/tag.h>
+#include <taglib/fileref.h>
+#include <taglib/mpegfile.h>
+#include <taglib/id3v2tag.h>
+#include <taglib/id3v2frame.h>
+#include <taglib/mpegheader.h>
+#include <taglib/attachedpictureframe.h>
 
 #ifdef _WIN32
 #define HOMEDIR "USERPROFILE"
@@ -34,12 +44,21 @@
 #define DIV_START_X 20  
 #define DIV_START_Y 20
 
+#define BACK_BUTTON_MARGIN_BOTTOM 50
+#define BACK_BUTTON_WIDTH 20 
+#define BACK_BUTTON_HEIGHT 40
+
+
+using namespace TagLib;
+
 enum class GuiTab {
     Dashboard = 0, 
     CreatePlaylist,
     OnPlaylist,
+    OnTrack,
     PlaylistAddFromFile,
-    PlaylistAddFromFolder
+    PlaylistAddFromFolder,
+    TabCount
 };
 
 enum class FileStatus {
@@ -71,6 +90,7 @@ struct Sound {
 struct SoundFile {
     std::string path; 
     int32_t duration;
+    LfTexture thumbnail;
 
     bool operator==(const SoundFile& other) const {
         return path == other.path;
@@ -111,6 +131,8 @@ struct PlaylistAddFromFolderTab {
 
     int32_t folderIndex = -1;
     std::vector<Folder> loadedFolders;
+
+    LfDiv* fileContainer = NULL;
 };
 
 
@@ -132,7 +154,10 @@ struct GlobalState {
     float deltaTime, lastTime;
 
     ma_engine soundEngine;
+
     Sound currentSound;
+    SoundFile* currentSoundFile = NULL;
+
 
     LfFont musicTitleFont;
     LfFont poppinsBold;
@@ -148,13 +173,25 @@ struct GlobalState {
     std::vector<Playlist> playlists;
     std::vector<Popup> popups;
 
-    LfTexture backTexture, musicNoteTexture, downTexture, addTexture, tickTexture;
+    LfTexture backTexture, musicNoteTexture, downTexture, addTexture, tickTexture, 
+              playTexture, pauseTexture, skipUpTexture, skipDownTexture, skipSongUpTexture, 
+              skipSongDownTexture;
+    LfTexture trackThumbnail;
 
     CreatePlaylistState createPlaylistTab;
     PlaylistAddFromFileTab playlistAddFromFileTab;
     PlaylistAddFromFolderTab playlistAddFromFolderTab;
 
+    int32_t playlistFileOptionsIndex = -1;
+
     int32_t currentPlaylist = -1;
+
+    LfSlider trackProgress;
+
+    int32_t currentSoundPos;
+    float soundPosUpdateTimer = 1.0f;
+    float soundPosUpdateTime = 0.0f;
+
 };
 
 static GlobalState state;
@@ -162,27 +199,38 @@ static GlobalState state;
 static void                     winResizeCb(GLFWwindow* window, int32_t width, int32_t height);
 static void                     initWin(uint32_t width, uint32_t height);
 static void                     initUI();
-static void                     handleKeystrokes();
-
+static void                     handleTabKeyStrokes();
 
 static void                     renderDashboard();
 static void                     renderCreatePlaylist();
 static void                     renderOnPlaylist();
+static void                     renderOnTrack();
 static void                     renderPlaylistAddFromFile();
 static void                     renderPlaylistAddFromFolder();
 
 static void                     renderFileOrFolderPopup();
 
 static void                     backButtonTo(GuiTab tab);
+static void                     changeTabTo(GuiTab tab);
 
 static FileStatus               createPlaylist(const std::string& name);
 static FileStatus               addFileToPlaylist(const std::string& path, uint32_t playlistIndex);
+static FileStatus               removeFileFromPlaylist(const std::string& path, uint32_t playlistIndex);
 static bool                     isFileInPlaylist(const std::string& path, uint32_t playlistIndex);
+static void                     loadPlaylist(const std::filesystem::directory_entry& folder);
 static void                     loadPlaylists();
 static std::vector<std::string> loadFilesFromFolder(const std::filesystem::path& folderPath);
 static void                     playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex);
+static void                     skipSoundUp();
+static void                     skipSoundDown();
+
 static double                   getSoundDuration(const std::string& soundPath);
 static std::string              formatDurationToMins(int32_t duration);
+static LfTexture                getSoundThubmnail(const std::string& soundPath);
+static void                     updateSoundProgress();
+
+static std::string              removeFileExtension(const std::string& filename);
+
 
 template<typename T>
 static bool elementInVector(const std::vector<T>& v, const T& e) {
@@ -192,7 +240,9 @@ static bool elementInVector(const std::vector<T>& v, const T& e) {
     return false;
 }
 
-static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+static void enterOnPlaylistCallback() {
+    Playlist& playlist = state.playlists[state.currentPlaylist];
+    loadPlaylist(std::filesystem::directory_entry(playlist.path));
 }
 
 static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
@@ -207,7 +257,7 @@ static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void*
 
 void Sound::init(const std::string& filepath) {
     if (ma_decoder_init_file(filepath.c_str(), NULL, &decoder) != MA_SUCCESS) {
-        std::cerr << "Failed to load Sound '" << filepath << "'.\n";
+        std::cerr << "[Error]: Failed to load Sound '" << filepath << "'.\n";
         return;
     }
 
@@ -274,30 +324,33 @@ void initWin(uint32_t width, uint32_t height) {
     state.winWidth = width;
     state.winHeight = height;
     if(!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW.\n";
+        std::cerr << "[Error]: Failed to initialize GLFW.\n";
     }
 
     state.win = glfwCreateWindow(width, height, "Lyssa Music" ,NULL, NULL);
     if(!state.win) {
-        std::cerr << "Failed to create GLFW window.\n";
+        std::cerr << "[Error]: Failed to create GLFW window.\n";
     }
     glfwMakeContextCurrent(state.win);
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cout << "Failed to initialize Glad.\n";
+        std::cerr << "[Error]: Failed to initialize Glad.\n";
     }
-    LfTheme theme = lf_default_theme("../game/fonts/inter.ttf", 24);
+
+    LfTheme theme = lf_default_theme();
     theme.div_props.color = (vec4s){LF_RGBA(0, 0, 0, 0)};
-    lf_init_glfw(width, height, "../game/fonts/inter.ttf", &theme, state.win);   
+    theme.scrollbar_props.corner_radius = 1.5;
+    lf_init_glfw(width, height, &theme, state.win);   
     lf_set_text_wrap(true);
+
     glfwSetFramebufferSizeCallback(state.win, winResizeCb);
     glViewport(0, 0, width, height);
 
+    state.currentSoundPos = 0.0;
+
     ma_result result = ma_engine_init(NULL, &state.soundEngine);
     if (result != MA_SUCCESS) {
-        std::cerr << "Failed to initialize miniaudio.\n";
+        std::cerr << "[Error]: Failed to initialize miniaudio.\n";
     } 
-
-    lf_add_scroll_callback((void*)scrollCallback);
 }
 
 void initUI() {
@@ -307,17 +360,39 @@ void initUI() {
     state.h4Font = lf_load_font("../game/fonts/inter-bold.ttf", 30);
     state.h5Font = lf_load_font("../game/fonts/inter-bold.ttf", 24);
     state.h6Font = lf_load_font("../game/fonts/inter-bold.ttf", 20);
-    state.musicTitleFont = lf_load_font("../game/fonts/poppins.ttf", 74);
+    state.musicTitleFont = lf_load_font("../game/fonts/poppins.ttf", 90);
     state.poppinsBold = lf_load_font("../game/fonts/poppins.ttf", 30);
 
-    state.backTexture = lf_tex_create("../game/textures/back.png", false, LF_TEX_FILTER_LINEAR);
-    state.musicNoteTexture = lf_tex_create("../game/textures/music1.png", false, LF_TEX_FILTER_LINEAR);
-    state.downTexture = lf_tex_create("../game/textures/down.png", false, LF_TEX_FILTER_LINEAR);
-    state.addTexture = lf_tex_create("../game/textures/add-symbol.png", false, LF_TEX_FILTER_LINEAR);
-    state.tickTexture = lf_tex_create("../game/textures/tick.png", false, LF_TEX_FILTER_LINEAR);
+    state.backTexture = lf_load_texture("../game/textures/back.png", false, LF_TEX_FILTER_LINEAR);
+    state.musicNoteTexture = lf_load_texture("../game/textures/music1.png", false, LF_TEX_FILTER_LINEAR);
+    state.downTexture = lf_load_texture("../game/textures/down.png", false, LF_TEX_FILTER_LINEAR);
+    state.addTexture = lf_load_texture("../game/textures/add-symbol.png", false, LF_TEX_FILTER_LINEAR);
+    state.tickTexture = lf_load_texture("../game/textures/tick.png", false, LF_TEX_FILTER_LINEAR);
+
+    state.playTexture = lf_load_texture("../game/textures/play.png", false, LF_TEX_FILTER_LINEAR);
+    state.pauseTexture = lf_load_texture("../game/textures/pause.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipDownTexture = lf_load_texture("../game/textures/skip_down.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipUpTexture = lf_load_texture("../game/textures/skip_up.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipSongDownTexture = lf_load_texture("../game/textures/skip_song_down.png", false, LF_TEX_FILTER_LINEAR);
+    state.skipSongUpTexture = lf_load_texture("../game/textures/skip_song_up.png", false, LF_TEX_FILTER_LINEAR);
 }
 
-void handleKeystrokes() {   
+void handleTabKeyStrokes() {
+    if(state.currentSound.isInit) {
+        if(lf_key_went_down(GLFW_KEY_SPACE)) {
+            if(state.currentSound.isPlaying)
+                state.currentSound.stop();
+            else 
+                state.currentSound.play();
+        }
+        if(lf_key_went_down(GLFW_KEY_N)) {
+            if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
+                skipSoundDown();
+            } else {
+                skipSoundUp();
+            }
+        }
+    }
 }
 
 void renderDashboard() {
@@ -343,7 +418,7 @@ void renderDashboard() {
             lf_set_ptr_x(state.winWidth - width - marginRight * 2);
             lf_pop_font();
             if(lf_button_fixed("Add Playlist", width, height) == LF_CLICKED) { 
-                state.currentTab = GuiTab::CreatePlaylist;
+                changeTabTo(GuiTab::CreatePlaylist);
                 loadPlaylists();
             }
             lf_pop_style_props();
@@ -376,7 +451,7 @@ void renderDashboard() {
             props.margin_left = 0;
             lf_push_style_props(props);
             if(lf_button_fixed("Create Playlist", width, 50) == LF_CLICKED)  {
-                state.currentTab = GuiTab::CreatePlaylist;
+                changeTabTo(GuiTab::CreatePlaylist);
             }
             lf_pop_style_props();
         }
@@ -443,8 +518,8 @@ void renderDashboard() {
 
             // If the user clicked on the playlist
             if(hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-               state.currentTab = GuiTab::OnPlaylist;
                state.currentPlaylist = i; 
+               changeTabTo(GuiTab::OnPlaylist);
             }
             posX += width + padding;
         }
@@ -533,50 +608,56 @@ void renderCreatePlaylist() {
 
 
 void renderOnPlaylist() {
-    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
-    lf_set_cull_start_y(0);
-    lf_rect_render((vec2s){0, 0}, (vec2s){(float)state.winWidth, 160}, RGB_COLOR(12, 12, 12), RGBA_COLOR(0, 0, 0, 0), 0.0f, 0.0f);
-    lf_set_cull_start_y(DIV_START_Y);
     if(state.currentPlaylist == -1) return;
 
+    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+
     auto& currentPlaylist = state.playlists[state.currentPlaylist];
-    // Title 
+
+    // Playlist Heading
     {
-        lf_push_font(&state.musicTitleFont);
-        LfUIElementProps props = lf_theme()->text_props;
-        props.text_color = LYSSA_BLUE;
-        lf_push_style_props(props);
-        lf_text(currentPlaylist.name.c_str());
-        lf_pop_style_props();
-        lf_pop_font();
+        // Title 
+        {
+            lf_push_font(&state.musicTitleFont);
+            LfUIElementProps props = lf_theme()->text_props;
+            props.text_color = LYSSA_BLUE;
+            lf_push_style_props(props);
+            lf_text(currentPlaylist.name.c_str());
+            lf_pop_style_props();
+            lf_pop_font();
+        }
+
+        // Add More button
+        {
+            lf_push_font(&state.h5Font);
+            const char* text = "Add more Music";
+            float textWidth = lf_text_dimension(text).x;
+            LfUIElementProps props = lf_theme()->button_props;
+            props.color = (vec4s){0, 0, 0, 0};
+            props.text_color = (vec4s){1, 1, 1, 1};
+            props.padding = 10;
+            props.border_width = 0;
+            lf_set_ptr_x(state.winWidth - textWidth - 80);
+            lf_push_style_props(props);
+            float ptr_x = lf_get_ptr_x();
+            float ptr_y = lf_get_ptr_y();
+            if(lf_button(text) == LF_CLICKED) {
+                state.popups[(int32_t)PopupID::FileOrFolderPopup].render = !state.popups[(int32_t)PopupID::FileOrFolderPopup].render;
+            }  
+            lf_pop_style_props();
+        }
     }
-    {
-        lf_push_font(&state.h5Font);
-        const char* text = "Add more Music";
-        float textWidth = lf_text_dimension(text).x;
-        LfUIElementProps props = lf_theme()->button_props;
-        props.color = (vec4s){0, 0, 0, 0};
-        props.text_color = (vec4s){1, 1, 1, 1};
-        props.padding = 10;
-        props.border_width = 0;
-        lf_set_ptr_x(state.winWidth - textWidth - 80);
-        lf_push_style_props(props);
-        float ptr_x = lf_get_ptr_x();
-        float ptr_y = lf_get_ptr_y();
-        if(lf_button(text) == LF_CLICKED) {
-            state.popups[(int32_t)PopupID::FileOrFolderPopup].render = !state.popups[(int32_t)PopupID::FileOrFolderPopup].render;
-        }  
-        lf_pop_style_props();
-    }
-    
     if(currentPlaylist.musicFiles.empty()) {
         // Text
-        lf_set_ptr_y(100);
         {
+            lf_set_ptr_y(100);
             lf_push_font(&state.h5Font);
             const char* text = "There is no music in this playlist.";
             float textWidth = lf_text_dimension(text).x;
+
+            // Centering the text
             lf_set_ptr_x((state.winWidth - textWidth) / 2.0f - DIV_START_X);
+
             LfUIElementProps props = lf_theme()->text_props;
             props.margin_top = 80;
             props.margin_left = 0;
@@ -597,21 +678,28 @@ void renderOnPlaylist() {
             props.corner_radius = 10; 
             props.border_width = 0;
             props.margin_top = 20;
+
+            // Centering the buttons
             lf_set_ptr_x((state.winWidth - 
                         (buttonWidth + props.padding * 2.0f) * 2.0f - (props.margin_right + props.margin_left) * 2.f) / 2.0f - DIV_START_X);
+
             lf_push_style_props(props);
             if(lf_button_fixed("Add from file", buttonWidth, 40) == LF_CLICKED) {
-                state.currentTab = GuiTab::PlaylistAddFromFile;
+                changeTabTo(GuiTab::PlaylistAddFromFile);
             }
             if(lf_button_fixed("Add from Folder", buttonWidth, 40) == LF_CLICKED) {
-                state.currentTab = GuiTab::PlaylistAddFromFolder;
+                changeTabTo(GuiTab::PlaylistAddFromFolder);
             }
             lf_pop_style_props();
             lf_pop_font();
         }
     } else {
+        // Popup Variables
+        vec2s popupPos = (vec2s){-1, -1};
+        std::string popupFilePath = "";
+        int32_t popupIndex = -1;
+
         lf_next_line();
-        float ptr_y = lf_get_ptr_y();
         {
             lf_push_font(&state.h3Font);
             LfUIElementProps props = lf_theme()->text_props;
@@ -624,6 +712,7 @@ void renderOnPlaylist() {
         }
         lf_next_line();
 
+        /* Heading */
         {
             LfUIElementProps props = lf_theme()->text_props;
             props.margin_bottom = 20;
@@ -636,46 +725,260 @@ void renderOnPlaylist() {
             lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
             lf_text("Duration");
             lf_pop_style_props();
+
+            lf_next_line();
         }
 
-        lf_rect_render((vec2s){DIV_START_X, lf_get_ptr_y() + lf_theme()->font.font_size + 5}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 1}, RGBA_COLOR(190, 190, 190, 80), (vec4s){0, 0, 0, 0}, 0.0f, 0.0f);
-        lf_next_line();
+        
+        // Begin a new div container for the files
+        {
+            lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
+        }
+
+        if(lf_mouse_clicked_div(GLFW_MOUSE_BUTTON_LEFT))
+            state.playlistFileOptionsIndex = -1;
+
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
-            const SoundFile& file = currentPlaylist.musicFiles[i];
+            SoundFile& file = currentPlaylist.musicFiles[i];
             {
-                bool hovered_text_div = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size});
+                vec4s selectedColor = RGB_COLOR(255, 255, 255);
+                selectedColor = (vec4s){LF_ZTO_TO_RGBA(selectedColor.r, selectedColor.g, selectedColor.b, selectedColor.a)};
+
+                LfAABB fileAABB = (LfAABB){
+                    .pos = (vec2s){lf_get_ptr_x(), lf_get_ptr_y()},
+                    .size = (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size}
+                };
+
+                bool hovered_text_div = lf_hovered(fileAABB.pos, fileAABB.size);
                 if(hovered_text_div) {
-                    if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-                        playlistPlayFileWithIndex(i, state.currentPlaylist);
+                    if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_RIGHT)) {
+                        state.playlistFileOptionsIndex = i;
                     }
-                    lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size}, RGBA_COLOR(255, 255, 255, 60), 
+                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 60),
                             (vec4s){0, 0, 0, 0}, 0.0f, 2.0f);
                 }
                 if(currentPlaylist.playingFile == i) {
-                    lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size}, RGBA_COLOR(255, 255, 255, 80), 
+                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 80),
                             (vec4s){0, 0, 0, 0}, 0.0f, 2.0f);
+                } 
+
+                // Index heading
+                {
+                    std::stringstream indexSS;
+                    indexSS << i;
+                    std::string indexStr = indexSS.str();
+                    lf_text(indexStr.c_str());
+
+                    // Pointer for Title heading
+                    lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension(indexStr.c_str()).x + lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
                 }
 
-                std::stringstream indexSS;
-                indexSS << i;
-                std::string indexStr = indexSS.str();
-                lf_text(indexStr.c_str());
+                // Title Heading
+                {
+                    std::filesystem::path fsPath(file.path);
+                    std::string filename = removeFileExtension(fsPath.filename().string());
 
-                lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension(indexStr.c_str()).x + lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
+                    vec2s thumbnailContainerSize = (vec2s){48, 48};
 
-                std::filesystem::path fsPath(file.path);
-                std::string filename = fsPath.filename().string();
-                lf_text(filename.c_str());
+                    float aspect = (float)file.thumbnail.width / (float)file.thumbnail.height;
 
-                lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
+                    float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
-                lf_text(formatDurationToMins(file.duration).c_str());
-                lf_next_line();
+                    LfUIElementProps props = lf_theme()->image_props;
+                    props.margin_left = 0;
+                    props.margin_top = 0;
+
+                    lf_push_style_props(props);
+                    lf_image((LfTexture){.id = file.thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight});   
+                    lf_pop_style_props();
+
+                    lf_text(filename.c_str());
+                }
+
+                if(state.playlistFileOptionsIndex == i) {
+                    popupPos = (vec2s){lf_get_ptr_x() + 20, lf_get_ptr_y() + 20};
+                    popupFilePath = file.path;
+                    popupIndex = i;
+                }
+
+                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i) {
+                    if(i != currentPlaylist.playingFile) {
+                        playlistPlayFileWithIndex(i, state.currentPlaylist);
+                    }
+                    state.currentSoundFile = &file;
+                    state.trackThumbnail = file.thumbnail;
+                    changeTabTo(GuiTab::OnTrack);
+                }
+
+
+                // Duration Heading
+                {
+                    lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
+                    lf_text(formatDurationToMins(file.duration).c_str());
+                    lf_next_line();    
+                }
             }
-        }   
+        }
+        lf_div_end();
+
+        if(popupPos.x != -1 && popupPos.y != 1)
+        {
+            LfUIElementProps props = lf_theme()->button_props;
+            props.color = RGB_COLOR(18, 18, 18);
+            props.corner_radius = 5;
+            props.border_width = 0;
+            lf_push_style_props(props);
+            lf_div_begin(popupPos, (vec2s){150, 50});
+            lf_pop_style_props();
+
+                {
+                    LfUIElementProps props = lf_theme()->button_props;
+                    props.border_width = 0;
+                    props.corner_radius = 5;
+                    props.color = LYSSA_RED;
+                    lf_push_style_props(props);
+                    if(lf_button("Remove") == LF_CLICKED) {
+                        FileStatus removeStatus = removeFileFromPlaylist(popupFilePath, state.currentPlaylist);
+                        if(removeStatus == FileStatus::Failed) {
+                            std::cout << "[Error]: Failed to remove file '" << popupFilePath << "' from playlist '" << currentPlaylist.name << "'.\n";
+                        }
+                        if(currentPlaylist.playingFile == popupIndex) {
+                            state.currentSound.stop();
+                            state.currentSound.uninit();
+                        }
+                        state.playlistFileOptionsIndex = -1;
+                    }
+                    lf_pop_style_props();
+                }
+                lf_div_end();
+
+            }
     }
 
     backButtonTo(GuiTab::Dashboard);
+
+    lf_div_end();
+}
+void renderOnTrack() {
+    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+
+    // Sound Title
+    {
+        std::filesystem::path filepath = state.currentSoundFile->path;
+        std::string filename = removeFileExtension(filepath.filename());
+
+        lf_push_font(&state.musicTitleFont);
+
+        float textWidth = lf_text_dimension(filename.c_str()).x;
+        lf_set_ptr_x((state.winWidth - textWidth) / 2.0f - DIV_START_X);
+
+        lf_text(filename.c_str());
+    }
+
+    // Sound Thumbnail
+    {
+        const vec2s thumbnailContainerSize = (vec2s){350, 350};
+        lf_set_ptr_x(((state.winWidth - thumbnailContainerSize.x) / 2.0f - DIV_START_X));
+        lf_set_ptr_y(lf_get_ptr_y() + 100);
+
+        float ptrX = lf_get_ptr_x();
+        float ptrY = lf_get_ptr_y();
+        lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, 
+                thumbnailContainerSize, RGBA_COLOR(255, 255, 255, 30), LF_NO_COLOR, 0.0f, 8.0f);
+
+        float aspect = (float)state.trackThumbnail.width / (float)state.trackThumbnail.height;
+
+        float thumbnailHeight = thumbnailContainerSize.y / aspect; 
+
+        lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f}, 
+                LF_WHITE, (LfTexture){.id = state.trackThumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);   
+
+        lf_set_ptr_x(ptrX);
+        lf_set_ptr_y(ptrY + thumbnailContainerSize.y);
+    }
+
+
+    // Progress Bar 
+    {
+        const vec2s progressBarSize = {400, 10}; 
+   
+        lf_set_ptr_x((state.winWidth - progressBarSize.x) / 2.0f - DIV_START_X);
+        
+        LfUIElementProps props = lf_theme()->slider_props;
+        props.margin_top = 20;
+        props.corner_radius = 1.5;
+        props.color = RGBA_COLOR(255, 255, 255, 100);
+        props.text_color = LF_WHITE;
+        props.border_width = 0;
+        lf_push_style_props(props);
+
+        vec2s posPtr = (vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top};
+
+        LfClickableItemState slider = lf_slider_int(&state.trackProgress);
+
+        lf_rect_render(posPtr, (vec2s){(float)state.trackProgress.handle_pos, (float)state.trackProgress.height}, LF_WHITE, LF_NO_COLOR, 0.0f, props.corner_radius /= 2.0f);
+
+        if(slider == LF_RELEASED || slider == LF_CLICKED) {
+            state.currentSound.setPositionInSeconds(state.currentSoundPos);
+        }
+
+        lf_pop_style_props();
+    }
+
+    lf_next_line();
+
+    {
+        const float iconSizeSm = 48;
+        const float iconSizeXsm = 36;
+
+        LfUIElementProps props = lf_theme()->button_props;
+        props.margin_left = 15;
+        props.margin_right = 15;
+
+        lf_set_ptr_x((state.winWidth - ((iconSizeSm + props.padding * 2.0f) + (iconSizeXsm * 2.0f) + (props.margin_left + props.margin_right) * 3.0f)) / 2.0f - DIV_START_X);
+
+        props.color = LF_NO_COLOR;
+        props.border_width = 0; 
+        props.corner_radius = 0; 
+        props.margin_top = iconSizeXsm / 2.0f;
+        props.padding = 0;
+       
+        lf_push_style_props(props);
+        if(lf_image_button((LfTexture){.id = state.skipDownTexture.id, .width = (uint32_t)iconSizeXsm, .height = (uint32_t)iconSizeXsm}) == LF_CLICKED) {
+            skipSoundDown();
+        }
+        lf_pop_style_props();
+
+        {
+            props.color = LF_WHITE;
+            props.corner_radius = 16;
+            props.padding = 10;
+            props.margin_top = 0;
+            lf_push_style_props(props);
+            if(lf_image_button((LfTexture){.id = state.currentSound.isPlaying ? state.pauseTexture.id : state.playTexture.id, .width = (uint32_t)iconSizeSm, .height = (uint32_t)iconSizeSm}) == LF_CLICKED) {
+                if(state.currentSound.isPlaying)
+                    state.currentSound.stop();
+                else 
+                    state.currentSound.play();
+            }
+            lf_pop_style_props();
+        }
+
+        props.color = LF_NO_COLOR;
+        props.border_width = 0;
+        props.corner_radius = 0;
+        props.margin_top = iconSizeXsm / 2.0f;
+        props.padding = 0;
+       
+        lf_push_style_props(props);
+        if(lf_image_button((LfTexture){.id = state.skipUpTexture.id, .width = (uint32_t)iconSizeXsm, .height = (uint32_t)iconSizeXsm}) == LF_CLICKED) {
+            skipSoundUp();
+        }
+        lf_pop_style_props();
+
+    }
+
+    backButtonTo(GuiTab::OnPlaylist);
 
     lf_div_end();
 }
@@ -794,13 +1097,15 @@ void renderPlaylistAddFromFolder() {
         if(lf_button_fixed("Load Files", 175, -1) == LF_CLICKED) {
             state.playlistAddFromFolderTab.loadedFolders.push_back((Folder){.path = std::string(state.playlistAddFromFolderTab.pathInput.buf), .files = loadFilesFromFolder(state.playlistAddFromFolderTab.pathInput.buf)}); 
             state.playlistAddFromFolderTab.folderIndex++;
+            if(state.playlistAddFromFolderTab.fileContainer != NULL) {
+                state.playlistAddFromFolderTab.fileContainer->scroll = 0;
+            }
         }
         lf_pop_style_props();
     }
     lf_next_line();
-    // Folder Tabs
     {
-
+        // Tabs 
         for(uint32_t i = 0; i < state.playlistAddFromFolderTab.loadedFolders.size(); i++) {
             Folder& folder = state.playlistAddFromFolderTab.loadedFolders[i];
             std::filesystem::path folderPath = folder.path;
@@ -810,47 +1115,60 @@ void renderPlaylistAddFromFolder() {
             props.corner_radius = 3;
             props.margin_left = 15;
             props.margin_right = -15;
-            props.margin_bottom = -3;
+            props.margin_bottom = 10;
             props.color = state.playlistAddFromFolderTab.folderIndex == i ? RGB_COLOR(140, 140, 140) :  RGB_COLOR(200, 200, 200);
             lf_push_style_props(props);
             if(lf_button_fixed(folderName.c_str(), 160, -1) == LF_CLICKED) {
-                state.playlistAddFromFolderTab.folderIndex = i;
+                if(state.playlistAddFromFolderTab.fileContainer != NULL) {
+                    state.playlistAddFromFolderTab.folderIndex = i;
+                    state.playlistAddFromFolderTab.fileContainer->scroll = 0;
+                }
             }
             lf_pop_style_props();
         }
+
         lf_next_line();
+
+        // File Container
         if(state.playlistAddFromFolderTab.folderIndex != -1)
         {
             Folder& selectedFolder = state.playlistAddFromFolderTab.loadedFolders[state.playlistAddFromFolderTab.folderIndex];
+
+            // Props
             LfUIElementProps props = lf_theme()->div_props;
-            props.color = RGB_COLOR(60, 60, 60);
+            props.color = RGBA_COLOR(40, 40, 40, 120);
             props.corner_radius = 10;
             lf_push_style_props(props);
-            lf_div_begin_id((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 400}, state.playlistAddFromFolderTab.folderIndex);
+
+            state.playlistAddFromFolderTab.fileContainer = lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 
+                                                                        (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
+
             for(auto& file : selectedFolder.files) {
-                std::string filename = std::filesystem::path(file).filename();
-                {
-                    LfUIElementProps btn_props = lf_theme()->text_props;
-                    lf_push_style_props(btn_props);
-                    lf_button(filename.c_str());
-                    lf_pop_style_props();
+                LfAABB file_aabb = (LfAABB){
+                    .pos = (vec2s){lf_get_current_div().aabb.pos.x + lf_theme()->text_props.margin_left, lf_get_ptr_y()},
+                    .size =  (vec2s){lf_get_current_div().aabb.size.x - lf_theme()->text_props.margin_right * 2.0f, (float)lf_theme()->font.font_size}
+                };
+
+                bool hoveredFile = lf_hovered(file_aabb.pos, file_aabb.size);
+                bool fileInPlaylist = isFileInPlaylist(file, state.currentPlaylist);
+
+                // Indicate that the file is already in playlist
+                if(fileInPlaylist && hoveredFile) {
+                    vec4s greenTint = RGBA_COLOR(47, 168, 92, 125);
+                    lf_rect_render(file_aabb.pos, file_aabb.size, greenTint, LF_NO_COLOR, 0.0f, 3.0f);
                 }
 
-                if(lf_hovered((vec2s){lf_get_current_div().aabb.pos.x, lf_get_ptr_y()}, (vec2s){lf_get_current_div().aabb.size.x, (float)lf_theme()->font.font_size}))
-                {
-                    LfUIElementProps img_props = lf_theme()->button_props;
-                    props.padding = 0;
-                    props.color = (vec4s){(vec4s){0.0f, 0.0f, 0.0f, 0.0f}};
+                std::string filename = std::filesystem::path(file).filename();
+                lf_text(filename.c_str());
+
+                // Render add button
+                if(!fileInPlaylist && hoveredFile) {
+                    LfUIElementProps props = lf_theme()->button_props;
+                    props.corner_radius = 3;
                     props.border_width = 0;
-                    props.margin_top = lf_theme()->font.font_size / 2.0f;
-                    props.margin_bottom = 0;
                     lf_push_style_props(props);
-                    if(!isFileInPlaylist(file, state.currentPlaylist)) {
-                        if(lf_image_button((LfTexture){.id = state.addTexture.id, .width = 20, .height = 20}) == LF_CLICKED) {
-                            addFileToPlaylist(file, state.currentPlaylist);
-                        }
-                    } else {
-                        lf_image_button((LfTexture){.id = state.tickTexture.id, .width = 20, .height = 20});
+                    if(lf_image_button((LfTexture){.id = state.addTexture.id, .width = 15, .height = 15}) == LF_CLICKED) {
+                        addFileToPlaylist(file, state.currentPlaylist);
                     }
                     lf_pop_style_props();
                 }
@@ -918,14 +1236,13 @@ void renderFileOrFolderPopup() {
         lf_push_style_props(bprops);
 
         // Make the buttons stretch the entire div
-        float halfDivWidth = lf_get_div_size().x / 2.0f - bprops.padding * 2.0f - bprops.border_width * 2.0f  - (bprops.margin_left + bprops.margin_right) - props.padding - props.corner_radius;
+        float halfDivWidth = lf_get_div_size().x / 2.0f - bprops.padding * 2.0f - bprops.border_width * 2.0f  - (bprops.margin_left + bprops.margin_right);
         if(lf_button_fixed("From File", halfDivWidth, -1) == LF_CLICKED) {
-            state.currentTab = GuiTab::PlaylistAddFromFile;
+            changeTabTo(GuiTab::PlaylistAddFromFile);
             state.popups[(int32_t)PopupID::FileOrFolderPopup].render = false;
         }
-        lf_push_style_props(bprops);
         if(lf_button_fixed("From Folder", halfDivWidth, -1) == LF_CLICKED) {
-            state.currentTab = GuiTab::PlaylistAddFromFolder;
+            changeTabTo(GuiTab::PlaylistAddFromFolder);
             state.popups[(int32_t)PopupID::FileOrFolderPopup].render = false;
         }
         lf_pop_style_props();
@@ -935,26 +1252,34 @@ void renderFileOrFolderPopup() {
 }
 
 void backButtonTo(GuiTab tab) {
-    const uint32_t marginBottom = 50, width = 20, height = 40;
     lf_next_line();
 
     float ptr_y = lf_get_ptr_y();
 
-    lf_set_ptr_y(state.winHeight - marginBottom - height * 2);
+    lf_set_ptr_y(state.winHeight - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2);
     LfUIElementProps props = lf_theme()->button_props;
     props.color = (vec4s){0, 0, 0, 0};
     props.border_width = 0;
     lf_push_style_props(props);
 
-    if(lf_image_button((LfTexture){.id = state.backTexture.id, .width = width, .height = height}) == LF_CLICKED) {
-        state.currentTab = tab;
-        loadPlaylists();
+    if(lf_image_button((LfTexture){.id = state.backTexture.id, .width = BACK_BUTTON_WIDTH, .height = BACK_BUTTON_HEIGHT}) == LF_CLICKED) {
+        changeTabTo(tab);
+        if(state.currentPlaylist != -1)
+            loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path));
     }
 
     lf_pop_style_props();
 
     lf_set_ptr_y(ptr_y);
 }
+void changeTabTo(GuiTab tab) {
+    state.currentTab = tab;
+
+    for(uint32_t i = 0; i < lf_get_div_count(); i++) {
+        lf_get_divs()[i].scroll = 0;
+    }
+}
+
 FileStatus createPlaylist(const std::string& name) {
     std::string folderPath = LYSSA_DIR + "/" + name;
     if(!std::filesystem::exists(folderPath)) {
@@ -993,6 +1318,33 @@ FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
     playlist.musicFiles.push_back((SoundFile){path, static_cast<int32_t>(getSoundDuration(path))});
     metadata.close();
 
+
+    return FileStatus::Success;
+}
+
+FileStatus removeFileFromPlaylist(const std::string& path, uint32_t playlistIndex) {
+    Playlist& playlist = state.playlists[playlistIndex];
+
+    if(!isFileInPlaylist(path, playlistIndex)) return FileStatus::Failed;
+
+    std::ofstream metdata(playlist.path + "/.metadata", std::ios::trunc);
+
+    if(!metdata.is_open()) return FileStatus::Failed;
+
+    metdata << "name: " << playlist.name << "\n";
+    metdata << "files: ";
+
+    for(auto& file : playlist.musicFiles) {
+        if(file.path == path) {
+            playlist.musicFiles.erase(std::find(playlist.musicFiles.begin(), playlist.musicFiles.end(), file));
+            break;
+        }
+    }
+
+    for(auto& file : playlist.musicFiles) {
+        metdata << "\"" << file.path << "\" ";
+    }
+
     return FileStatus::Success;
 }
 
@@ -1003,57 +1355,70 @@ bool isFileInPlaylist(const std::string& path, uint32_t playlistIndex) {
     }
     return false;
 }
-void loadPlaylists() { 
-     for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
-        if (folder.is_directory()) {
-            bool alreadyLoaded = false;
-            for(auto& playlist : state.playlists) {
-                if(playlist.path == folder.path().string()) {
-                    alreadyLoaded = true;
-                    break;
+void loadPlaylist(const std::filesystem::directory_entry& folder) {
+    if (folder.is_directory()) {
+        Playlist* loadedPlaylist = nullptr;
+        for(auto& playlist : state.playlists) {
+            if(playlist.path == folder.path().string()) {
+                loadedPlaylist = &playlist;
+                break;
+            }
+        }
+
+        std::ifstream metadata(folder.path().string() + "/.metadata");
+
+        if(!metadata.is_open()) {
+            std::cerr << "[Error] Failed to open the metadata of playlist on path '" << folder.path().string() << "'\n";
+            return;
+        }
+        std::string name;
+        std::vector<SoundFile> files;
+
+        std::string line;
+        while(std::getline(metadata, line)) {
+            std::istringstream iss(line);
+            std::string key;
+            iss >> key;
+
+            if(key == "name:") {
+                std::getline(iss, name);
+                name.erase(0, name.find_first_not_of(" \t"));
+                name.erase(name.find_last_not_of(" \t") + 1);
+            }
+            if (line.find("files:") != std::string::npos) {
+                // If the line contains "files:", extract paths from the rest of the line
+                std::istringstream iss(line.substr(line.find("files:") + std::string("files:").length()));
+                std::string path;
+           
+                while (iss >> std::quoted(path)) {
+                    files.push_back((SoundFile){
+                            .path = path, 
+                            .duration = static_cast<int32_t>(getSoundDuration(path)), 
+                            .thumbnail = getSoundThubmnail(path)});
                 }
             }
-            if(alreadyLoaded) continue;
+        }
+        metadata.close();
 
-            std::ifstream metadata(folder.path().string() + "/.metadata");
-
-            if(!metadata.is_open()) {
-                std::cerr << "Error opening the metadata of playlist on path: " << folder.path().string() << "\n";
-                continue;
-            }
-            std::string name;
-            std::vector<SoundFile> files;
-
-            std::string line;
-            while(std::getline(metadata, line)) {
-                std::istringstream iss(line);
-                std::string key;
-                iss >> key;
-
-                if(key == "name:") {
-                      std::getline(iss, name);
-                      name.erase(0, name.find_first_not_of(" \t"));
-                      name.erase(name.find_last_not_of(" \t") + 1);
-                }
-                if (line.find("files:") != std::string::npos) {
-                    // If the line contains "files:", extract paths from the rest of the line
-                    std::istringstream iss(line.substr(line.find("files:") + std::string("files:").length()));
-                    std::string path;
-
-                    while (iss >> std::quoted(path)) {
-                        files.push_back((SoundFile){path, static_cast<int32_t>(getSoundDuration(path))});
-                    }
-                }
-            }
-            metadata.close();
-
+        if(!loadedPlaylist) {
             Playlist playlist;
             playlist.path = folder.path().string();
             playlist.name = name;
             playlist.musicFiles = files;
-
             state.playlists.push_back(playlist);
+        } else {
+            loadedPlaylist->path = folder.path().string();
+            loadedPlaylist->name = name;
+            loadedPlaylist->musicFiles = files;
+            state.playlists.push_back(*loadedPlaylist);
         }
+
+    }
+    std::cout << "Loaded playlist\n";
+}
+void loadPlaylists() {
+    for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
+        loadPlaylist(folder);
     }
 }
 
@@ -1082,13 +1447,108 @@ void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
     state.currentSound.init(playlist.musicFiles[i].path);
     state.currentSound.play();
 
+    state.currentSoundPos = 0.0;
+    state.trackProgress._init = false;
+    state.trackProgress.max = state.currentSound.lengthInSeconds;
+
 }
+
+void skipSoundUp() {
+    Playlist& playlist = state.playlists[state.currentPlaylist];
+
+    if(playlist.playingFile + 1 < playlist.musicFiles.size())
+        playlist.playingFile++;
+    else 
+        playlist.playingFile = 0;
+
+    state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
+    state.trackThumbnail = state.currentSoundFile->thumbnail;
+
+    playlistPlayFileWithIndex(playlist.playingFile, state.currentPlaylist);
+
+}
+
+void skipSoundDown() {
+    Playlist& playlist = state.playlists[state.currentPlaylist];
+
+    if(playlist.playingFile - 1 >= 0)
+        playlist.playingFile--;
+    else 
+        playlist.playingFile = playlist.musicFiles.size() - 1; 
+
+    state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
+    state.trackThumbnail = state.currentSoundFile->thumbnail;
+
+    playlistPlayFileWithIndex(playlist.playingFile, state.currentPlaylist);
+}
+
 double getSoundDuration(const std::string& soundPath) {
     Sound sound; 
     sound.init(soundPath);
     double duration = sound.lengthInSeconds;
     sound.uninit();
     return duration;
+}
+
+LfTexture getSoundThubmnail(const std::string& soundPath) {    
+    MPEG::File file(soundPath.c_str());
+
+    LfTexture tex = {0};
+    // Get the ID3v2 tag
+    ID3v2::Tag *tag = file.ID3v2Tag();
+    if (!tag) {
+        std::cerr << "[Error] No ID3v2 tag found for file '" << soundPath << "'.\n";
+        return tex;
+    }
+
+    // Get the first APIC (Attached Picture) frame
+    ID3v2::FrameList apicFrames = tag->frameListMap()["APIC"];
+    if (apicFrames.isEmpty()) {
+        std::cerr << "[Error]: No APIC frame found for file '" << soundPath << "'.\n";
+        return tex;
+    }
+
+    // Extract the image data
+    ID3v2::AttachedPictureFrame *apicFrame = dynamic_cast<ID3v2::AttachedPictureFrame *>(apicFrames.front());
+    if (!apicFrame) {
+        std::cerr << "[Error]: Failed to cast APIC frame for file '" << soundPath << "'.\n";
+        return tex;
+    }
+
+    const ByteVector& imageData = apicFrame->picture();
+    
+    tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
+
+    return tex;
+}
+void updateSoundProgress() {
+    if(!state.currentSound.isInit) {
+        return;
+    }
+
+    if(state.currentSoundPos + 1 <= state.currentSound.lengthInSeconds && state.currentSound.isPlaying) {
+        state.soundPosUpdateTime += state.deltaTime;
+        if(state.soundPosUpdateTime >= state.soundPosUpdateTimer) {
+            state.soundPosUpdateTime = 0.0f;
+            state.currentSoundPos++;
+            state.trackProgress._init = false;
+        }
+    }
+
+    if(state.currentSoundPos >= (uint32_t)state.currentSound.lengthInSeconds && !state.trackProgress.held) {
+        skipSoundUp();
+    }
+
+}
+std::string removeFileExtension(const std::string& filename) {
+    // Find the last dot (.) in the filename
+    size_t lastDotIndex = filename.rfind('.');
+
+    if (lastDotIndex != std::string::npos && lastDotIndex > 0) {
+        return filename.substr(0, lastDotIndex);
+    } else {
+        return filename;
+    }
 }
 
 std::string formatDurationToMins(int32_t duration) {
@@ -1099,7 +1559,6 @@ std::string formatDurationToMins(int32_t duration) {
             << std::setw(2) << std::setfill('0') << seconds;
     return format.str();
 }
-
 int main(int argc, char* argv[]) {
     // Initialization 
     initWin(1280, 720); 
@@ -1126,6 +1585,14 @@ int main(int argc, char* argv[]) {
         .placeholder = (char*)"Path",
     };
 
+    state.trackProgress = (LfSlider){
+        .val = reinterpret_cast<int32_t*>(&state.currentSoundPos), 
+        .min = 0, 
+        .max = 0,
+        .width = 400,
+        .height = 5,
+    };
+
     if(!std::filesystem::exists(LYSSA_DIR)) { 
         std::filesystem::create_directory(LYSSA_DIR);
     }
@@ -1135,46 +1602,11 @@ int main(int argc, char* argv[]) {
     state.popups.reserve((int32_t)PopupID::PopupCount);
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
 
-    uint32_t index = 0;
-
-
-    uint32_t val = 0;
-    LfSlider slider = (LfSlider){
-        .val = &val, 
-        .min = 0, 
-        .max = -1, 
-        .width = 600,
-        .handle_size = 18, 
-        .handle_color = RGB_COLOR(240, 30, 20)
-    };
-
-    const char* items[20] = {
-        "option 1",
-        "option 2",
-        "option 3",
-        "option 4",
-        "option 5",
-        "option 6",
-        "option 7",
-        "option 8",
-        "option 9",
-        "option 10",
-        "option 11",
-        "option 12",
-        "option 13",
-        "option 14",
-        "option 15",
-        "option 16",
-        "option 17",
-        "option 18",
-        "option 19",
-        "option 20",
-    };
-    int32_t selected_index = 0;
-    int32_t selected_index2 = 0;
-    bool dropdown_opened = false;
-    bool dropdown_opened2 = false;
     while(!glfwWindowShouldClose(state.win)) { 
+        // Updating the timestamp of the currently playing sound
+        updateSoundProgress();
+        handleTabKeyStrokes();
+
         // Delta-Time calculation
         float currentTime = glfwGetTime();
         state.deltaTime = currentTime - state.lastTime;
@@ -1186,7 +1618,7 @@ int main(int argc, char* argv[]) {
 
 
         lf_begin();
-        /*switch(state.currentTab) {
+        switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
                 break;
@@ -1195,6 +1627,9 @@ int main(int argc, char* argv[]) {
                 break;
             case GuiTab::OnPlaylist:
                 renderOnPlaylist();
+                break;
+            case GuiTab::OnTrack:
+                renderOnTrack();
                 break;
             case GuiTab::PlaylistAddFromFile:
                 renderPlaylistAddFromFile();
@@ -1210,20 +1645,14 @@ int main(int argc, char* argv[]) {
             auto& popup = state.popups[i];
             if(popup.render) {
                 popup.renderCb();
+            } else {
+                lf_div_hide();
             }
-        }*/
+        } 
 
-
-
-        LfUIElementProps props = lf_theme()->button_props;
-        props.border_width = 0;
-        props.corner_radius = 5;
-        lf_push_style_props(props);
-        lf_dropdown_menu(items, 20, 200, 400, &selected_index, &dropdown_opened);
-        lf_dropdown_menu(items, 20, 200, 400, &selected_index2, &dropdown_opened2);
-        lf_pop_style_props();
 
         lf_end();
+
         glfwPollEvents();
         glfwSwapBuffers(state.win);
 
