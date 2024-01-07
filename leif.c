@@ -2130,12 +2130,11 @@ LfClickableItemState lf_slider_int(LfSlider* slider) {
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
-    margin_top = props.margin_top, margin_bottom =props.margin_bottom; 
-    // constants
-    const float handle_size = (slider->height != 0) ? slider->height * 4 : 20; // px 
-    const float slider_width = (slider->width != 0) ? slider->width : 200; // px
-    const float slider_height = (slider->height != 0) ? slider->height : handle_size / 2.0f; // px
-    // Get the height of the element
+    margin_top = props.margin_top, margin_bottom =props.margin_bottom;
+
+    float handle_size = (slider->height != 0) ? slider->height * 4 : 20; // px 
+    float slider_width = (slider->width != 0) ? slider->width : 200; // px
+    float slider_height = (slider->height != 0) ? slider->height : handle_size / 2.0f;
 
     vec4s color = props.color;
 

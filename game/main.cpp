@@ -48,6 +48,7 @@
 #define BACK_BUTTON_WIDTH 20 
 #define BACK_BUTTON_HEIGHT 40
 
+#define LF_PTR (vec2s){lf_get_ptr_x(), lf_get_ptr_y()}
 
 using namespace TagLib;
 
@@ -120,6 +121,13 @@ struct PlaylistAddFromFileTab {
     float addFileMessageTimer = 0.0f;
 };
 
+struct OnTrackTab {
+    LfTexture trackThumbnail;
+    LfSlider trackProgress;
+    LfSlider volumeSlider;
+    bool showVolumeSlider;
+};
+
 struct Folder {
     std::string path;
     std::vector<std::string> files;
@@ -157,7 +165,7 @@ struct GlobalState {
 
     Sound currentSound;
     SoundFile* currentSoundFile = NULL;
-
+    int32_t currentSoundPos;
 
     LfFont musicTitleFont;
     LfFont poppinsBold;
@@ -175,20 +183,16 @@ struct GlobalState {
 
     LfTexture backTexture, musicNoteTexture, downTexture, addTexture, tickTexture, 
               playTexture, pauseTexture, skipUpTexture, skipDownTexture, skipSongUpTexture, 
-              skipSongDownTexture;
-    LfTexture trackThumbnail;
+              skipSongDownTexture, soundIcon;
 
     CreatePlaylistState createPlaylistTab;
     PlaylistAddFromFileTab playlistAddFromFileTab;
     PlaylistAddFromFolderTab playlistAddFromFolderTab;
+    OnTrackTab onTrackTab; 
 
     int32_t playlistFileOptionsIndex = -1;
-
     int32_t currentPlaylist = -1;
 
-    LfSlider trackProgress;
-
-    int32_t currentSoundPos;
     float soundPosUpdateTimer = 1.0f;
     float soundPosUpdateTime = 0.0f;
 
@@ -378,6 +382,44 @@ void initUI() {
     state.skipUpTexture = lf_load_texture("../game/textures/skip_up.png", false, LF_TEX_FILTER_LINEAR);
     state.skipSongDownTexture = lf_load_texture("../game/textures/skip_song_down.png", false, LF_TEX_FILTER_LINEAR);
     state.skipSongUpTexture = lf_load_texture("../game/textures/skip_song_up.png", false, LF_TEX_FILTER_LINEAR);
+    state.soundIcon = lf_load_texture("../game/textures/sound.png", false, LF_TEX_FILTER_LINEAR);
+
+    static char bufName[512] = {0};
+    state.createPlaylistTab.nameInput = (LfInputField){
+        .width = 600, 
+        .buf = bufName, 
+        .placeholder = (char*)"Name",
+    };
+
+    static char bufPathFile[512] = {0};
+    state.playlistAddFromFileTab.pathInput = (LfInputField){
+        .width = 600, 
+        .buf = bufPathFile, 
+        .placeholder = (char*)"Path",
+    };
+
+    static char bufPathFolder[512] = {0};
+    state.playlistAddFromFolderTab.pathInput = (LfInputField){
+        .width = 600, 
+        .buf = bufPathFolder, 
+        .placeholder = (char*)"Path",
+    };
+
+    state.onTrackTab.trackProgress = (LfSlider){
+        .val = reinterpret_cast<int32_t*>(&state.currentSoundPos), 
+        .min = 0, 
+        .max = 0,
+        .width = 400,
+        .height = 5,
+    };
+
+    state.onTrackTab.volumeSlider = (LfSlider){
+        .val = reinterpret_cast<int32_t*>(&state.currentSound.volume), 
+        .min = 0, 
+        .max = 100,
+        .width = 300,
+        .height = 5,
+    };
 }
 
 void handleTabKeyStrokes() {
@@ -735,7 +777,7 @@ void renderOnPlaylist() {
         
         // Begin a new div container for the files
         {
-            lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
+            lf_div_begin(LF_PTR, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
         }
 
         if(lf_mouse_clicked_div(GLFW_MOUSE_BUTTON_LEFT))
@@ -752,7 +794,7 @@ void renderOnPlaylist() {
                 selectedColor = (vec4s){LF_ZTO_TO_RGBA(selectedColor.r, selectedColor.g, selectedColor.b, selectedColor.a)};
 
                 LfAABB fileAABB = (LfAABB){
-                    .pos = (vec2s){lf_get_ptr_x(), lf_get_ptr_y()},
+                    .pos = LF_PTR,
                     .size = (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)thumbnailContainerSize.y + marginBottomThumbnail - marginTopThumbnail}
                 };
 
@@ -810,7 +852,7 @@ void renderOnPlaylist() {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
                     state.currentSoundFile = &file;
-                    state.trackThumbnail = file.thumbnail;
+                    state.onTrackTab.trackThumbnail = file.thumbnail;
                     changeTabTo(GuiTab::OnTrack);
                 }
 
@@ -864,19 +906,54 @@ void renderOnPlaylist() {
     lf_div_end();
 }
 void renderOnTrack() {
+    OnTrackTab& tab = state.onTrackTab;
+
     lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
 
+    std::filesystem::path filepath = state.currentSoundFile->path;
+    std::string filename = removeFileExtension(filepath.filename());
+    lf_push_font(&state.musicTitleFont);
+    float titleWidth = lf_text_dimension(filename.c_str()).x;
+    lf_pop_font();
+    float titlePosX = (state.winWidth - titleWidth) / 2.0f - DIV_START_X;
+
+    {
+        {
+            const vec2s iconSize = (vec2s){state.soundIcon.width / 10.0f, state.soundIcon.height / 10.0f};
+
+            LfUIElementProps props = lf_theme()->button_props;
+            props.color = LF_NO_COLOR;
+            props.border_color = LF_NO_COLOR;
+            props.border_width = 0.0f;
+            lf_push_style_props(props);
+            if(lf_image_button((LfTexture){.id = state.soundIcon.id, .width = (uint32_t)iconSize.x, .height = (uint32_t)iconSize.y}) == LF_CLICKED) {
+                tab.showVolumeSlider = !tab.showVolumeSlider; 
+            }
+            lf_pop_style_props();
+        }
+        state.onTrackTab.volumeSlider.width = 100; 
+        if(tab.showVolumeSlider) {
+            LfUIElementProps props = lf_theme()->slider_props;
+            props.corner_radius = 1.5;
+            props.color = RGBA_COLOR(255, 255, 255, 30);
+            props.text_color = LF_WHITE;
+            props.border_width = 0;
+            props.margin_top = 30;
+            lf_push_style_props(props);
+
+            lf_rect_render((vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top}, (vec2s){(float)tab.volumeSlider.handle_pos, (float)tab.volumeSlider.height}, 
+                    props.text_color, LF_NO_COLOR, 0.0f, props.corner_radius);
+            lf_slider_int(&state.onTrackTab.volumeSlider);
+            lf_pop_style_props();
+        }
+    }
     // Sound Title
     {
-        std::filesystem::path filepath = state.currentSoundFile->path;
-        std::string filename = removeFileExtension(filepath.filename());
 
         lf_push_font(&state.musicTitleFont);
-
-        float textWidth = lf_text_dimension(filename.c_str()).x;
-        lf_set_ptr_x((state.winWidth - textWidth) / 2.0f - DIV_START_X);
-
+        lf_set_ptr_x(titlePosX);
         lf_text(filename.c_str());
+        lf_pop_font();
     }
 
     // Sound Thumbnail
@@ -887,15 +964,15 @@ void renderOnTrack() {
 
         float ptrX = lf_get_ptr_x();
         float ptrY = lf_get_ptr_y();
-        lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, 
+        lf_rect_render(LF_PTR, 
                 thumbnailContainerSize, RGBA_COLOR(255, 255, 255, 30), LF_NO_COLOR, 0.0f, 8.0f);
 
-        float aspect = (float)state.trackThumbnail.width / (float)state.trackThumbnail.height;
+        float aspect = (float)tab.trackThumbnail.width / (float)tab.trackThumbnail.height;
 
         float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
         lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f}, 
-                LF_WHITE, (LfTexture){.id = state.trackThumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);   
+                LF_WHITE, (LfTexture){.id = tab.trackThumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);   
 
         lf_set_ptr_x(ptrX);
         lf_set_ptr_y(ptrY + thumbnailContainerSize.y);
@@ -918,9 +995,9 @@ void renderOnTrack() {
 
         vec2s posPtr = (vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top};
 
-        LfClickableItemState slider = lf_slider_int(&state.trackProgress);
+        LfClickableItemState slider = lf_slider_int(&tab.trackProgress);
 
-        lf_rect_render(posPtr, (vec2s){(float)state.trackProgress.handle_pos, (float)state.trackProgress.height}, LF_WHITE, LF_NO_COLOR, 0.0f, props.corner_radius /= 2.0f);
+        lf_rect_render(posPtr, (vec2s){(float)tab.trackProgress.handle_pos, (float)tab.trackProgress.height}, LF_WHITE, LF_NO_COLOR, 0.0f, props.corner_radius /= 2.0f);
 
         if(slider == LF_RELEASED || slider == LF_CLICKED) {
             state.currentSound.setPositionInSeconds(state.currentSoundPos);
@@ -979,7 +1056,6 @@ void renderOnTrack() {
             skipSoundUp();
         }
         lf_pop_style_props();
-
     }
 
     backButtonTo(GuiTab::OnPlaylist);
@@ -1144,7 +1220,7 @@ void renderPlaylistAddFromFolder() {
             props.corner_radius = 10;
             lf_push_style_props(props);
 
-            state.playlistAddFromFolderTab.fileContainer = lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y()}, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 
+            state.playlistAddFromFolderTab.fileContainer = lf_div_begin(LF_PTR, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 
                                                                         (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
 
             for(auto& file : selectedFolder.files) {
@@ -1302,6 +1378,7 @@ FileStatus createPlaylist(const std::string& name) {
     }
     metadata.close();
 
+    loadPlaylist(std::filesystem::directory_entry(folderPath));
     return FileStatus::Success;
 }
 FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
@@ -1449,8 +1526,8 @@ void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
     state.currentSound.play();
 
     state.currentSoundPos = 0.0;
-    state.trackProgress._init = false;
-    state.trackProgress.max = state.currentSound.lengthInSeconds;
+    state.onTrackTab.trackProgress._init = false;
+    state.onTrackTab.trackProgress.max = state.currentSound.lengthInSeconds;
 
 }
 
@@ -1463,7 +1540,7 @@ void skipSoundUp() {
         playlist.playingFile = 0;
 
     state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-    state.trackThumbnail = state.currentSoundFile->thumbnail;
+    state.onTrackTab.trackThumbnail = state.currentSoundFile->thumbnail;
 
     playlistPlayFileWithIndex(playlist.playingFile, state.currentPlaylist);
 
@@ -1478,7 +1555,7 @@ void skipSoundDown() {
         playlist.playingFile = playlist.musicFiles.size() - 1; 
 
     state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-    state.trackThumbnail = state.currentSoundFile->thumbnail;
+    state.onTrackTab.trackThumbnail = state.currentSoundFile->thumbnail;
 
     playlistPlayFileWithIndex(playlist.playingFile, state.currentPlaylist);
 }
@@ -1532,11 +1609,11 @@ void updateSoundProgress() {
         if(state.soundPosUpdateTime >= state.soundPosUpdateTimer) {
             state.soundPosUpdateTime = 0.0f;
             state.currentSoundPos++;
-            state.trackProgress._init = false;
+            state.onTrackTab.trackProgress._init = false;
         }
     }
 
-    if(state.currentSoundPos >= (uint32_t)state.currentSound.lengthInSeconds && !state.trackProgress.held) {
+    if(state.currentSoundPos >= (uint32_t)state.currentSound.lengthInSeconds && !state.onTrackTab.trackProgress.held) {
         skipSoundUp();
     }
 
@@ -1564,35 +1641,6 @@ int main(int argc, char* argv[]) {
     // Initialization 
     initWin(1280, 720); 
     initUI();
-
-    char bufName[512] = {0};
-    state.createPlaylistTab.nameInput = (LfInputField){
-        .width = 600, 
-        .buf = bufName, 
-        .placeholder = (char*)"Name",
-    };
-
-    char bufPathFile[512] = {0};
-    state.playlistAddFromFileTab.pathInput = (LfInputField){
-        .width = 600, 
-        .buf = bufPathFile, 
-        .placeholder = (char*)"Path",
-    };
-
-    char bufPathFolder[512] = {0};
-    state.playlistAddFromFolderTab.pathInput = (LfInputField){
-        .width = 600, 
-        .buf = bufPathFolder, 
-        .placeholder = (char*)"Path",
-    };
-
-    state.trackProgress = (LfSlider){
-        .val = reinterpret_cast<int32_t*>(&state.currentSoundPos), 
-        .min = 0, 
-        .max = 0,
-        .width = 400,
-        .height = 5,
-    };
 
     if(!std::filesystem::exists(LYSSA_DIR)) { 
         std::filesystem::create_directory(LYSSA_DIR);
