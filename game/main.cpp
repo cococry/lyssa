@@ -277,6 +277,7 @@ void Sound::init(const std::string& filepath) {
     isInit = true;
 }
 void Sound::uninit() {
+    if(!this->isInit) return;
     ma_device_stop(&device);
     ma_device_uninit(&device);
     ma_decoder_uninit(&decoder);
@@ -284,11 +285,13 @@ void Sound::uninit() {
 }
 
 void Sound::play() {
+    if(this->isPlaying) return;
     ma_device_start(&device);
     isPlaying = true;
 }
 
 void Sound::stop() {
+    if(!this->isPlaying) return;
     ma_device_stop(&device);
     isPlaying = false;
 }
@@ -627,7 +630,7 @@ void renderOnPlaylist() {
             lf_pop_font();
         }
 
-        // Add More button
+        // "Add More" button
         {
             lf_push_font(&state.h5Font);
             const char* text = "Add more Music";
@@ -720,7 +723,7 @@ void renderOnPlaylist() {
             lf_text("#");
 
             lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension("#").x + lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
-            lf_text("Title");
+            lf_text("Track");
 
             lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
             lf_text("Duration");
@@ -741,12 +744,16 @@ void renderOnPlaylist() {
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
             SoundFile& file = currentPlaylist.musicFiles[i];
             {
+                vec2s thumbnailContainerSize = (vec2s){48, 48};
                 vec4s selectedColor = RGB_COLOR(255, 255, 255);
+                float marginBottomThumbnail = 10.0f, 
+                      marginTopThumbnail = 5.0f, 
+                      marginLeftThumbnail = 10.0f;
                 selectedColor = (vec4s){LF_ZTO_TO_RGBA(selectedColor.r, selectedColor.g, selectedColor.b, selectedColor.a)};
 
                 LfAABB fileAABB = (LfAABB){
                     .pos = (vec2s){lf_get_ptr_x(), lf_get_ptr_y()},
-                    .size = (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)lf_theme()->font.font_size}
+                    .size = (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)thumbnailContainerSize.y + marginBottomThumbnail - marginTopThumbnail}
                 };
 
                 bool hovered_text_div = lf_hovered(fileAABB.pos, fileAABB.size);
@@ -778,19 +785,16 @@ void renderOnPlaylist() {
                     std::filesystem::path fsPath(file.path);
                     std::string filename = removeFileExtension(fsPath.filename().string());
 
-                    vec2s thumbnailContainerSize = (vec2s){48, 48};
-
                     float aspect = (float)file.thumbnail.width / (float)file.thumbnail.height;
-
                     float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
-                    LfUIElementProps props = lf_theme()->image_props;
-                    props.margin_left = 0;
-                    props.margin_top = 0;
+                    lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + marginTopThumbnail}, thumbnailContainerSize, 
+                            RGBA_COLOR(40, 40, 40, 255), LF_NO_COLOR, 0.0f, 3.0f);
 
-                    lf_push_style_props(props);
-                    lf_image((LfTexture){.id = file.thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight});   
-                    lf_pop_style_props();
+                    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE, (LfTexture){.id = file.thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
+
+                    lf_set_ptr_x(lf_get_ptr_x() + thumbnailContainerSize.x + marginLeftThumbnail);
+                    lf_set_line_height(thumbnailContainerSize.y + marginBottomThumbnail);
 
                     lf_text(filename.c_str());
                 }
@@ -824,7 +828,7 @@ void renderOnPlaylist() {
         if(popupPos.x != -1 && popupPos.y != 1)
         {
             LfUIElementProps props = lf_theme()->button_props;
-            props.color = RGB_COLOR(18, 18, 18);
+            props.color = RGB_COLOR(40, 40, 40);
             props.corner_radius = 5;
             props.border_width = 0;
             lf_push_style_props(props);
@@ -833,9 +837,9 @@ void renderOnPlaylist() {
 
                 {
                     LfUIElementProps props = lf_theme()->button_props;
-                    props.border_width = 0;
                     props.corner_radius = 5;
                     props.color = LYSSA_RED;
+                    props.border_width = 0;
                     lf_push_style_props(props);
                     if(lf_button("Remove") == LF_CLICKED) {
                         FileStatus removeStatus = removeFileFromPlaylist(popupFilePath, state.currentPlaylist);
@@ -1318,7 +1322,6 @@ FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
     playlist.musicFiles.push_back((SoundFile){path, static_cast<int32_t>(getSoundDuration(path))});
     metadata.close();
 
-
     return FileStatus::Success;
 }
 
@@ -1410,11 +1413,9 @@ void loadPlaylist(const std::filesystem::directory_entry& folder) {
             loadedPlaylist->path = folder.path().string();
             loadedPlaylist->name = name;
             loadedPlaylist->musicFiles = files;
-            state.playlists.push_back(*loadedPlaylist);
         }
 
     }
-    std::cout << "Loaded playlist\n";
 }
 void loadPlaylists() {
     for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
