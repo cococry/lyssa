@@ -337,3 +337,5 @@ void lf_set_line_height(uint32_t line_height);
 uint32_t lf_get_line_height();
 
 void lf_set_line_should_overflow(bool overflow);
+
+void lf_set_div_hoverable(bool clickable);

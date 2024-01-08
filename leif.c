@@ -174,7 +174,7 @@ typedef struct {
 
     LfTexture tex_arrow_down, tex_tick;
 
-    bool div_storage, div_cull, text_wrap, line_overflow;
+    bool div_storage, div_cull, text_wrap, line_overflow, div_hoverable;
 } LfState;
 
 typedef enum {
@@ -1811,49 +1811,48 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size) {
     state.divs[state.div_index_ptr].aabb.pos = pos;
     state.divs[state.div_index_ptr].aabb.size = size;
 
-    LfDiv div = state.divs[state.div_index_ptr];
-    div.aabb.size = (vec2s){size.x, size.y};
-    div.aabb.pos = pos;
-    div.init = true;
-    if(div.id == -1) {
-        div.id = state.div_count;
+    LfDiv* div = &state.divs[state.div_index_ptr];
+    div->aabb.size = (vec2s){size.x, size.y};
+    div->aabb.pos = pos;
+    div->init = true;
+    if(div->id == -1) {
+        div->id = state.div_count;
     }
-    if(div.scroll == -1) {
-        div.scroll = 0;
+    if(div->scroll == -1) {
+        div->scroll = 0;
     }
 
     state.pos_ptr = pos; 
 
-    state.current_div = div;
+    state.current_div = *div;
 
-    div.interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
-                                                      (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, false);
+    div->interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
+                                                      (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, state.div_hoverable);
 
 
     // Culling & Scrolling
     if(state.div_storage) {
-        lf_set_ptr_y(div.scroll + props.border_width + props.corner_radius);
+        lf_set_ptr_y(div->scroll + props.border_width + props.corner_radius);
     } else {
         lf_set_ptr_y(props.border_width + props.corner_radius);
     }
     state.cull_start = (vec2s){-1, pos.y + props.border_width + props.corner_radius};
     state.cull_end = (vec2s){-1, pos.y + size.y - props.border_width - props.corner_radius};
 
-    state.current_div = div;
+    state.current_div = *div;
 
     if(state.div_storage) {
-        if(state.divs[div.id].id == -1) {
-            state.divs[state.div_count++] = div;
+        if(state.divs[div->id].id == -1) {
+            state.divs[state.div_count++] = *div;
         }
     }
 
-    state.div_index_ptr++;
 
     state.current_line_height = 0;
     state.font_stack = NULL;
     state.props_on_stack = false;
 
-    return &state.divs[state.div_index_ptr - 1];
+    return &state.divs[state.div_index_ptr++];
 }
 
 void draw_scrollbar_on(uint32_t div_id) {
@@ -1937,7 +1936,7 @@ void lf_text(const char* text) {
 
     // Advancing to the next line if the the text does not fit on the current div
     LfTextProps text_props = lf_text_render(state.pos_ptr, text, font, 
-                                        state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right * 2.0 : -1,
+                                        state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1,
                                          -1, -1, -1, 1, -1, true, text_color);
     next_line_on_overflow(
         (vec2s){text_props.width + padding * 2.0f + margin_left + margin_right,
@@ -1951,7 +1950,7 @@ void lf_text(const char* text) {
     // Rendering a colored text box if a color is specified
     // Rendering the text
     lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, 
-                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right * 2.0f : -1, -1, -1, -1, -1, -1, false, text_color);
+                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, -1, -1, -1, -1, -1, false, text_color);
 
     // Advancing the position pointer by the width of the text
     state.pos_ptr.x += text_props.width + margin_right + padding;
@@ -2029,7 +2028,6 @@ void lf_end() {
             }
         }
     }
-
     for(uint32_t i = 0; i < state.div_index_ptr; i++) {
         state.divs[i].hidden = false;
     }
@@ -2522,12 +2520,15 @@ void lf_div_hide_index(uint32_t i) {
 void lf_set_item_color(vec4s color) {
     state.item_color_stack = color;
 }
+
 void lf_set_div_storage(bool storage) {
     state.div_storage = storage;
 }
+
 void lf_set_div_cull(bool cull) {
     state.div_cull = cull;
 }
+
 uint32_t lf_get_div_count() {
     return state.div_count;
 }
@@ -2535,6 +2536,7 @@ uint32_t lf_get_div_count() {
 LfDiv* lf_get_divs() {
     return state.divs;
 }
+
 void lf_set_line_height(uint32_t line_height) {
     state.current_line_height = line_height;
 }
@@ -2542,6 +2544,11 @@ void lf_set_line_height(uint32_t line_height) {
 uint32_t lf_get_line_height() {
     return state.current_line_height;
 }
+
 void lf_set_line_should_overflow(bool overflow) {
     state.line_overflow = overflow;
+}
+
+void lf_set_div_hoverable(bool clickable) {
+    state.div_hoverable = clickable;
 }
