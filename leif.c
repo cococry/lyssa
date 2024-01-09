@@ -1650,18 +1650,17 @@ bool lf_mouse_button_changed(uint32_t button) {
     return state.input.mouse.buttons_current[button] != state.input.mouse.buttons_last[button];
 }
 
-bool lf_mouse_clicked_div(uint32_t button) {
-    return lf_mouse_button_went_down(button) &&  state.scrollbar_div == state.current_div.id; 
+bool lf_mouse_button_went_down_on_div(uint32_t button) {
+    return lf_mouse_button_went_down(button) && state.scrollbar_div == state.current_div.id;
 }
 
-bool lf_mouse_released_div(uint32_t button) {
-    return lf_mouse_button_is_released(button) &&  state.scrollbar_div == state.current_div.id; 
+bool lf_mouse_button_is_released_on_div(uint32_t button) {
+    return lf_mouse_button_is_released(button) && state.scrollbar_div == state.current_div.id;
 }
 
-bool lf_mouse_changed_div(uint32_t button) {
-    return lf_mouse_button_changed(button) &&  state.scrollbar_div == state.current_div.id; 
+bool lf_mouse_button_changed_on_div(uint32_t button) {
+    return lf_mouse_button_changed(button) && state.scrollbar_div == state.current_div.id;
 }
-
 double lf_get_mouse_x() {
     return state.input.mouse.xpos;
 }
@@ -1811,48 +1810,50 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size) {
     state.divs[state.div_index_ptr].aabb.pos = pos;
     state.divs[state.div_index_ptr].aabb.size = size;
 
-    LfDiv* div = &state.divs[state.div_index_ptr];
-    div->aabb.size = (vec2s){size.x, size.y};
-    div->aabb.pos = pos;
-    div->init = true;
-    if(div->id == -1) {
-        div->id = state.div_count;
+    LfDiv div = state.divs[state.div_index_ptr];
+    div.aabb.size = (vec2s){size.x, size.y};
+    div.aabb.pos = pos;
+    div.init = true;
+    if(div.id == -1) {
+        div.id = state.div_count;
     }
-    if(div->scroll == -1) {
-        div->scroll = 0;
+    if(div.scroll == -1) {
+        div.scroll = 0;
     }
 
     state.pos_ptr = pos; 
 
-    state.current_div = *div;
+    state.current_div = div;
 
-    div->interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
+    div.interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
                                                       (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, state.div_hoverable);
 
 
     // Culling & Scrolling
     if(state.div_storage) {
-        lf_set_ptr_y(div->scroll + props.border_width + props.corner_radius);
+        lf_set_ptr_y(div.scroll + props.border_width + props.corner_radius);
     } else {
         lf_set_ptr_y(props.border_width + props.corner_radius);
     }
     state.cull_start = (vec2s){-1, pos.y + props.border_width + props.corner_radius};
     state.cull_end = (vec2s){-1, pos.y + size.y - props.border_width - props.corner_radius};
 
-    state.current_div = *div;
+    state.current_div = div;
 
     if(state.div_storage) {
-        if(state.divs[div->id].id == -1) {
-            state.divs[state.div_count++] = *div;
+        if(state.divs[div.id].id == -1) {
+            state.divs[state.div_count++] = div;
         }
     }
 
+    state.divs[state.div_index_ptr] = div;
+    state.div_index_ptr++;
 
     state.current_line_height = 0;
     state.font_stack = NULL;
     state.props_on_stack = false;
 
-    return &state.divs[state.div_index_ptr++];
+    return &state.divs[state.div_index_ptr - 1];
 }
 
 void draw_scrollbar_on(uint32_t div_id) {

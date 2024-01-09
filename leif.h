@@ -183,11 +183,11 @@ bool lf_mouse_button_is_released(uint32_t button);
 
 bool lf_mouse_button_changed(uint32_t button);
 
-bool lf_mouse_clicked_div(uint32_t button);
+bool lf_mouse_button_went_down_on_div(uint32_t button);
 
-bool lf_mouse_released_div(uint32_t button);
+bool lf_mouse_button_is_released_on_div(uint32_t button);
 
-bool lf_mouse_changed_div(uint32_t button);
+bool lf_mouse_button_changed_on_div(uint32_t button);
 
 double lf_get_mouse_x();
 
@@ -338,4 +338,4 @@ uint32_t lf_get_line_height();
 
 void lf_set_line_should_overflow(bool overflow);
 
-void lf_set_div_hoverable(bool clickable);
+void lf_set_div_hoverable(bool hoverable);

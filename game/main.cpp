@@ -511,7 +511,7 @@ void renderDashboard() {
         int32_t playlistIndex = 0;
         for(auto& playlist : state.playlists) {
             LfUIElementProps props = lf_theme()->div_props;
-            props.color = RGB_COLOR(40, 40, 40);
+            props.color = RGB_COLOR(20, 20, 20);
             props.corner_radius = 5.0f;
             lf_push_style_props(props);
             lf_set_div_hoverable(true);
@@ -767,8 +767,6 @@ void renderOnPlaylist() {
             lf_div_begin(LF_PTR, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
         }
 
-        if(lf_mouse_clicked_div(GLFW_MOUSE_BUTTON_LEFT))
-            state.playlistFileOptionsIndex = -1;
 
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
             SoundFile& file = currentPlaylist.musicFiles[i];
@@ -833,8 +831,10 @@ void renderOnPlaylist() {
                     popupFilePath = file.path;
                     popupIndex = i;
                 }
+                if((lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && state.playlistFileOptionsIndex != -1) && !lf_hovered(popupPos, (vec2s){150, 50}))
+                    state.playlistFileOptionsIndex = -1;
 
-                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i) {
+                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex != -1) {
                     if(i != currentPlaylist.playingFile) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
@@ -857,7 +857,7 @@ void renderOnPlaylist() {
         if(popupPos.x != -1 && popupPos.y != 1)
         {
             LfUIElementProps props = lf_theme()->button_props;
-            props.color = RGB_COLOR(40, 40, 40);
+            props.color = RGB_COLOR(20, 20, 20);
             props.corner_radius = 5;
             props.border_width = 0;
             lf_push_style_props(props);
