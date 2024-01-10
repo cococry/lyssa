@@ -831,10 +831,8 @@ void renderOnPlaylist() {
                     popupFilePath = file.path;
                     popupIndex = i;
                 }
-                if((lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && state.playlistFileOptionsIndex != -1) && !lf_hovered(popupPos, (vec2s){150, 50}))
-                    state.playlistFileOptionsIndex = -1;
 
-                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex != -1) {
+                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex == -1) {
                     if(i != currentPlaylist.playingFile) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
@@ -854,6 +852,9 @@ void renderOnPlaylist() {
         }
         lf_div_end();
 
+        if((lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && state.playlistFileOptionsIndex != -1) && !lf_hovered(popupPos, (vec2s){150, 50})) {
+            state.playlistFileOptionsIndex = -1;
+        }
         if(popupPos.x != -1 && popupPos.y != 1)
         {
             LfUIElementProps props = lf_theme()->button_props;
