@@ -441,6 +441,12 @@ void handleTabKeyStrokes() {
     }
 }
 
+
+static bool area_hovered(vec2s pos, vec2s size) {
+    bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
+    return hovered;
+}
 void renderDashboard() {
     lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
 
@@ -505,25 +511,31 @@ void renderDashboard() {
 
         // Constants
         const float width = 140;
-        const float height = 180;
+        float height = 180;
         const float paddingTop = 50;
 
         int32_t playlistIndex = 0;
+
+        static int popupIndex = -1;
+        static vec2s popupRenderPos = (vec2s){-1, -1};
         for(auto& playlist : state.playlists) {
+            // Div
             LfUIElementProps props = lf_theme()->div_props;
             props.color = RGB_COLOR(20, 20, 20);
             props.corner_radius = 5.0f;
+            props.padding = 0;
+            lf_push_style_props(props);
+
+            vec2s popupPos = (vec2s){lf_get_ptr_x() + width, lf_get_ptr_y() + height + paddingTop};
+
+            bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20});
+            
             lf_push_style_props(props);
             lf_set_div_hoverable(true);
-            LfDiv* div = lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height});
+            LfDiv* div = lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, overDiv ? height + 20 : height});
             lf_set_div_hoverable(false);
             lf_pop_style_props();
 
-            if(div->interact_state == LF_CLICKED) {
-                state.currentPlaylist = playlistIndex;
-                changeTabTo(GuiTab::OnPlaylist);
-                printf("Clicked.\n");
-            }
             // Playlist Thumbnail
             {
                 LfUIElementProps props = lf_theme()->image_props;
@@ -545,6 +557,37 @@ void renderDashboard() {
                 lf_text(playlist.name.c_str());
                 lf_pop_style_props();
             }
+
+            // More Button
+            bool overMoreButton = false;
+            if(overDiv)
+            {
+                const char* moreText = "...";
+                vec2s textDim = lf_text_dimension(moreText);
+                float margin = 5;
+
+                lf_set_ptr_x(width - textDim.x - margin - lf_theme()->text_props.margin_left - lf_theme()->text_props.margin_right);
+                float ptr_y = lf_get_ptr_y();
+
+                lf_set_ptr_y(height + 20 - margin * 6);
+                LfUIElementProps props = lf_theme()->text_props;
+                props.padding = 1;
+                lf_push_style_props(props);
+
+                LfClickableItemState moreButton = lf_button(moreText); 
+                if(moreButton == LF_CLICKED) {
+                    popupIndex = popupIndex != playlistIndex ? playlistIndex : -1;
+                    popupRenderPos = popupPos;
+                }
+                overMoreButton = moreButton != LF_IDLE;
+
+                lf_pop_style_props();
+                lf_set_ptr_y(ptr_y - lf_get_current_div().aabb.size.y);
+            }
+            if(div->interact_state == LF_CLICKED && !overMoreButton) {
+                state.currentPlaylist = playlistIndex;
+                changeTabTo(GuiTab::OnPlaylist);
+            }
             lf_next_line();
             lf_div_end();
 
@@ -554,6 +597,17 @@ void renderDashboard() {
                 lf_set_ptr_y(lf_get_ptr_y() + height + props.margin_bottom);
             }
             playlistIndex++;
+        }
+        if(popupIndex != -1) {
+            LfUIElementProps props = lf_theme()->div_props;
+            props.color = RGB_COLOR(20, 20, 20);
+            props.corner_radius = 5.0f;
+            props.padding = 0;
+            lf_push_style_props(props);
+            lf_div_begin(popupRenderPos, (vec2s){200, 200});
+            lf_text("hello");
+            lf_pop_style_props();
+            lf_div_end();
         }
     }
     lf_div_end();

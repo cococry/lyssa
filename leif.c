@@ -1807,12 +1807,10 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size) {
     state.div_props = props;
 
     // Updating the aabb
-    state.divs[state.div_index_ptr].aabb.pos = pos;
-    state.divs[state.div_index_ptr].aabb.size = size;
+    state.divs[state.div_index_ptr].aabb.pos = (vec2s){pos.x - props.padding, pos.y - props.padding};
+    state.divs[state.div_index_ptr].aabb.size = (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f};
 
     LfDiv div = state.divs[state.div_index_ptr];
-    div.aabb.size = (vec2s){size.x, size.y};
-    div.aabb.pos = pos;
     div.init = true;
     if(div.id == -1) {
         div.id = state.div_count;
