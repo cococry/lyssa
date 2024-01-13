@@ -996,6 +996,8 @@ void input_field(LfInputField* input, InputFieldType type) {
             if(input->cursor_index - 1 >= 0)
                 input->cursor_index--;
         }
+    }
+    if(input->selected && !input->reached_stop) {
         if(lf_key_went_down(GLFW_KEY_ENTER) && input->expand_on_overflow) {
             insert_i_str(input->buf, '\n', input->cursor_index);
             input->cursor_index++;
@@ -1006,7 +1008,7 @@ void input_field(LfInputField* input, InputFieldType type) {
                 input->cursor_index++;
             }
         }
-        if(state.ch_ev.happened) {
+        if(state.ch_ev.happened && !input->reached_stop) {
             switch(type) {
                 case INPUT_FLOAT: {
                     char* end_ptr;
@@ -1034,16 +1036,23 @@ void input_field(LfInputField* input, InputFieldType type) {
                 }
             }
         }
+        if(input->char_callback != NULL)
+            input->char_callback(state.ch_ev.charcode);
     }
 
     LfTextProps text_props_post_input = lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding},
-                                                    input->buf, font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, -1, true, text_color);
+                                                    input->buf, font, 
+                                                    input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, -1, -1, -1, -1, -1, true, text_color);
+
+    
+    if(!input->expand_on_overflow)
+        input->reached_stop = text_props_post_input.width > input->width - padding;
     // Rendering the input field
-    int32_t width = text_props_post_input.width > input->width ? text_props_post_input.width : input->width;
 
     if(!input->height) {
         input->height = get_max_char_height_font(font); 
     };
+    printf("%i\n", text_props_post_input.height);
     if(text_props_post_input.height > input->height) {
         input->height = text_props_post_input.height;
     }
@@ -1062,7 +1071,7 @@ void input_field(LfInputField* input, InputFieldType type) {
     // Rendering the text in the input field
     LfTextProps text_props_rendered = lf_text_render((vec2s){(state.pos_ptr.x + padding),
         state.pos_ptr.y + padding}, input->buf,
-                                                     font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, -1, false, text_color);
+                                                     font, input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, -1, -1, -1, -1, -1, false, text_color);
 
     // Handleing the cursor indicator
     if(input->selected) {
@@ -1075,7 +1084,7 @@ void input_field(LfInputField* input, InputFieldType type) {
 
         LfTextProps cursor_pos_props = lf_text_render((vec2s){(float)text_props_rendered.start_x,
             state.pos_ptr.y + padding}, cursor_slice,
-                                                      font, input->expand_on_overflow ? input->width + padding : -1, -1, -1, -1, -1, -1, true, text_color);
+                                                      font, input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, -1, -1, -1, -1, -1, true, text_color);
 
         // Rendering the cursor indicator
         lf_rect_render((vec2s){(strlen(input->buf) != 0) ? cursor_pos_props.end_x : state.pos_ptr.x + padding,
@@ -1096,11 +1105,6 @@ void input_field(LfInputField* input, InputFieldType type) {
         *(float*)input->val = atof(input->buf);
     else if(type == INPUT_INT)
         *(int32_t*)input->val = atoi(input->buf);
-    if(input->width > input->start_width) {
-        input->width = width;
-    } else {
-        input->width = input->start_width;
-    }
 }
 
 

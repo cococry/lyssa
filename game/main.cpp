@@ -19,7 +19,7 @@
 
 #include <taglib/tag.h>
 #include <taglib/fileref.h>
-#include <taglib/mpegfile.h>
+#include <taglib/mpegfile.h>18
 #include <taglib/id3v2tag.h>
 #include <taglib/id3v2frame.h>
 #include <taglib/mpegheader.h>
@@ -196,6 +196,7 @@ struct GlobalState {
     float soundPosUpdateTimer = 1.0f;
     float soundPosUpdateTime = 0.0f;
 
+    LfInputField renamePlaylistInput;
 };
 
 static GlobalState state;
@@ -218,6 +219,7 @@ static void                     backButtonTo(GuiTab tab);
 static void                     changeTabTo(GuiTab tab);
 
 static FileStatus               createPlaylist(const std::string& name);
+static FileStatus               renamePlaylist(const std::string& name, uint32_t playlistIndex);
 static FileStatus               addFileToPlaylist(const std::string& path, uint32_t playlistIndex);
 static FileStatus               removeFileFromPlaylist(const std::string& path, uint32_t playlistIndex);
 static bool                     isFileInPlaylist(const std::string& path, uint32_t playlistIndex);
@@ -244,9 +246,8 @@ static bool elementInVector(const std::vector<T>& v, const T& e) {
     return false;
 }
 
-static void enterOnPlaylistCallback() {
-    Playlist& playlist = state.playlists[state.currentPlaylist];
-    loadPlaylist(std::filesystem::directory_entry(playlist.path));
+static void renamePlaylistCharCallback(char c) {
+    renamePlaylist(state.renamePlaylistInput.buf, state.currentPlaylist);
 }
 
 static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
@@ -406,6 +407,14 @@ void initUI() {
         .placeholder = (char*)"Path",
     };
 
+    static char bufRenameFile[512] = {0};
+    state.renamePlaylistInput = (LfInputField){
+        .width = 140, 
+        .buf = bufRenameFile, 
+        .placeholder = (char*)"",
+        .char_callback = renamePlaylistCharCallback
+    };
+
     state.onTrackTab.trackProgress = (LfSlider){
         .val = reinterpret_cast<int32_t*>(&state.currentSoundPos), 
         .min = 0, 
@@ -508,28 +517,25 @@ void renderDashboard() {
             lf_pop_style_props();
         }
     } else {
-
         // Constants
         const float width = 140;
         float height = 180;
         const float paddingTop = 50;
 
         int32_t playlistIndex = 0;
-
-        static int popupIndex = -1;
-        static vec2s popupRenderPos = (vec2s){-1, -1};
+        static int renameIndex = -1;
         for(auto& playlist : state.playlists) {
+            if(renameIndex == playlistIndex) {
+                playlist.name = std::string(state.renamePlaylistInput.buf);
+            }
+            bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
             // Div
             LfUIElementProps props = lf_theme()->div_props;
-            props.color = RGB_COLOR(20, 20, 20);
+            props.color = overDiv ? RGB_COLOR(28, 28, 28) : RGB_COLOR(20, 20, 20);
             props.corner_radius = 5.0f;
             props.padding = 0;
             lf_push_style_props(props);
 
-            vec2s popupPos = (vec2s){lf_get_ptr_x() + width, lf_get_ptr_y() + height + paddingTop};
-
-            bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20});
-            
             lf_push_style_props(props);
             lf_set_div_hoverable(true);
             LfDiv* div = lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, overDiv ? height + 20 : height});
@@ -553,8 +559,14 @@ void renderDashboard() {
             {
                 LfUIElementProps props = lf_theme()->text_props;
                 props.margin_left = 12.5f; 
+                props.padding = 0;
                 lf_push_style_props(props);
-                lf_text(playlist.name.c_str());
+                if(renameIndex == playlistIndex) {
+                    lf_input_text(&state.renamePlaylistInput);
+                }
+                else {
+                    lf_text(playlist.name.c_str());
+                }
                 lf_pop_style_props();
             }
 
@@ -571,23 +583,26 @@ void renderDashboard() {
 
                 lf_set_ptr_y(height + 20 - margin * 6);
                 LfUIElementProps props = lf_theme()->text_props;
-                props.padding = 1;
                 lf_push_style_props(props);
 
                 LfClickableItemState moreButton = lf_button(moreText); 
                 if(moreButton == LF_CLICKED) {
-                    popupIndex = popupIndex != playlistIndex ? playlistIndex : -1;
-                    popupRenderPos = popupPos;
+                    renameIndex = renameIndex != playlistIndex ? playlistIndex : -1;
+                    strcpy(state.renamePlaylistInput.buf, playlist.name.c_str());
+                    state.renamePlaylistInput.width = width - 12.5 * 3;
+                    state.renamePlaylistInput.selected = true;
+                    state.renamePlaylistInput.cursor_index = strlen(playlist.name.c_str());
                 }
                 overMoreButton = moreButton != LF_IDLE;
 
                 lf_pop_style_props();
                 lf_set_ptr_y(ptr_y - lf_get_current_div().aabb.size.y);
             }
-            if(div->interact_state == LF_CLICKED && !overMoreButton) {
+            if(div->interact_state == LF_CLICKED && !overMoreButton && !state.renamePlaylistInput.selected) {
                 state.currentPlaylist = playlistIndex;
                 changeTabTo(GuiTab::OnPlaylist);
-            }
+                renameIndex = -1;
+            } 
             lf_next_line();
             lf_div_end();
 
@@ -597,17 +612,6 @@ void renderDashboard() {
                 lf_set_ptr_y(lf_get_ptr_y() + height + props.margin_bottom);
             }
             playlistIndex++;
-        }
-        if(popupIndex != -1) {
-            LfUIElementProps props = lf_theme()->div_props;
-            props.color = RGB_COLOR(20, 20, 20);
-            props.corner_radius = 5.0f;
-            props.padding = 0;
-            lf_push_style_props(props);
-            lf_div_begin(popupRenderPos, (vec2s){200, 200});
-            lf_text("hello");
-            lf_pop_style_props();
-            lf_div_end();
         }
     }
     lf_div_end();
@@ -1435,6 +1439,24 @@ FileStatus createPlaylist(const std::string& name) {
     loadPlaylist(std::filesystem::directory_entry(folderPath));
     return FileStatus::Success;
 }
+FileStatus renamePlaylist(const std::string& name, uint32_t playlistIndex) {
+    Playlist& playlist = state.playlists[playlistIndex];
+
+    playlist.name = name; 
+
+    std::ofstream metdata(playlist.path + "/.metadata", std::ios::trunc);
+
+    if(!metdata.is_open()) return FileStatus::Failed;
+
+    metdata << "name: " << playlist.name << "\n";
+    metdata << "files: ";
+
+    for(auto& file : playlist.musicFiles) {
+        metdata << "\"" << file.path << "\" ";
+    }
+
+    return FileStatus::Success;
+}
 FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
     Playlist& playlist = state.playlists[playlistIndex];
 
@@ -1718,9 +1740,8 @@ int main(int argc, char* argv[]) {
         // OpenGL color clearing 
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LF_RGBA(0, 0, 0, 255));
-
-
         lf_begin();
+    
         switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
@@ -1751,8 +1772,7 @@ int main(int argc, char* argv[]) {
             } else {
                 lf_div_hide();
             }
-        } 
-      
+        }
         lf_end();
 
         glfwPollEvents();

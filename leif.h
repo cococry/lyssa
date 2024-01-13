@@ -76,12 +76,16 @@ typedef struct {
 } LfTextProps;
 
 typedef struct {
-    int32_t cursor_index, width, height, start_height, start_width;
+    int32_t cursor_index, width, height, start_height;
     char* buf;
     void* val;
     char* placeholder;
     bool selected;
     bool expand_on_overflow;
+    bool reached_stop;
+
+    void (*char_callback)(char);
+    
 } LfInputField;
 
 typedef struct {
