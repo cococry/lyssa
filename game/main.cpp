@@ -19,7 +19,7 @@
 
 #include <taglib/tag.h>
 #include <taglib/fileref.h>
-#include <taglib/mpegfile.h>18
+#include <taglib/mpegfile.h>
 #include <taglib/id3v2tag.h>
 #include <taglib/id3v2frame.h>
 #include <taglib/mpegheader.h>
@@ -49,6 +49,8 @@
 #define BACK_BUTTON_HEIGHT 40
 
 #define LF_PTR (vec2s){lf_get_ptr_x(), lf_get_ptr_y()}
+
+#define MAX_PLAYLIST_NAME_LENGTH 10 
 
 using namespace TagLib;
 
@@ -183,7 +185,7 @@ struct GlobalState {
 
     LfTexture backTexture, musicNoteTexture, downTexture, addTexture, tickTexture, 
               playTexture, pauseTexture, skipUpTexture, skipDownTexture, skipSongUpTexture, 
-              skipSongDownTexture, soundIcon, soundOffIcon;
+              skipSongDownTexture, soundIcon, soundOffIcon, editIcon;
 
     CreatePlaylistState createPlaylistTab;
     PlaylistAddFromFileTab playlistAddFromFileTab;
@@ -247,7 +249,8 @@ static bool elementInVector(const std::vector<T>& v, const T& e) {
 }
 
 static void renamePlaylistCharCallback(char c) {
-    renamePlaylist(state.renamePlaylistInput.buf, state.currentPlaylist);
+    if(state.renamePlaylistInput.buf != NULL)
+        renamePlaylist(std::string(state.renamePlaylistInput.buf), state.currentPlaylist);
 }
 
 static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
@@ -385,12 +388,14 @@ void initUI() {
     state.skipSongUpTexture = lf_load_texture("../game/textures/skip_song_up.png", false, LF_TEX_FILTER_LINEAR);
     state.soundIcon = lf_load_texture("../game/textures/sound.png", false, LF_TEX_FILTER_LINEAR);
     state.soundOffIcon = lf_load_texture("../game/textures/sound_off.png", false, LF_TEX_FILTER_LINEAR);
+    state.editIcon = lf_load_texture("../game/textures/edit.png", false, LF_TEX_FILTER_LINEAR);
 
     static char bufName[512] = {0};
     state.createPlaylistTab.nameInput = (LfInputField){
         .width = 600, 
         .buf = bufName, 
         .placeholder = (char*)"Name",
+        .max_chars = MAX_PLAYLIST_NAME_LENGTH
     };
 
     static char bufPathFile[512] = {0};
@@ -412,7 +417,9 @@ void initUI() {
         .width = 140, 
         .buf = bufRenameFile, 
         .placeholder = (char*)"",
-        .char_callback = renamePlaylistCharCallback
+        .expand_on_overflow = true,
+        .max_chars = MAX_PLAYLIST_NAME_LENGTH,
+        .char_callback = renamePlaylistCharCallback, 
     };
 
     state.onTrackTab.trackProgress = (LfSlider){
@@ -524,6 +531,10 @@ void renderDashboard() {
 
         int32_t playlistIndex = 0;
         static int renameIndex = -1;
+        if(state.renamePlaylistInput.selected && lf_key_went_down(GLFW_KEY_ENTER)) {
+            state.renamePlaylistInput.selected = false;
+            renameIndex = -1;
+        }
         for(auto& playlist : state.playlists) {
             if(renameIndex == playlistIndex) {
                 playlist.name = std::string(state.renamePlaylistInput.buf);
@@ -560,6 +571,7 @@ void renderDashboard() {
                 LfUIElementProps props = lf_theme()->text_props;
                 props.margin_left = 12.5f; 
                 props.padding = 0;
+                props.border_width = 0;
                 lf_push_style_props(props);
                 if(renameIndex == playlistIndex) {
                     lf_input_text(&state.renamePlaylistInput);
@@ -574,26 +586,28 @@ void renderDashboard() {
             bool overMoreButton = false;
             if(overDiv)
             {
-                const char* moreText = "...";
-                vec2s textDim = lf_text_dimension(moreText);
+                vec2s size = (vec2s){16, 16};
                 float margin = 5;
 
-                lf_set_ptr_x(width - textDim.x - margin - lf_theme()->text_props.margin_left - lf_theme()->text_props.margin_right);
+                lf_set_ptr_x(width - size.x - margin - lf_theme()->text_props.margin_left - lf_theme()->text_props.margin_right);
                 float ptr_y = lf_get_ptr_y();
 
                 lf_set_ptr_y(height + 20 - margin * 6);
                 LfUIElementProps props = lf_theme()->text_props;
+                props.color = LF_WHITE;
                 lf_push_style_props(props);
 
-                LfClickableItemState moreButton = lf_button(moreText); 
-                if(moreButton == LF_CLICKED) {
+                LfClickableItemState renameButton = lf_image_button((LfTexture){.id = state.editIcon.id, 
+                        .width = (uint32_t)size.x, .height = (uint32_t)size.y}); 
+                if(renameButton == LF_CLICKED) {
+                    state.currentPlaylist = playlistIndex;
                     renameIndex = renameIndex != playlistIndex ? playlistIndex : -1;
                     strcpy(state.renamePlaylistInput.buf, playlist.name.c_str());
                     state.renamePlaylistInput.width = width - 12.5 * 3;
                     state.renamePlaylistInput.selected = true;
                     state.renamePlaylistInput.cursor_index = strlen(playlist.name.c_str());
                 }
-                overMoreButton = moreButton != LF_IDLE;
+                overMoreButton = renameButton != LF_IDLE;
 
                 lf_pop_style_props();
                 lf_set_ptr_y(ptr_y - lf_get_current_div().aabb.size.y);

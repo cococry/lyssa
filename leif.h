@@ -84,6 +84,8 @@ typedef struct {
     bool expand_on_overflow;
     bool reached_stop;
 
+    uint32_t max_chars;
+
     void (*char_callback)(char);
     
 } LfInputField;

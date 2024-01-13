@@ -997,7 +997,7 @@ void input_field(LfInputField* input, InputFieldType type) {
                 input->cursor_index--;
         }
     }
-    if(input->selected && !input->reached_stop) {
+    if(input->selected && !input->reached_stop && (input->max_chars != 0 && strlen(input->buf) < input->max_chars) || (input->max_chars == 0)) {
         if(lf_key_went_down(GLFW_KEY_ENTER) && input->expand_on_overflow) {
             insert_i_str(input->buf, '\n', input->cursor_index);
             input->cursor_index++;
@@ -1020,24 +1020,28 @@ void input_field(LfInputField* input, InputFieldType type) {
                     } else {
                         remove_i_str(input->buf, input->cursor_index);
                     }
+                    if(input->char_callback != NULL)
+                        input->char_callback(state.ch_ev.charcode);
                     break;
                 }
                 case INPUT_INT: {
                     if(isdigit(state.ch_ev.charcode)) {
                         insert_i_str(input->buf, state.ch_ev.charcode, input->cursor_index);
                         input->cursor_index++;
+                        if(input->char_callback != NULL)
+                            input->char_callback(state.ch_ev.charcode);
                     }
                     break;
                 }
                 case INPUT_TEXT: {
                     insert_i_str(input->buf, state.ch_ev.charcode, input->cursor_index);
                     input->cursor_index++;
+                    if(input->char_callback != NULL)
+                        input->char_callback(state.ch_ev.charcode);
                     break;
                 }
             }
         }
-        if(input->char_callback != NULL)
-            input->char_callback(state.ch_ev.charcode);
     }
 
     LfTextProps text_props_post_input = lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding},
@@ -1052,7 +1056,6 @@ void input_field(LfInputField* input, InputFieldType type) {
     if(!input->height) {
         input->height = get_max_char_height_font(font); 
     };
-    printf("%i\n", text_props_post_input.height);
     if(text_props_post_input.height > input->height) {
         input->height = text_props_post_input.height;
     }
