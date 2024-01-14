@@ -197,7 +197,7 @@ static void                     renderer_init();
 static LfTexture                tex_create(const char* filepath, bool flip, LfTextureFiltering filter);
 
 // --- UI ---
-static LfClickableItemState     clickable_item(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
+static LfClickableItemState     button(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
 static LfTextProps              text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render);
 static void                     input_field(LfInputField* input, InputFieldType type);
 LfFont                          load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add);
@@ -420,11 +420,8 @@ void renderer_init() {
         "     if(u_screen_size.y - gl_FragCoord.y > v_max_coord.y && v_max_coord.y != -1) {\n"
         "         discard;\n"
         "     }\n"
-        "     if(u_screen_size.x - gl_FragCoord.x < v_min_coord.x && v_min_coord.x != -1) {\n"
-        "         discard;\n"
-        "     }\n"
-        "     if(u_screen_size.x - gl_FragCoord.x > v_max_coord.x && v_max_coord.x != -1) {\n"
-        "         discard;\n"
+        "     if ((gl_FragCoord.x < v_min_coord.x && v_min_coord.x != -1) || (gl_FragCoord.x > v_max_coord.x && v_max_coord.x != -1)) {\n"
+        "         discard;\n" 
         "     }\n"
         "     vec2 size = v_scale;\n"
         "     vec4 opaque_color, display_color;\n"
@@ -655,7 +652,7 @@ bool lf_aabb_intersects_aabb(LfAABB a, LfAABB b) {
         || b.pos.y + b.size.y / 2.0f < a.pos.y - a.size.y / 2.0f) return false;
     return true;
 }
-LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width,  bool click_color, bool hover_color) {
+LfClickableItemState button(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width,  bool click_color, bool hover_color) {
     if(!state.current_div.init) {
         LF_ERROR("Trying to render without div context. Call lf_div_begin()");
         return LF_IDLE;
@@ -672,10 +669,6 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
     bool is_hovered = lf_hovered(pos, size);
     if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
         lf_rect_render(pos, size, hover_color_rgb, props.border_color, border_width, props.corner_radius);
-        return LF_RELEASED;
-    }
-    if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-        lf_rect_render(pos, size, held_color_rgb, props.border_color, border_width, props.corner_radius);
         return LF_CLICKED;
     }
     if(is_hovered && lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -1058,7 +1051,7 @@ void input_field(LfInputField* input, InputFieldType type) {
     if(text_props_post_input.height > input->height) {
         input->height = text_props_post_input.height;
     }
-    LfClickableItemState item = clickable_item(state.pos_ptr,
+    LfClickableItemState item = button(state.pos_ptr,
                                                (vec2s){input->width + padding * 2.0f, input->height + padding * 2.0f},
                                                 props, color, border_width, false,false);
 
@@ -1714,7 +1707,7 @@ LfClickableItemState lf_button(const char* text) {
     state.pos_ptr.y += margin_top;
 
     // Rendering the button
-    LfClickableItemState ret = clickable_item(state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
+    LfClickableItemState ret = button(state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
                                               props, color, props.border_width, true, true);
     // Rendering the text of the button
     text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, text_color, false);
@@ -1747,7 +1740,7 @@ LfClickableItemState lf_image_button(LfTexture img) {
     state.pos_ptr.y += margin_top;
 
     // Rendering the button
-    LfClickableItemState ret = clickable_item(state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
+    LfClickableItemState ret = button(state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
                                               props, color, props.border_width, true, true);
     // Rendering the text of the button
     lf_image_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (vec4s){1.0f, 1.0f, 1.0f, 1.0f}, img, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
@@ -1781,7 +1774,7 @@ LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t he
     state.pos_ptr.y += margin_top; 
 
     // Rendering the button
-    LfClickableItemState ret = clickable_item(state.pos_ptr, 
+    LfClickableItemState ret = button(state.pos_ptr, 
         (vec2s){width == -1 ? text_props.width + padding * 2.0f : width + padding * 2, ((height == -1) ? text_props.height : height) + padding * 2}, props, 
                                               color, props.border_width, false, true);
 
@@ -1830,7 +1823,7 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size) {
 
     state.current_div = div;
 
-    div.interact_state = clickable_item((vec2s){pos.x - props.padding, pos.y - props.padding}, 
+    div.interact_state = button((vec2s){pos.x - props.padding, pos.y - props.padding}, 
                                                       (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, state.div_hoverable);
 
 
@@ -1840,8 +1833,8 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size) {
     } else {
         lf_set_ptr_y(props.border_width + props.corner_radius);
     }
-    state.cull_start = (vec2s){-1, pos.y + props.border_width + props.corner_radius};
-    state.cull_end = (vec2s){-1, pos.y + size.y - props.border_width - props.corner_radius};
+    state.cull_start = (vec2s){pos.x, pos.y + props.border_width + props.corner_radius};
+    state.cull_end = (vec2s){pos.x + size.x - props.border_width - props.corner_radius, pos.y + size.y - props.border_width - props.corner_radius};
 
     state.current_div = div;
 
@@ -2090,7 +2083,7 @@ LfClickableItemState lf_checkbox(const char* text, bool* val, vec4s tick_color, 
 
     // Render the box
     vec4s checkbox_color = (*val) ? ((tick_color.a == 0) ? props.color : tick_color) : props.color;
-    LfClickableItemState checkbox = clickable_item(state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
+    LfClickableItemState checkbox = button(state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
                                                    props, checkbox_color, props.border_width, false, false);
 
 
@@ -2154,7 +2147,7 @@ LfClickableItemState lf_slider_int(LfSlider* slider) {
     // Render the slider 
     LfUIElementProps slider_props = props;
     slider_props.border_width /= 2.0f;
-    LfClickableItemState slider_state = clickable_item(state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
+    LfClickableItemState slider_state = button(state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                                        slider_props, color, 0, 
                                                        false, false);
    
@@ -2167,7 +2160,7 @@ LfClickableItemState lf_slider_int(LfSlider* slider) {
     
     LfUIElementProps handle_props = props;
     handle_props.corner_radius = props.corner_radius * 4.0f;
-    LfClickableItemState handle = clickable_item((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
+    LfClickableItemState handle = button((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, handle_props, handle_props.text_color, handle_props.border_width, false, false);
     
     LfClickableItemState ret_state = handle;
@@ -2234,7 +2227,7 @@ LfClickableItemState lf_progress_bar_val(int32_t width, int32_t height, int32_t 
     // Render the slider 
     LfUIElementProps slider_props = props;
     slider_props.corner_radius = props. corner_radius / 2.0f;
-    LfClickableItemState slider_state = clickable_item(state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
+    LfClickableItemState slider_state = button(state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                                        slider_props, props.color, 0, 
                                                        false, false);
 
@@ -2243,7 +2236,7 @@ LfClickableItemState lf_progress_bar_val(int32_t width, int32_t height, int32_t 
                                       handle_size / 2.0f, slider_width - handle_size / 2.0f) - (handle_size) / 2.0f;
 
     //handle_props.corner_radius = props.corner_radius * 2.0f;
-    LfClickableItemState handle = clickable_item((vec2s){state.pos_ptr.x + handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
+    LfClickableItemState handle = button((vec2s){state.pos_ptr.x + handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, props, props.text_color, props.border_width, false, false);
 
     state.pos_ptr.x += slider_width + margin_right;
@@ -2271,12 +2264,12 @@ LfClickableItemState lf_progress_bar_int(LfSlider* slider) {
     state.pos_ptr.y += margin_top;
 
     // Render the slider 
-    LfClickableItemState bar = clickable_item(state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
+    LfClickableItemState bar = button(state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
     
     // Check if the slider bar is pressed
     slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
                                   0, slider->width);
-    LfClickableItemState handle = clickable_item(state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    LfClickableItemState handle = button(state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
 
     state.pos_ptr.x += slider->width + margin_right;
     state.pos_ptr.y -= margin_top;
@@ -2304,12 +2297,12 @@ LfClickableItemState lf_progress_stripe_int(LfSlider* slider) {
     state.pos_ptr.y += margin_top;
 
     // Render the slider 
-    LfClickableItemState bar = clickable_item(state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
+    LfClickableItemState bar = button(state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
     
     // Check if the slider bar is pressed
     slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
                                   0, slider->width);
-    LfClickableItemState handle = clickable_item(state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    LfClickableItemState handle = button(state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
     lf_rect_render((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (float)height / 2.0f}, (vec2s){(float)slider->height * 2, (float)slider->height * 2}, props.text_color, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
 
     state.pos_ptr.x += slider->width + margin_right;
@@ -2383,7 +2376,7 @@ void lf_dropdown_menu(const char** items, const char* placeholder, uint32_t item
     state.pos_ptr.y += margin_top;
 
     vec2s button_pos = state.pos_ptr;
-    LfClickableItemState dropdown_button = clickable_item(state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
+    LfClickableItemState dropdown_button = button(state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
 
     text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, button_text, font, props.text_color, false);
 
