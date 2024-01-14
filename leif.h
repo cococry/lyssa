@@ -290,7 +290,9 @@ void lf_push_style_props(LfUIElementProps props);
 
 void lf_pop_style_props();
 
-void lf_set_item_color(vec4s color);
+void lf_set_image_color(vec4s color);
+
+void lf_unset_image_color();
 
 bool lf_hovered(vec2s pos, vec2s size);
 

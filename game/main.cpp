@@ -7,6 +7,7 @@
 #include <iostream>
 #include <filesystem>
 #include <sstream>
+#include <taglib/tfile.h>
 #include <vector>
 #include <cstdlib> 
 
@@ -50,7 +51,7 @@
 
 #define LF_PTR (vec2s){lf_get_ptr_x(), lf_get_ptr_y()}
 
-#define MAX_PLAYLIST_NAME_LENGTH 10 
+#define MAX_PLAYLIST_NAME_LENGTH 15 
 
 using namespace TagLib;
 
@@ -105,6 +106,10 @@ struct Playlist {
     
     std::string name, path;
     int32_t playingFile = -1;
+
+    bool operator==(const Playlist& other) const { 
+        return path == other.path;
+    }
 };
 
 struct CreatePlaylistState {
@@ -185,7 +190,7 @@ struct GlobalState {
 
     LfTexture backTexture, musicNoteTexture, downTexture, addTexture, tickTexture, 
               playTexture, pauseTexture, skipUpTexture, skipDownTexture, skipSongUpTexture, 
-              skipSongDownTexture, soundIcon, soundOffIcon, editIcon;
+              skipSongDownTexture, soundIcon, soundOffIcon, editIcon, deleteIcon;
 
     CreatePlaylistState createPlaylistTab;
     PlaylistAddFromFileTab playlistAddFromFileTab;
@@ -222,11 +227,12 @@ static void                     changeTabTo(GuiTab tab);
 
 static FileStatus               createPlaylist(const std::string& name);
 static FileStatus               renamePlaylist(const std::string& name, uint32_t playlistIndex);
+static FileStatus               deletePlaylist(uint32_t playlistIndex);
+static void                     loadPlaylists();
 static FileStatus               addFileToPlaylist(const std::string& path, uint32_t playlistIndex);
 static FileStatus               removeFileFromPlaylist(const std::string& path, uint32_t playlistIndex);
 static bool                     isFileInPlaylist(const std::string& path, uint32_t playlistIndex);
 static void                     loadPlaylist(const std::filesystem::directory_entry& folder);
-static void                     loadPlaylists();
 static std::vector<std::string> loadFilesFromFolder(const std::filesystem::path& folderPath);
 static void                     playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex);
 static void                     skipSoundUp();
@@ -389,6 +395,8 @@ void initUI() {
     state.soundIcon = lf_load_texture("../game/textures/sound.png", false, LF_TEX_FILTER_LINEAR);
     state.soundOffIcon = lf_load_texture("../game/textures/sound_off.png", false, LF_TEX_FILTER_LINEAR);
     state.editIcon = lf_load_texture("../game/textures/edit.png", false, LF_TEX_FILTER_LINEAR);
+    state.editIcon = lf_load_texture("../game/textures/edit.png", false, LF_TEX_FILTER_LINEAR);
+    state.deleteIcon = lf_load_texture("../game/textures/delete.png", false, LF_TEX_FILTER_LINEAR);
 
     static char bufName[512] = {0};
     state.createPlaylistTab.nameInput = (LfInputField){
@@ -536,9 +544,11 @@ void renderDashboard() {
             renameIndex = -1;
         }
         for(auto& playlist : state.playlists) {
-            if(renameIndex == playlistIndex) {
+            if(renameIndex == playlistIndex) 
                 playlist.name = std::string(state.renamePlaylistInput.buf);
-            }
+            if(!state.renamePlaylistInput.selected)
+                renameIndex = -1;
+
             bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
             // Div
             LfUIElementProps props = lf_theme()->div_props;
@@ -582,37 +592,52 @@ void renderDashboard() {
                 lf_pop_style_props();
             }
 
-            // More Button
-            bool overMoreButton = false;
+            // Buttons
+            bool overButton = false;
+            vec2s buttonSize = (vec2s){16, 16};
             if(overDiv)
             {
-                vec2s size = (vec2s){16, 16};
-                float margin = 5;
+                LfUIElementProps props = lf_theme()->button_props;
+                props.color = LF_NO_COLOR;
+                props.border_color = LF_NO_COLOR;
+                props.border_width = 0;
+                props.padding = 0;
+                lf_push_style_props(props);
 
-                lf_set_ptr_x(width - size.x - margin - lf_theme()->text_props.margin_left - lf_theme()->text_props.margin_right);
+                float margin = 5;
                 float ptr_y = lf_get_ptr_y();
 
                 lf_set_ptr_y(height + 20 - margin * 6);
-                LfUIElementProps props = lf_theme()->text_props;
-                props.color = LF_WHITE;
-                lf_push_style_props(props);
+                lf_set_ptr_x(width - buttonSize.x - props.margin_right - props.margin_left - buttonSize.x - props.margin_right - margin);
+
+
+                lf_set_image_color(LYSSA_RED);
+                LfClickableItemState deleteButton = lf_image_button((LfTexture){.id = state.deleteIcon.id, 
+                        .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y});
+                lf_unset_image_color();
+
+                if(deleteButton == LF_CLICKED) {
+                    deletePlaylist(playlistIndex);
+                }
 
                 LfClickableItemState renameButton = lf_image_button((LfTexture){.id = state.editIcon.id, 
-                        .width = (uint32_t)size.x, .height = (uint32_t)size.y}); 
+                        .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}); 
+
                 if(renameButton == LF_CLICKED) {
                     state.currentPlaylist = playlistIndex;
+                    state.renamePlaylistInput.selected = true;
                     renameIndex = renameIndex != playlistIndex ? playlistIndex : -1;
+                    memset(state.renamePlaylistInput.buf, 0, 512);
                     strcpy(state.renamePlaylistInput.buf, playlist.name.c_str());
                     state.renamePlaylistInput.width = width - 12.5 * 3;
-                    state.renamePlaylistInput.selected = true;
                     state.renamePlaylistInput.cursor_index = strlen(playlist.name.c_str());
                 }
-                overMoreButton = renameButton != LF_IDLE;
+                overButton = (renameButton != LF_IDLE || deleteButton != LF_IDLE);
 
                 lf_pop_style_props();
                 lf_set_ptr_y(ptr_y - lf_get_current_div().aabb.size.y);
             }
-            if(div->interact_state == LF_CLICKED && !overMoreButton && !state.renamePlaylistInput.selected) {
+            if(div->interact_state == LF_CLICKED && !overButton && renameIndex != playlistIndex) {
                 state.currentPlaylist = playlistIndex;
                 changeTabTo(GuiTab::OnPlaylist);
                 renameIndex = -1;
@@ -1468,6 +1493,16 @@ FileStatus renamePlaylist(const std::string& name, uint32_t playlistIndex) {
     for(auto& file : playlist.musicFiles) {
         metdata << "\"" << file.path << "\" ";
     }
+
+    return FileStatus::Success;
+}
+FileStatus deletePlaylist(uint32_t playlistIndex) {
+    Playlist& playlist = state.playlists[playlistIndex];
+
+    if(!std::filesystem::exists(playlist.path) || !std::filesystem::is_directory(playlist.path)) return FileStatus::Failed;
+
+    std::filesystem::remove_all(playlist.path);
+    state.playlists.erase(std::find(state.playlists.begin(), state.playlists.end(), playlist));
 
     return FileStatus::Success;
 }

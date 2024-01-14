@@ -155,8 +155,8 @@ typedef struct {
     // Pushable variables
     LfFont* font_stack, *prev_font_stack;
     LfUIElementProps props_stack, div_props, prev_props_stack;
+    vec4s image_color_stack;
     bool props_on_stack;
-    vec4s item_color_stack;
 
     // Event references 
     LfKeyEvent key_ev;
@@ -665,10 +665,6 @@ LfClickableItemState clickable_item(vec2s pos, vec2s size, LfUIElementProps prop
         return LF_IDLE;
     }
 
-    if(state.item_color_stack.a != 0.0f) {
-        color = state.item_color_stack;
-        state.item_color_stack = LF_NO_COLOR;
-    }
     vec4s color_rgb = (vec4s){LF_ZTO_TO_RGBA(color.r, color.g, color.b, color.a)};
     vec4s hover_color_rgb = hover_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.1) : color; 
     vec4s held_color_rgb = click_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.2) : color; 
@@ -880,6 +876,9 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
     vec2s pos_initial = pos;
     pos = (vec2s){pos.x + tex.width / 2.0f, pos.y + tex.height / 2.0f};
 
+    if(state.image_color_stack.a != 0.0) {
+        color = state.image_color_stack;
+    }
     // Initializing texture coords data
     vec2s texcoords[4] = {
         (vec2s){0.0f, 0.0f},
@@ -1451,6 +1450,7 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
     state.pos_ptr = (vec2s){0, 0};
     state.text_wrap = false;
     state.props_on_stack = false;
+    state.image_color_stack = LF_NO_COLOR;
     if(theme != NULL) {
         state.theme = *theme;
     } else {
@@ -2523,8 +2523,12 @@ void lf_div_hide_index(uint32_t i) {
     state.div_index_ptr++;
 }
 
-void lf_set_item_color(vec4s color) {
-    state.item_color_stack = color;
+void lf_set_image_color(vec4s color) {
+    state.image_color_stack = color;
+}
+
+void lf_unset_image_color() {
+    state.image_color_stack = LF_NO_COLOR;
 }
 
 void lf_set_div_storage(bool storage) {
