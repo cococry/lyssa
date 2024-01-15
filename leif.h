@@ -207,25 +207,34 @@ double lf_get_mouse_scroll_x();
 
 double lf_get_mouse_scroll_y();
 
-LfDiv* lf_div_begin(vec2s pos, vec2s size);
+#define lf_div_begin(pos, size) _lf_div_begin_loc(pos, size, __FILE__, __LINE__)
+LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line);
 
 void lf_div_end();
 
-LfClickableItemState lf_button(const char* text);
+#define lf_button(text) _lf_button_loc(text, __FILE__, __LINE__)
+LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line);
 
-LfClickableItemState lf_image_button(LfTexture img);
+#define lf_image_button(img) _lf_image_button_loc(img, __FILE__, __LINE__)
+LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32_t line);
 
-LfClickableItemState lf_button_fixed(const char* text, int32_t width, int32_t height);
+#define lf_button_fixed(text, width, height) _lf_button_fixed_loc(text, width, height, __FILE__, __LINE__)
+LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32_t height, const char* file, int32_t line);
 
-LfClickableItemState lf_slider_int(LfSlider* slider);
+#define lf_slider_int(slider) _lf_slider_int_loc(slider, __FILE__, __LINE__)
+LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int32_t line);
 
-LfClickableItemState lf_progress_bar_val(int32_t width, int32_t height, int32_t min, int32_t max, int32_t val);
+#define lf_progress_bar_val(width, height, min, max, val) _lf_progress_bar_val_loc(width, height, min, max, val, __FILE__, __LINE__)
+LfClickableItemState _lf_progress_bar_val_loc(int32_t width, int32_t height, int32_t min, int32_t max, int32_t val, const char* file, int32_t line);
 
-LfClickableItemState lf_progress_bar_int(LfSlider* slider);
+#define lf_progress_bar_int(slider) _lf_progress_bar_int_loc(slider , __FILE__, __LINE__)
+LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file, int32_t line);
 
-LfClickableItemState lf_progress_stripe_int(LfSlider* slider);
+#define lf_progress_stripe_int(slider) _lf_progresss_stripe_int_loc(slider , __FILE__, __LINE__)
+LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* file, int32_t line);
 
-LfClickableItemState lf_checkbox(const char* text, bool* val, vec4s tick_color, vec4s tex_color);
+#define lf_checkbox(text, val, tick_color, tex_color) _lf_checkbox_loc(text, val, tick_color, tex_color, __FILE__, __LINE__)
+LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line);
 
 void lf_next_line();
 
@@ -253,15 +262,19 @@ void lf_image(LfTexture tex);
 
 LfTheme* lf_theme();
 
-void lf_begin();
+#define lf_begin() _lf_begin_loc(__FILE__, __LINE__)
+void _lf_begin_loc(const char* file, int32_t line);
 
 void lf_end();
 
-void lf_input_text(LfInputField* input);
+#define lf_input_text(input) _lf_input_text_loc(input, __FILE__, __LINE__)
+void _lf_input_text_loc(LfInputField* input, const char* file, int32_t line);
 
-void lf_input_int(LfInputField* input);
+#define lf_input_int(input) _lf_input_int_loc(input, __FILE__, __LINE__)
+void _lf_input_int_loc(LfInputField* input, const char* file, int32_t line);
 
-void lf_input_float(LfInputField* input);
+#define lf_input_float(input) _lf_input_float_loc(input, __FILE__, __LINE__)
+void _lf_input_float_loc(LfInputField* input, const char* file, int32_t line);
 
 void lf_set_text_wrap(bool wrap);
 
@@ -273,7 +286,8 @@ void lf_rect(uint32_t width, uint32_t height, vec4s color, float corner_radius);
 
 int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical);
 
-void lf_dropdown_menu(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened);
+#define lf_dropdown_menu(items, placeholder, item_count, width, height, selected_index, opened) _lf_dropdown_menu_loc(items, placeholder, item_count, width, height, selected_index, opened, __FILE__, __LINE__)
+void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point,
         int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);

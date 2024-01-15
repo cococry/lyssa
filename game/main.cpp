@@ -374,9 +374,9 @@ void initUI() {
     state.h1Font = lf_load_font("../game/fonts/inter-bold.ttf", 48);
     state.h2Font = lf_load_font("../game/fonts/inter-bold.ttf", 40);
     state.h3Font = lf_load_font("../game/fonts/inter-bold.ttf", 36);
-    state.h4Font = lf_load_font("../game/fonts/inter-bold.ttf", 30);
-    state.h5Font = lf_load_font("../game/fonts/inter-bold.ttf", 24);
-    state.h6Font = lf_load_font("../game/fonts/inter-bold.ttf", 20);
+    state.h4Font = lf_load_font("../game/fonts/inter.ttf", 30);
+    state.h5Font = lf_load_font("../game/fonts/inter.ttf", 24);
+    state.h6Font = lf_load_font("../game/fonts/inter.ttf", 20);
     state.musicTitleFont = lf_load_font("../game/fonts/poppins.ttf", 90);
     state.poppinsBold = lf_load_font("../game/fonts/poppins.ttf", 30);
 
@@ -469,7 +469,7 @@ static bool area_hovered(vec2s pos, vec2s size) {
     return hovered;
 }
 void renderDashboard() {
-    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
 
     lf_push_font(&state.h1Font);
     lf_text("Your Playlists");
@@ -546,7 +546,7 @@ void renderDashboard() {
 
             lf_push_style_props(props);
             lf_set_div_hoverable(true);
-            LfDiv* div = lf_div_begin((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, overDiv ? height + 20 : height});
+            LfDiv* div = lf_div_begin(((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}), ((vec2s){width, overDiv ? height + 20 : height}));
             lf_set_div_hoverable(false);
             lf_pop_style_props();
 
@@ -583,7 +583,9 @@ void renderDashboard() {
                 props.border_width = 0;
                 props.text_color = RGB_COLOR(150, 150, 150);
                 lf_push_style_props(props);
+                lf_push_font(&state.h6Font);
                 lf_text(playlist.desc.c_str());
+                lf_pop_font();
                 lf_pop_style_props();
             }
             // Buttons
@@ -606,16 +608,16 @@ void renderDashboard() {
 
 
                 lf_set_image_color(LYSSA_RED);
-                LfClickableItemState deleteButton = lf_image_button((LfTexture){.id = state.deleteIcon.id, 
-                        .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y});
+                LfClickableItemState deleteButton = lf_image_button(((LfTexture){.id = state.deleteIcon.id, 
+                        .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
                 lf_unset_image_color();
 
                 if(deleteButton == LF_CLICKED) {
                     deletePlaylist(playlistIndex);
                 }
 
-                LfClickableItemState renameButton = lf_image_button((LfTexture){.id = state.editIcon.id, 
-                        .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}); 
+                LfClickableItemState renameButton = lf_image_button(((LfTexture){.id = state.editIcon.id, 
+                        .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y})); 
 
                 if(renameButton == LF_CLICKED) {
                     memset(state.createPlaylistTab.nameInput.buf, 0, 512);
@@ -653,7 +655,7 @@ void renderDashboard() {
     lf_div_end();
 }
 void renderCreatePlaylist() {
-    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
     // Heading
     {
         LfUIElementProps props = lf_theme()->text_props;
@@ -754,7 +756,7 @@ void renderCreatePlaylist() {
 void renderOnPlaylist() {
     if(state.currentPlaylist == -1) return;
 
-    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
 
     auto& currentPlaylist = state.playlists[state.currentPlaylist];
 
@@ -876,7 +878,7 @@ void renderOnPlaylist() {
         
         // Begin a new div container for the files
         {
-            lf_div_begin(LF_PTR, (vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
+            lf_div_begin(LF_PTR, ((vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}));
         }
 
 
@@ -974,7 +976,7 @@ void renderOnPlaylist() {
             props.corner_radius = 5;
             props.border_width = 0;
             lf_push_style_props(props);
-            lf_div_begin(popupPos, (vec2s){150, 50});
+            lf_div_begin(popupPos, ((vec2s){150, 50}));
             lf_pop_style_props();
 
                 {
@@ -1008,7 +1010,7 @@ void renderOnPlaylist() {
 void renderOnTrack() {
     OnTrackTab& tab = state.onTrackTab;
 
-    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
     // Sound Title
     {
 
@@ -1094,7 +1096,7 @@ void renderOnTrack() {
         props.padding = 0;
        
         lf_push_style_props(props);
-        if(lf_image_button((LfTexture){.id = state.skipDownTexture.id, .width = (uint32_t)iconSizeXsm, .height = (uint32_t)iconSizeXsm}) == LF_CLICKED) {
+        if(lf_image_button(((LfTexture){.id = state.skipDownTexture.id, .width = (uint32_t)iconSizeXsm, .height = (uint32_t)iconSizeXsm})) == LF_CLICKED) {
             skipSoundDown();
         }
         lf_pop_style_props();
@@ -1105,7 +1107,7 @@ void renderOnTrack() {
             props.padding = 10;
             props.margin_top = 0;
             lf_push_style_props(props);
-            if(lf_image_button((LfTexture){.id = state.currentSound.isPlaying ? state.pauseTexture.id : state.playTexture.id, .width = (uint32_t)iconSizeSm, .height = (uint32_t)iconSizeSm}) == LF_CLICKED) {
+            if(lf_image_button(((LfTexture){.id = state.currentSound.isPlaying ? state.pauseTexture.id : state.playTexture.id, .width = (uint32_t)iconSizeSm, .height = (uint32_t)iconSizeSm})) == LF_CLICKED) {
                 if(state.currentSound.isPlaying)
                     state.currentSound.stop();
                 else 
@@ -1121,7 +1123,7 @@ void renderOnTrack() {
         props.padding = 0;
        
         lf_push_style_props(props);
-        if(lf_image_button((LfTexture){.id = state.skipUpTexture.id, .width = (uint32_t)iconSizeXsm, .height = (uint32_t)iconSizeXsm}) == LF_CLICKED) {
+        if(lf_image_button(((LfTexture){.id = state.skipUpTexture.id, .width = (uint32_t)iconSizeXsm, .height = (uint32_t)iconSizeXsm})) == LF_CLICKED) {
             skipSoundUp();
         }
         lf_pop_style_props();
@@ -1144,7 +1146,7 @@ void renderOnTrack() {
         bool overControlArea = lf_hovered((vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top}, (vec2s){
                 (float)state.winWidth, iconSize.y + props.margin_top + props.margin_bottom});
 
-        LfClickableItemState soundButton = lf_image_button((LfTexture){.id = buttonIcon, .width = (uint32_t)iconSize.x, .height = (uint32_t)iconSize.y});
+        LfClickableItemState soundButton = lf_image_button(((LfTexture){.id = buttonIcon, .width = (uint32_t)iconSize.x, .height = (uint32_t)iconSize.y}));
 
         if(!tab.showVolumeSlider) {
             overControlArea = (soundButton == LF_HOVERED);
@@ -1179,7 +1181,7 @@ void renderOnTrack() {
     lf_div_end();
 }
 void renderPlaylistAddFromFile() {
-    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
     
     // Heading
     {
@@ -1257,7 +1259,7 @@ void renderPlaylistAddFromFile() {
     lf_div_end();
 }
 void renderPlaylistAddFromFolder() {
-    lf_div_begin((vec2s){DIV_START_X, DIV_START_Y}, (vec2s){(float)state.winWidth, (float)state.winHeight});
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
 
     // Heading
     {
@@ -1336,8 +1338,8 @@ void renderPlaylistAddFromFolder() {
             props.corner_radius = 10;
             lf_push_style_props(props);
 
-            state.playlistAddFromFolderTab.fileContainer = lf_div_begin(LF_PTR, (vec2s){(float)state.winWidth - (DIV_START_X * 2), 
-                                                                        (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)});
+            state.playlistAddFromFolderTab.fileContainer = lf_div_begin(LF_PTR, ((vec2s){(float)state.winWidth - (DIV_START_X * 2), 
+                                                                        (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}));
 
             for(auto& file : selectedFolder.files) {
                 LfAABB file_aabb = (LfAABB){
@@ -1363,7 +1365,7 @@ void renderPlaylistAddFromFolder() {
                     props.corner_radius = 3;
                     props.border_width = 0;
                     lf_push_style_props(props);
-                    if(lf_image_button((LfTexture){.id = state.addTexture.id, .width = 15, .height = 15}) == LF_CLICKED) {
+                    if(lf_image_button(((LfTexture){.id = state.addTexture.id, .width = 15, .height = 15})) == LF_CLICKED) {
                         addFileToPlaylist(file, state.currentPlaylist);
                     }
                     lf_pop_style_props();
@@ -1389,7 +1391,7 @@ void renderFileOrFolderPopup() {
     props.corner_radius = 10;
     lf_push_style_props(props);
     // Centering the div/popup
-    lf_div_begin((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}, popupSize);
+    lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize);
     // Close Button
     {
         // Put the X Button in the top left of the div 
@@ -1455,7 +1457,7 @@ void renderEditPlaylistPopup() {
     props.corner_radius = 10;
     lf_push_style_props(props);
     // Centering the div/popup
-    lf_div_begin((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}, popupSize);
+    lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize);
     // Close Button
     {
         // Put the X Button in the top left of the div 
@@ -1541,7 +1543,7 @@ void backButtonTo(GuiTab tab) {
     props.border_width = 0;
     lf_push_style_props(props);
 
-    if(lf_image_button((LfTexture){.id = state.backTexture.id, .width = BACK_BUTTON_WIDTH, .height = BACK_BUTTON_HEIGHT}) == LF_CLICKED) {
+    if(lf_image_button(((LfTexture){.id = state.backTexture.id, .width = BACK_BUTTON_WIDTH, .height = BACK_BUTTON_HEIGHT})) == LF_CLICKED) {
         changeTabTo(tab);
         if(state.currentPlaylist != -1)
             loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path));
@@ -1894,8 +1896,11 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LF_RGBA(0, 0, 0, 255));
         lf_begin();
-    
-        switch(state.currentTab) {
+  
+        for(uint32_t i = 0; i < 10; i++) {
+            lf_button("Hello");
+        }
+        /*switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
                 break;
@@ -1925,7 +1930,18 @@ int main(int argc, char* argv[]) {
             } else {
                 lf_div_hide();
             }
-        }
+        }*/  
+            
+        /*for(uint32_t i = 0; i < 10; i++) {
+            LfUIElementProps props = lf_theme()->div_props;
+            props.border_width = 0; 
+            props.corner_radius = 5;
+            lf_push_style_props(props);
+            if(lf_button("Hello") == LF_CLICKED) {
+                std::cout << "Clicked Button Number " << i << "\n";
+            }
+            lf_pop_style_props();
+        }*/
         lf_end();
 
         glfwPollEvents();
