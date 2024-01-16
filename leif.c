@@ -7,6 +7,7 @@
 #include <stb_truetype.h>
 #include <GLFW/glfw3.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -201,7 +202,8 @@ static void                     renderer_init();
 static LfTexture                tex_create(const char* filepath, bool flip, LfTextureFiltering filter);
 
 // --- UI ---
-static LfClickableItemState     button(uint64_t id, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
+static LfClickableItemState     button(const char* file, int32_t line, int64_t element_id, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
+static LfClickableItemState     div_container(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
 static LfTextProps              text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render);
 static void                     input_field(LfInputField* input, InputFieldType type, const char* file, int32_t line);
 LfFont                          load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add);
@@ -658,7 +660,13 @@ bool lf_aabb_intersects_aabb(LfAABB a, LfAABB b) {
         || b.pos.y + b.size.y / 2.0f < a.pos.y - a.size.y / 2.0f) return false;
     return true;
 }
-LfClickableItemState button(uint64_t id, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width,  bool click_color, bool hover_color) {
+LfClickableItemState button(const char* file, int32_t line, int64_t element_id, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width,  bool click_color, bool hover_color) {
+    uint64_t id = DJB2_INIT;
+    id = djb2_hash(id, file, strlen(file));
+    id = djb2_hash(id, &line, sizeof(line));
+    if(element_id != -1) {
+        id = djb2_hash(id, &element_id, sizeof(element_id));
+    }
     if(!state.current_div.init) {
         LF_ERROR("Trying to render without div context. Call lf_div_begin()");
         return LF_IDLE;
@@ -672,6 +680,7 @@ LfClickableItemState button(uint64_t id, vec2s pos, vec2s size, LfUIElementProps
     vec4s hover_color_rgb = hover_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.1) : color; 
     vec4s held_color_rgb = click_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.2) : color; 
 
+
     bool is_hovered = lf_hovered(pos, size);
     if(state.active_element_id == 0) {
         if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -681,9 +690,11 @@ LfClickableItemState button(uint64_t id, vec2s pos, vec2s size, LfUIElementProps
         if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
             lf_rect_render(pos, size, hover_color_rgb, props.border_color, border_width, props.corner_radius);
             state.active_element_id = 0;
-            printf("CLciked.\n");
             return LF_CLICKED;
         }
+    }
+    if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+        state.active_element_id = 0;
     }
     if(is_hovered && lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT)) {
         lf_rect_render(pos, size, held_color_rgb, props.border_color, border_width, props.corner_radius);
@@ -695,6 +706,38 @@ LfClickableItemState button(uint64_t id, vec2s pos, vec2s size, LfUIElementProps
     }
     lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
     return LF_IDLE;
+}
+LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color) {
+    if(!state.current_div.init) {
+        LF_ERROR("Trying to render without div context. Call lf_div_begin()");
+        return LF_IDLE;
+    }
+
+    if(item_should_cull()) {
+        return LF_IDLE;
+    }
+
+    vec4s color_rgb = (vec4s){LF_ZTO_TO_RGBA(color.r, color.g, color.b, color.a)};
+    vec4s hover_color_rgb = hover_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.1) : color; 
+    vec4s held_color_rgb = click_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.2) : color; 
+
+
+    bool is_hovered = lf_hovered(pos, size);
+    if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+        lf_rect_render(pos, size, hover_color_rgb, props.border_color, border_width, props.corner_radius);
+        return LF_CLICKED;
+    }
+    if(is_hovered && lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT)) {
+        lf_rect_render(pos, size, held_color_rgb, props.border_color, border_width, props.corner_radius);
+        return LF_HELD;
+    }
+    if(is_hovered && (!lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && !lf_mouse_button_is_down(GLFW_MOUSE_BUTTON_LEFT))) {
+        lf_rect_render(pos, size, hover_color ? hover_color_rgb : color, props.border_color, border_width, props.corner_radius);
+        return LF_HOVERED;
+    }
+    lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
+    return LF_IDLE;
+
 }
 LfTextProps text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render) {
     return lf_text_render(pos, text, font, -1, -1, -1, -1, -1, -1, no_render, font_color);
@@ -964,11 +1007,6 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
 void input_field(LfInputField* input, InputFieldType type, const char* file, int32_t line) {
     if(!input->buf) return;
 
-    // Calculating ID
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Getting the property data of the input field
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;
@@ -1071,7 +1109,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     if(text_props_post_input.height > input->height) {
         input->height = text_props_post_input.height;
     }
-    LfClickableItemState item = button(id, state.pos_ptr,
+    LfClickableItemState item = button(file, line, -1, state.pos_ptr,
                                                (vec2s){input->width + padding * 2.0f, input->height + padding * 2.0f},
                                                 props, color, border_width, false,false);
 
@@ -1439,10 +1477,13 @@ void clear_events() {
 }
 
 uint64_t djb2_hash(uint64_t hash, const void* buf, size_t size) {
-    const uint8_t* bytes = (const uint8_t*)buf;
-    for(size_t i = 0; i < size; i++) {
-        hash = hash*33 + bytes[i];
+    uint8_t* bytes = (uint8_t*)buf;
+    int c;
+
+    while ((c = *bytes++)) {
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
     }
+
     return hash;
 }
 
@@ -1493,6 +1534,17 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
 
     state.tex_arrow_down = load_texture_asset("arrow-down", "png");
     state.tex_tick = load_texture_asset("tick", "png");
+
+    const char* file = "main.cpp";
+    int32_t line = 1901;
+    uint64_t id = DJB2_INIT; 
+    id = djb2_hash(id, &file, strlen(file));
+    id = djb2_hash(id, &line, sizeof(line));
+
+    printf("Id 1: %lu\n", id);
+    line = 1902;
+    id = djb2_hash(id, &line, sizeof(line));
+    printf("Id 2: %lu\n", id);
 #endif
 }
 
@@ -1740,7 +1792,7 @@ LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t 
     state.pos_ptr.y += margin_top;
 
     // Rendering the button
-    LfClickableItemState ret = button(id, state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
+    LfClickableItemState ret = button(file, line, -1, state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
                                               props, color, props.border_width, true, true);
     // Rendering the text of the button
     text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, text_color, false);
@@ -1752,11 +1804,6 @@ LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t 
     return ret;
 }
 LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32_t line) {
-    // Calculating ID 
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Retrieving the property data of the button
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;
@@ -1778,7 +1825,7 @@ LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32
     state.pos_ptr.y += margin_top;
 
     // Rendering the button
-    LfClickableItemState ret = button(id, state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
+    LfClickableItemState ret = button(file, line, -1, state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
                                               props, color, props.border_width, true, true);
     // Rendering the text of the button
     lf_image_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (vec4s){1.0f, 1.0f, 1.0f, 1.0f}, img, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
@@ -1790,11 +1837,6 @@ LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32
     return ret; 
 }
 LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32_t height, const char* file, int32_t line) {
-    // Calculating ID 
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Retrieving the property data of the button
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;
@@ -1817,7 +1859,7 @@ LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32
     state.pos_ptr.y += margin_top; 
 
     // Rendering the button
-    LfClickableItemState ret = button(id, state.pos_ptr, 
+    LfClickableItemState ret = button(file, line, -1, state.pos_ptr, 
         (vec2s){width == -1 ? text_props.width + padding * 2.0f : width + padding * 2, ((height == -1) ? text_props.height : height) + padding * 2}, props, 
                                               color, props.border_width, false, true);
 
@@ -1834,11 +1876,6 @@ LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32
 }
 
 LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) {
-    // Calculating ID 
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     if(state.div_index_ptr > LF_MAX_DIVS - 1) {
         LF_ERROR("Reached maximum div count.");
         return NULL;
@@ -1871,9 +1908,8 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
 
     state.current_div = div;
 
-    div.interact_state = button(id, (vec2s){pos.x - props.padding, pos.y - props.padding}, 
+    div.interact_state = div_container((vec2s){pos.x - props.padding, pos.y - props.padding}, 
                                                       (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, state.div_hoverable);
-
 
     // Culling & Scrolling
     if(state.div_storage) {
@@ -1936,6 +1972,7 @@ void draw_scrollbar_on(uint32_t div_id) {
     }
 }
 void lf_div_end() {
+    
     if(state.div_storage)
         draw_scrollbar_on(state.selected_div_id);
 
@@ -2106,11 +2143,6 @@ void lf_pop_font() {
     state.font_stack = NULL;
 }
 LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_color, vec4s img_color, const char* file, int32_t line) { 
-    // Calculating ID 
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Retrieving the property values of the checkbox
     LfFont font = get_current_font();
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.checkbox_props;
@@ -2136,7 +2168,7 @@ LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_co
 
     // Render the box
     vec4s checkbox_color = (*val) ? ((tick_color.a == 0) ? props.color : tick_color) : props.color;
-    LfClickableItemState checkbox = button(id, state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
+    LfClickableItemState checkbox = button(file, line, -1, state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
                                                    props, checkbox_color, props.border_width, false, false);
 
 
@@ -2177,12 +2209,6 @@ int map_vals(int value, int from_min, int from_max, int to_min, int to_max) {
     return (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
 }
 LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int32_t line) {
-    // Calculating ID 
-    uint64_t id = DJB2_INIT;
-    int32_t index_handle = 1;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
@@ -2206,7 +2232,7 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
     // Render the slider 
     LfUIElementProps slider_props = props;
     slider_props.border_width /= 2.0f;
-    LfClickableItemState slider_state = button(id, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
+    LfClickableItemState slider_state = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                                        slider_props, color, 0, 
                                                        false, false);
    
@@ -2217,11 +2243,9 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
                                           handle_size / 2.0f, slider->width - handle_size / 2.0f) - (handle_size) / 2.0f;
     }
     
-    id = djb2_hash(id, &index_handle, sizeof(index_handle));
-
     LfUIElementProps handle_props = props;
     handle_props.corner_radius = props.corner_radius * 4.0f;
-    LfClickableItemState handle = button(id, (vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
+    LfClickableItemState handle = button(file, line, 1, (vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, handle_props, handle_props.text_color, handle_props.border_width, false, false);
     
     LfClickableItemState ret_state = handle;
@@ -2266,10 +2290,6 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
 }
 
 LfClickableItemState _lf_progress_bar_val_loc(int32_t width, int32_t height, int32_t min, int32_t max, int32_t val, const char* file, int32_t line) {
-    uint64_t id = DJB2_INIT;
-    int32_t index_handle = 1;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
@@ -2292,7 +2312,7 @@ LfClickableItemState _lf_progress_bar_val_loc(int32_t width, int32_t height, int
     // Render the slider 
     LfUIElementProps slider_props = props;
     slider_props.corner_radius = props. corner_radius / 2.0f;
-    LfClickableItemState slider_state = button(id, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
+    LfClickableItemState slider_state = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                                        slider_props, props.color, 0, 
                                                        false, false);
 
@@ -2300,8 +2320,7 @@ LfClickableItemState _lf_progress_bar_val_loc(int32_t width, int32_t height, int
     int32_t handle_pos = map_vals(val, min, max,
                                       handle_size / 2.0f, slider_width - handle_size / 2.0f) - (handle_size) / 2.0f;
 
-    id = djb2_hash(id, &index_handle, sizeof(index_handle));
-    LfClickableItemState handle = button(id, (vec2s){state.pos_ptr.x + handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
+    LfClickableItemState handle = button(file, line, 1, (vec2s){state.pos_ptr.x + handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, props, props.text_color, props.border_width, false, false);
 
     state.pos_ptr.x += slider_width + margin_right;
@@ -2310,11 +2329,6 @@ LfClickableItemState _lf_progress_bar_val_loc(int32_t width, int32_t height, int
 
 }
 LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file, int32_t line) {
-    uint64_t id = DJB2_INIT;
-    int32_t index_handle = 1;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
@@ -2334,13 +2348,12 @@ LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file
     state.pos_ptr.y += margin_top;
 
     // Render the slider 
-    LfClickableItemState bar = button(id, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
+    LfClickableItemState bar = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
     
     slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
                                   0, slider->width);
 
-    id = djb2_hash(id, &index_handle, sizeof(index_handle));
-    LfClickableItemState handle = button(id, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    LfClickableItemState handle = button(file, line, 1, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
 
     state.pos_ptr.x += slider->width + margin_right;
     state.pos_ptr.y -= margin_top;
@@ -2348,11 +2361,6 @@ LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file
 }
 
 LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* file, int32_t line) {
-    uint64_t id = DJB2_INIT;
-    int32_t index_handle = 1;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
@@ -2372,14 +2380,13 @@ LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* f
     state.pos_ptr.y += margin_top;
 
     // Render the slider 
-    LfClickableItemState bar = button(id, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
+    LfClickableItemState bar = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
     
     // Check if the slider bar is pressed
     slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
                                   0, slider->width);
 
-    id = djb2_hash(id, &index_handle, sizeof(index_handle));
-    LfClickableItemState handle = button(id, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    LfClickableItemState handle = button(file, line, 1, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
     lf_rect_render((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (float)height / 2.0f}, (vec2s){(float)slider->height * 2, (float)slider->height * 2}, props.text_color, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
 
     state.pos_ptr.x += slider->width + margin_right;
@@ -2435,10 +2442,6 @@ int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selec
 }
 
 void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line) {
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
     margin_top = props.margin_top, margin_bottom = props.margin_bottom;
@@ -2457,7 +2460,7 @@ void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t
     state.pos_ptr.y += margin_top;
 
     vec2s button_pos = state.pos_ptr;
-    LfClickableItemState dropdown_button = button(id, state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
+    LfClickableItemState dropdown_button = button(file, line, -1, state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
 
     text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, button_text, font, props.text_color, false);
 

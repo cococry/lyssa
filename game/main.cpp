@@ -1882,6 +1882,7 @@ int main(int argc, char* argv[]) {
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
 
+    bool show = false;
     while(!glfwWindowShouldClose(state.win)) { 
         // Updating the timestamp of the currently playing sound
         updateSoundProgress();
@@ -1896,11 +1897,7 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LF_RGBA(0, 0, 0, 255));
         lf_begin();
-  
-        for(uint32_t i = 0; i < 10; i++) {
-            lf_button("Hello");
-        }
-        /*switch(state.currentTab) {
+        switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
                 break;
@@ -1930,9 +1927,9 @@ int main(int argc, char* argv[]) {
             } else {
                 lf_div_hide();
             }
-        }*/  
-            
-        /*for(uint32_t i = 0; i < 10; i++) {
+        } 
+
+        for(uint32_t i = 0; i < 10; i++) {
             LfUIElementProps props = lf_theme()->div_props;
             props.border_width = 0; 
             props.corner_radius = 5;
@@ -1941,7 +1938,7 @@ int main(int argc, char* argv[]) {
                 std::cout << "Clicked Button Number " << i << "\n";
             }
             lf_pop_style_props();
-        }*/
+        }
         lf_end();
 
         glfwPollEvents();
