@@ -305,6 +305,10 @@ void lf_push_style_props(LfUIElementProps props);
 
 void lf_pop_style_props();
 
+void lf_push_element_id(int32_t id);
+
+void lf_pop_element_id();
+
 void lf_set_image_color(vec4s color);
 
 void lf_unset_image_color();

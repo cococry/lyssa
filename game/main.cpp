@@ -1882,26 +1882,6 @@ int main(int argc, char* argv[]) {
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
 
-    const char* items[] = {
-        "Item 1",
-        "Item 2",
-        "Item 3",
-        "Item 4",
-        "Item 5",
-        "Item 6",
-        "Item 7",
-        "Item 8",
-        "Item 9",
-        "Item 10",
-        "Item 11",
-    };
-    const char* placeholder = "Select...";
-    uint32_t item_count = 11;
-    int32_t selected_index = -1;
-    int32_t selected_index2 = -1;
-    bool opened = false;
-    bool opened2 = false;
-
     while(!glfwWindowShouldClose(state.win)) { 
         // Updating the timestamp of the currently playing sound
         updateSoundProgress();
@@ -1917,10 +1897,26 @@ int main(int argc, char* argv[]) {
         glClearColor(LF_RGBA(0, 0, 0, 255));
         lf_begin();
 
-        lf_dropdown_menu(items, placeholder, item_count, 200, 200, &selected_index, &opened);
-        lf_dropdown_menu(items, placeholder, item_count, 200, 200, &selected_index2, &opened2);
-        if(lf_button("Hello") == LF_CLICKED) {
-            printf("Clicked.\n");
+        vec2s pos = (vec2s){10, 10};
+        for(uint32_t i = 0; i < 10; i++) {
+            
+            LfUIElementProps props = lf_theme()->div_props; 
+            props.corner_radius = 5; 
+            props.color = RGB_COLOR(30, 30, 30);
+            lf_push_style_props(props);
+            lf_push_element_id(i);
+            lf_div_begin(pos, ((vec2s){100, 100})); 
+            for(uint32_t j = 0; j < 5; j++) {
+                lf_push_element_id(j);
+                if(lf_button("Hello") == LF_CLICKED) {
+                    printf("Clicked button.\n");
+                }
+                lf_pop_element_id();
+            }
+            lf_pop_element_id();
+            lf_div_end();
+            lf_pop_style_props();
+            pos.x += 100 + 10;
         }
         /*switch(state.currentTab) {
             case GuiTab::Dashboard:

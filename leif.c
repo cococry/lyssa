@@ -158,6 +158,7 @@ typedef struct {
     // Pushable variables
     LfFont* font_stack, *prev_font_stack;
     LfUIElementProps props_stack, div_props, prev_props_stack;
+    int32_t element_id_stack; 
     vec4s image_color_stack;
     bool props_on_stack;
 
@@ -180,6 +181,7 @@ typedef struct {
     bool div_storage, div_cull, text_wrap, line_overflow, div_hoverable;
 
     uint64_t active_element_id, selected_div_id, scrollbar_div;
+
 } LfState;
 
 typedef enum {
@@ -202,7 +204,7 @@ static void                     renderer_init();
 static LfTexture                tex_create(const char* filepath, bool flip, LfTextureFiltering filter);
 
 // --- UI ---
-static LfClickableItemState     button(const char* file, int32_t line, int64_t element_id, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
+static LfClickableItemState     button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
 static LfClickableItemState     div_container(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
 static LfTextProps              text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render);
 static void                     input_field(LfInputField* input, InputFieldType type, const char* file, int32_t line);
@@ -661,12 +663,12 @@ bool lf_aabb_intersects_aabb(LfAABB a, LfAABB b) {
         || b.pos.y + b.size.y / 2.0f < a.pos.y - a.size.y / 2.0f) return false;
     return true;
 }
-LfClickableItemState button(const char* file, int32_t line, int64_t element_id, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width,  bool click_color, bool hover_color) {
+LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width,  bool click_color, bool hover_color) {
     uint64_t id = DJB2_INIT;
     id = djb2_hash(id, file, strlen(file));
     id = djb2_hash(id, &line, sizeof(line));
-    if(element_id != -1) {
-        id = djb2_hash(id, &element_id, sizeof(element_id));
+    if(state.element_id_stack != -1) {
+        id = djb2_hash(id, &state.element_id_stack, sizeof(state.element_id_stack));
     }
     if(!state.current_div.init) {
         LF_ERROR("Trying to render without div context. Call lf_div_begin()");
@@ -1109,7 +1111,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     if(text_props_post_input.height > input->height) {
         input->height = text_props_post_input.height;
     }
-    LfClickableItemState item = button(file, line, -1, state.pos_ptr,
+    LfClickableItemState item = button(file, line, state.pos_ptr,
                                                (vec2s){input->width + padding * 2.0f, input->height + padding * 2.0f},
                                                 props, color, border_width, false,false);
 
@@ -1791,7 +1793,7 @@ LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t 
     state.pos_ptr.y += margin_top;
 
     // Rendering the button
-    LfClickableItemState ret = button(file, line, -1, state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
+    LfClickableItemState ret = button(file, line, state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
                                               props, color, props.border_width, true, true);
     // Rendering the text of the button
     text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, text_color, false);
@@ -1824,7 +1826,7 @@ LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32
     state.pos_ptr.y += margin_top;
 
     // Rendering the button
-    LfClickableItemState ret = button(file, line, -1, state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
+    LfClickableItemState ret = button(file, line, state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
                                               props, color, props.border_width, true, true);
     // Rendering the text of the button
     lf_image_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (vec4s){1.0f, 1.0f, 1.0f, 1.0f}, img, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
@@ -1858,7 +1860,7 @@ LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32
     state.pos_ptr.y += margin_top; 
 
     // Rendering the button
-    LfClickableItemState ret = button(file, line, -1, state.pos_ptr, 
+    LfClickableItemState ret = button(file, line, state.pos_ptr, 
         (vec2s){width == -1 ? text_props.width + padding * 2.0f : width + padding * 2, ((height == -1) ? text_props.height : height) + padding * 2}, props, 
                                               color, props.border_width, false, true);
 
@@ -1878,6 +1880,9 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
     uint64_t id_hash = DJB2_INIT;
     id_hash = djb2_hash(id_hash, file, strlen(file));
     id_hash = djb2_hash(id_hash, &line, sizeof(line));
+    if(state.element_id_stack != -1) {
+        id_hash = djb2_hash(id_hash, &state.element_id_stack, sizeof(state.element_id_stack));
+    }
 
     if(state.div_index_ptr > LF_MAX_DIVS - 1) {
         LF_ERROR("Reached maximum div count.");
@@ -2171,7 +2176,7 @@ LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_co
 
     // Render the box
     vec4s checkbox_color = (*val) ? ((tick_color.a == 0) ? props.color : tick_color) : props.color;
-    LfClickableItemState checkbox = button(file, line, -1, state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
+    LfClickableItemState checkbox = button(file, line, state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
                                                    props, checkbox_color, props.border_width, false, false);
 
 
@@ -2235,7 +2240,7 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
     // Render the slider 
     LfUIElementProps slider_props = props;
     slider_props.border_width /= 2.0f;
-    LfClickableItemState slider_state = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
+    LfClickableItemState slider_state = button(file, line, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                                        slider_props, color, 0, 
                                                        false, false);
    
@@ -2248,8 +2253,10 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
     
     LfUIElementProps handle_props = props;
     handle_props.corner_radius = props.corner_radius * 4.0f;
-    LfClickableItemState handle = button(file, line, 1, (vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
+    lf_push_element_id(1);
+    LfClickableItemState handle = button(file, line, (vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, handle_props, handle_props.text_color, handle_props.border_width, false, false);
+    lf_pop_element_id();
     
     LfClickableItemState ret_state = handle;
 
@@ -2315,7 +2322,7 @@ LfClickableItemState _lf_progress_bar_val_loc(int32_t width, int32_t height, int
     // Render the slider 
     LfUIElementProps slider_props = props;
     slider_props.corner_radius = props. corner_radius / 2.0f;
-    LfClickableItemState slider_state = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
+    LfClickableItemState slider_state = button(file, line, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                                        slider_props, props.color, 0, 
                                                        false, false);
 
@@ -2323,8 +2330,10 @@ LfClickableItemState _lf_progress_bar_val_loc(int32_t width, int32_t height, int
     int32_t handle_pos = map_vals(val, min, max,
                                       handle_size / 2.0f, slider_width - handle_size / 2.0f) - (handle_size) / 2.0f;
 
-    LfClickableItemState handle = button(file, line, 1, (vec2s){state.pos_ptr.x + handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
+    lf_push_element_id(1);
+    LfClickableItemState handle = button(file, line, (vec2s){state.pos_ptr.x + handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, props, props.text_color, props.border_width, false, false);
+    lf_pop_element_id();
 
     state.pos_ptr.x += slider_width + margin_right;
     state.pos_ptr.y -= margin_top + handle_size / 4.0f;
@@ -2351,12 +2360,14 @@ LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file
     state.pos_ptr.y += margin_top;
 
     // Render the slider 
-    LfClickableItemState bar = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
+    LfClickableItemState bar = button(file, line, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
     
     slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
                                   0, slider->width);
 
-    LfClickableItemState handle = button(file, line, 1, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    lf_push_element_id(1);
+    LfClickableItemState handle = button(file, line, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    lf_pop_element_id();
 
     state.pos_ptr.x += slider->width + margin_right;
     state.pos_ptr.y -= margin_top;
@@ -2383,13 +2394,16 @@ LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* f
     state.pos_ptr.y += margin_top;
 
     // Render the slider 
-    LfClickableItemState bar = button(file, line, -1, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
+    LfClickableItemState bar = button(file, line, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
     
     // Check if the slider bar is pressed
     slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
                                   0, slider->width);
 
-    LfClickableItemState handle = button(file, line, 1, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    lf_push_element_id(1);
+    LfClickableItemState handle = button(file, line, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    lf_pop_element_id();
+
     lf_rect_render((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (float)height / 2.0f}, (vec2s){(float)slider->height * 2, (float)slider->height * 2}, props.text_color, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
 
     state.pos_ptr.x += slider->width + margin_right;
@@ -2463,7 +2477,7 @@ void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t
     state.pos_ptr.y += margin_top;
 
     vec2s button_pos = state.pos_ptr;
-    LfClickableItemState dropdown_button = button(file, line, -1, state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
+    LfClickableItemState dropdown_button = button(file, line, state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
 
     text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, button_text, font, props.text_color, false);
 
@@ -2527,6 +2541,16 @@ void lf_push_style_props(LfUIElementProps props) {
 
 void lf_pop_style_props() {
     state.props_on_stack = false;
+}
+
+void lf_push_element_id(int32_t id) {
+    if(state.element_id_stack == -1)
+        state.element_id_stack = 0;
+    state.element_id_stack += id;
+}
+
+void lf_pop_element_id() {
+    state.element_id_stack = -1;
 }
 
 LfCursorPosEvent lf_mouse_move_event() {
