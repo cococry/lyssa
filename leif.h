@@ -135,7 +135,7 @@ typedef struct {
 } LfTheme;
 
 typedef struct {
-    int32_t id;
+    uint64_t id;
 
     LfAABB aabb;
     LfClickableItemState interact_state;
@@ -284,7 +284,8 @@ void lf_pop_font();
 
 void lf_rect(uint32_t width, uint32_t height, vec4s color, float corner_radius);
 
-int32_t lf_menu_item_list(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical);
+#define lf_menu_item_list(items, item_count, selected_index, per_cb, vertical, file, line)
+int32_t _lf_menu_item_list_loc(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line);
 
 #define lf_dropdown_menu(items, placeholder, item_count, width, height, selected_index, opened) _lf_dropdown_menu_loc(items, placeholder, item_count, width, height, selected_index, opened, __FILE__, __LINE__)
 void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
