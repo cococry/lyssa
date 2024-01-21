@@ -1051,8 +1051,6 @@ void renderOnTrack() {
         lf_set_ptr_x(ptrX);
         lf_set_ptr_y(ptrY + thumbnailContainerSize.y);
     }
-
-
     // Progress Bar 
     {
         const vec2s progressBarSize = {400, 10}; 
@@ -1555,7 +1553,29 @@ void renderEditPlaylistPopup() {
     lf_pop_style_props();
 }
 
-void renderTrackDisplay() {}
+void renderTrackDisplay() {
+    float thumbnailSize = 48;
+    float margin = 10;
+    vec2s containerSize = (vec2s){200, thumbnailSize + margin};
+
+    lf_set_ptr_y(state.winHeight - containerSize.y - DIV_START_Y - margin);
+    lf_set_ptr_x(state.winWidth - containerSize.x - DIV_START_X - margin);
+
+    lf_rect_render(LF_PTR, containerSize, RGBA_COLOR(255, 255, 255, 60), LF_NO_COLOR, 0.0f, 3.0f);
+
+    lf_set_ptr_x(state.winWidth - containerSize.x + margin / 2.0f - DIV_START_X - margin);
+    lf_set_ptr_y(lf_get_ptr_y() + margin / 2.0f);
+    lf_rect_render(LF_PTR, 
+            (vec2s){thumbnailSize, thumbnailSize}, RGBA_COLOR(255, 255, 255, 30), LF_NO_COLOR, 0.0f, 0.0f);
+
+    uint32_t playingFileIndex = state.playlists[state.currentPlaylist].playingFile;
+    LfTexture trackThumbnail = state.playlists[state.currentPlaylist].musicFiles[playingFileIndex].thumbnail;
+    float aspect = (float)trackThumbnail.width / (float)trackThumbnail.height;
+    float thumbnailHeight = thumbnailSize / aspect; 
+
+    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailSize - thumbnailHeight) / 2.0f}, 
+            LF_WHITE, (LfTexture){.id = trackThumbnail.id, .width = (uint32_t)thumbnailSize, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);   
+}
 void backButtonTo(GuiTab tab) {
     lf_next_line();
 
@@ -1949,7 +1969,12 @@ int main(int argc, char* argv[]) {
             } else {
                 lf_div_hide();
             }
-        } 
+        }
+        if(state.currentPlaylist != -1) {
+            if(state.playlists[state.currentPlaylist].playingFile != -1) {
+                renderTrackDisplay();
+            }
+        }
 
         for(uint32_t i = 0; i < 10; i++) {
             LfUIElementProps props = lf_theme()->div_props;
