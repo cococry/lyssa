@@ -135,7 +135,7 @@ typedef struct {
 } LfTheme;
 
 typedef struct {
-    uint64_t id;
+    int32_t id;
 
     LfAABB aabb;
     LfClickableItemState interact_state;
@@ -284,8 +284,8 @@ void lf_pop_font();
 
 void lf_rect(uint32_t width, uint32_t height, vec4s color, float corner_radius);
 
-#define lf_menu_item_list(items, item_count, selected_index, per_cb, vertical, file, line)
-int32_t _lf_menu_item_list_loc(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line);
+#define lf_menu_item_list(items, item_count, selected_index, per_cb, vertical) _lf_menu_item_list_loc(__FILE__, __LINE__, items, item_count, selected_index, per_cb, vertical)
+int32_t _lf_menu_item_list_loc(const char* file, int32_t line, const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical);
 
 #define lf_dropdown_menu(items, placeholder, item_count, width, height, selected_index, opened) _lf_dropdown_menu_loc(items, placeholder, item_count, width, height, selected_index, opened, __FILE__, __LINE__)
 void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
@@ -304,10 +304,6 @@ bool lf_aabb_intersects_aabb(LfAABB a, LfAABB b);
 void lf_push_style_props(LfUIElementProps props);
 
 void lf_pop_style_props();
-
-void lf_push_element_id(int32_t id);
-
-void lf_pop_element_id();
 
 void lf_set_image_color(vec4s color);
 
@@ -366,3 +362,7 @@ uint32_t lf_get_line_height();
 void lf_set_line_should_overflow(bool overflow);
 
 void lf_set_div_hoverable(bool hoverable);
+
+void lf_push_element_id(int64_t id);
+
+void lf_pop_element_id();

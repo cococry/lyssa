@@ -223,6 +223,8 @@ static void                     renderPlaylistAddFromFolder();
 static void                     renderFileOrFolderPopup();
 static void                     renderEditPlaylistPopup();
 
+static void                     renderTrackDisplay();
+
 static void                     backButtonTo(GuiTab tab);
 static void                     changeTabTo(GuiTab tab);
 
@@ -363,7 +365,6 @@ void initWin(uint32_t width, uint32_t height) {
     glViewport(0, 0, width, height);
 
     state.currentSoundPos = 0.0;
-
     ma_result result = ma_engine_init(NULL, &state.soundEngine);
     if (result != MA_SUCCESS) {
         std::cerr << "[Error]: Failed to initialize miniaudio.\n";
@@ -546,7 +547,9 @@ void renderDashboard() {
 
             lf_push_style_props(props);
             lf_set_div_hoverable(true);
+            lf_push_element_id(playlistIndex);
             LfDiv* div = lf_div_begin(((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}), ((vec2s){width, overDiv ? height + 20 : height}));
+            lf_pop_element_id();
             lf_set_div_hoverable(false);
             lf_pop_style_props();
 
@@ -1452,7 +1455,9 @@ void renderEditPlaylistPopup() {
     // Beginning a new div
     const vec2s popupSize = (vec2s){500.0f, 350.0f};
     LfUIElementProps props = lf_theme()->div_props;
-    props.color = RGB_COLOR(25, 25, 25);
+    props.color = RGB_COLOR(10, 10, 10);
+    props.border_color = RGB_COLOR(50, 50, 50);
+    props.border_width = 3;
     props.padding = 5;
     props.corner_radius = 10;
     lf_push_style_props(props);
@@ -1483,18 +1488,35 @@ void renderEditPlaylistPopup() {
 
     lf_next_line();
     {
+        LfUIElementProps props = lf_theme()->text_props;
+        props.margin_left = 20;
+        lf_push_style_props(props);
+        lf_text("Name");
+        lf_pop_style_props();
+    }
+    lf_next_line();
+    {
         LfUIElementProps props = lf_theme()->inputfield_props;
+        props.margin_bottom = 15;
         props.padding = 15; 
         props.border_width = 1;
         props.color = RGB_COLOR(25, 25, 25); 
         props.border_color = LF_WHITE;
         props.corner_radius = 10;
-        props.margin_top = 20;
         props.text_color = LF_WHITE;
         state.createPlaylistTab.nameInput.width = 457;
         lf_push_style_props(props);
         lf_input_text(&state.createPlaylistTab.nameInput);
         lf_next_line();
+        lf_pop_style_props();
+    }
+
+    lf_next_line();
+    {
+        LfUIElementProps props = lf_theme()->text_props;
+        props.margin_left = 20;
+        lf_push_style_props(props);
+        lf_text("Description");
         lf_pop_style_props();
     }
     lf_next_line();
@@ -1505,7 +1527,6 @@ void renderEditPlaylistPopup() {
         props.color = RGB_COLOR(25, 25, 25); 
         props.border_color = LF_WHITE;
         props.corner_radius = 10;
-        props.margin_top = 20;
         props.text_color = LF_WHITE;
         state.createPlaylistTab.descInput.width = 457;
         lf_push_style_props(props);
@@ -1519,9 +1540,9 @@ void renderEditPlaylistPopup() {
         props.corner_radius = 5;
         props.border_width = 0; 
         props.margin_top = 15;
-        props.color = LYSSA_BLUE;
+        props.color = LYSSA_GREEN;
         lf_push_style_props(props);
-        if(lf_button_fixed("Submit", 150, -1) == LF_CLICKED) {
+        if(lf_button_fixed("Done", 150, -1) == LF_CLICKED) {
             renamePlaylist(std::string(state.createPlaylistTab.nameInput.buf), state.currentPlaylist);
             changePlaylistDesc(std::string(state.createPlaylistTab.descInput.buf), state.currentPlaylist);
             state.popups[(int32_t)PopupID::EditPlaylistPopup].render = false;
@@ -1534,6 +1555,7 @@ void renderEditPlaylistPopup() {
     lf_pop_style_props();
 }
 
+void renderTrackDisplay() {}
 void backButtonTo(GuiTab tab) {
     lf_next_line();
 
@@ -1882,6 +1904,7 @@ int main(int argc, char* argv[]) {
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
 
+    bool show = false;
     while(!glfwWindowShouldClose(state.win)) { 
         // Updating the timestamp of the currently playing sound
         updateSoundProgress();
@@ -1896,29 +1919,7 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LF_RGBA(0, 0, 0, 255));
         lf_begin();
-
-        vec2s pos = (vec2s){10, 10};
-        for(uint32_t i = 0; i < 10; i++) {
-            
-            LfUIElementProps props = lf_theme()->div_props; 
-            props.corner_radius = 5; 
-            props.color = RGB_COLOR(30, 30, 30);
-            lf_push_style_props(props);
-            lf_push_element_id(i);
-            lf_div_begin(pos, ((vec2s){100, 100})); 
-            for(uint32_t j = 0; j < 5; j++) {
-                lf_push_element_id(j);
-                if(lf_button("Hello") == LF_CLICKED) {
-                    printf("Clicked button.\n");
-                }
-                lf_pop_element_id();
-            }
-            lf_pop_element_id();
-            lf_div_end();
-            lf_pop_style_props();
-            pos.x += 100 + 10;
-        }
-        /*switch(state.currentTab) {
+        switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
                 break;
@@ -1959,7 +1960,7 @@ int main(int argc, char* argv[]) {
                 std::cout << "Clicked Button Number " << i << "\n";
             }
             lf_pop_style_props();
-        }*/ 
+        }
         lf_end();
 
         glfwPollEvents();

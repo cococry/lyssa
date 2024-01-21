@@ -158,8 +158,8 @@ typedef struct {
     // Pushable variables
     LfFont* font_stack, *prev_font_stack;
     LfUIElementProps props_stack, div_props, prev_props_stack;
-    int32_t element_id_stack; 
     vec4s image_color_stack;
+    int64_t element_id_stack;
     bool props_on_stack;
 
     // Event references 
@@ -172,16 +172,16 @@ typedef struct {
     
     vec2s cull_start, cull_end;
 
-    LfDiv divs[LF_MAX_DIVS];
+    LfDiv* divs;
+    uint32_t div_capacity, div_count;
 
-    uint32_t div_index_ptr, div_count;
+    uint32_t div_index_ptr, selected_div_id, scrollbar_div;
 
     LfTexture tex_arrow_down, tex_tick;
 
     bool div_storage, div_cull, text_wrap, line_overflow, div_hoverable;
 
-    uint64_t active_element_id, selected_div_id, scrollbar_div;
-
+    uint64_t active_element_id;
 } LfState;
 
 typedef enum {
@@ -213,7 +213,6 @@ static void                     next_line_on_overflow(vec2s size, float xoffset)
 static bool                     area_hovered(vec2s pos, vec2s size);
 static LfFont                   get_current_font(); 
 static bool                     item_should_cull();
-static int32_t                  get_div_index(uint64_t div_id);
 
 // Utility
 static int32_t                  get_max_char_height_font(LfFont font);
@@ -238,6 +237,8 @@ static void                     update_input();
 static void                     clear_events();
 
 static uint64_t                 djb2_hash(uint64_t hash, const void* buf, size_t size);
+
+static void                     div_push(LfDiv* arr, uint32_t* capacity, uint32_t* count, LfDiv div);
 
 // --- Static Functions --- 
 uint32_t shader_create(GLenum type, const char* src) {
@@ -683,11 +684,11 @@ LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s siz
     vec4s hover_color_rgb = hover_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.1) : color; 
     vec4s held_color_rgb = click_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.2) : color; 
 
+
     bool is_hovered = lf_hovered(pos, size);
     if(state.active_element_id == 0) {
         if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
             state.active_element_id = id;
-            
         }
     } else if(state.active_element_id == id) {
         if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -806,7 +807,7 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 
     if(state.div_index_ptr > LF_MAX_DIVS - 1) return;
     
-    LfDiv* selected_div = &state.divs[get_div_index(state.selected_div_id)];
+    LfDiv* selected_div = &state.divs[state.selected_div_id];
     if(yoffset == -1) {
         if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
             selected_div->scroll -= LF_SCROLL_AMOUNT;
@@ -816,6 +817,7 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
             selected_div->scroll += LF_SCROLL_AMOUNT;
         }        
     } 
+
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
@@ -1270,7 +1272,7 @@ LfFont get_current_font() {
 
 bool item_should_cull() {
     if(state.div_storage && state.div_cull) {
-        LfDiv* selected_div = &state.divs[get_div_index(state.selected_div_id)];
+        LfDiv* selected_div = &state.divs[state.selected_div_id];
         if((state.pos_ptr.y > state.dsp_h 
             || state.pos_ptr.x > state.dsp_w) && state.current_div.id == state.scrollbar_div) {
             return true;
@@ -1279,12 +1281,6 @@ bool item_should_cull() {
     return false;
 }
 
-int32_t get_div_index(uint64_t div_id) {
-    for(uint32_t i = 0; i < state.div_count; i++) {
-        if(state.divs[i].id == div_id) return i;
-    }
-    return -1;
-}
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, 
                         vec4s color) {
     // Retrieving the texture index
@@ -1485,16 +1481,27 @@ void clear_events() {
 }
 
 uint64_t djb2_hash(uint64_t hash, const void* buf, size_t size) {
-    const uint8_t* bytes = (const uint8_t*)buf;
+    uint8_t* bytes = (uint8_t*)buf;
     int c;
 
     while ((c = *bytes++)) {
-        hash = ((hash << 5) + hash) + c; 
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
     }
 
     return hash;
 }
 
+void div_push(LfDiv* arr, uint32_t* capacity, uint32_t* count, LfDiv div) {
+      if (*count == *capacity) {
+        *capacity *= 2;
+        arr = (LfDiv*)realloc(arr, *capacity * sizeof(int));
+        if (arr == NULL) {
+            LF_ERROR("Memory allocation failed.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+    arr[*count++] = div;
+}
 // ------------------------------------
 // ------- Public API Functions -------
 // ------------------------------------
@@ -1527,6 +1534,10 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
         state.theme = lf_default_theme();
     }
 
+    state.div_capacity = LF_MAX_DIVS;
+    state.divs = (LfDiv*)malloc(sizeof(LfDiv) * state.div_capacity);
+    memset(state.divs, -1, sizeof(LfDiv) * state.div_capacity);
+
     // Setting glfw callbacks
     glfwSetKeyCallback((GLFWwindow*)state.window_handle, glfw_key_callback);
     glfwSetMouseButtonCallback((GLFWwindow*)state.window_handle, glfw_mouse_button_callback);
@@ -1540,17 +1551,6 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
 
     state.tex_arrow_down = load_texture_asset("arrow-down", "png");
     state.tex_tick = load_texture_asset("tick", "png");
-
-    const char* file = "main.cpp";
-    int32_t line = 1901;
-    uint64_t id = DJB2_INIT; 
-    id = djb2_hash(id, &file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
-    printf("Id 1: %lu\n", id);
-    line = 1902;
-    id = djb2_hash(id, &line, sizeof(line));
-    printf("Id 2: %lu\n", id);
 #endif
 }
 
@@ -1652,7 +1652,7 @@ LfTheme lf_default_theme() {
 
 void lf_resize_display(uint32_t display_width, uint32_t display_height) {
     // Resetting the scroll for the selected div if there is no scrollable region
-    LfDiv selected_div = state.divs[get_div_index(state.selected_div_id)]; 
+    LfDiv selected_div = state.divs[state.selected_div_id]; 
     bool scrollable_region_exists = selected_div.total_area.y > (selected_div.aabb.size.y + selected_div.aabb.pos.y);
     if(selected_div.scroll < 0 && !scrollable_region_exists) {
         selected_div.scroll = 0;
@@ -1772,6 +1772,11 @@ double lf_get_mouse_scroll_y() {
 }
 
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line) {
+    // Calculating ID 
+    uint64_t id = DJB2_INIT;
+    id = djb2_hash(id, file, strlen(file));
+    id = djb2_hash(id, &line, sizeof(line));
+
     // Retrieving the property data of the button
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;
@@ -1877,13 +1882,6 @@ LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32
 }
 
 LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) {
-    uint64_t id_hash = DJB2_INIT;
-    id_hash = djb2_hash(id_hash, file, strlen(file));
-    id_hash = djb2_hash(id_hash, &line, sizeof(line));
-    if(state.element_id_stack != -1) {
-        id_hash = djb2_hash(id_hash, &state.element_id_stack, sizeof(state.element_id_stack));
-    }
-
     if(state.div_index_ptr > LF_MAX_DIVS - 1) {
         LF_ERROR("Reached maximum div count.");
         return NULL;
@@ -1905,12 +1903,14 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
 
     LfDiv div = state.divs[state.div_index_ptr];
     div.init = true;
-    div.id = id_hash;
+    if(div.id == -1) {
+        div.id = state.div_count;
+    }
     if(div.scroll == -1) {
         div.scroll = 0;
     }
 
-    state.pos_ptr = (vec2s){pos.x + props.padding + props.border_width, pos.y};
+    state.pos_ptr = pos; 
 
     state.current_div = div;
 
@@ -1923,15 +1923,14 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
     } else {
         lf_set_ptr_y(props.border_width + props.corner_radius);
     }
-    state.cull_start = (vec2s){pos.x, pos.y + props.border_width + props.corner_radius};
-    state.cull_end = (vec2s){pos.x + size.x, pos.y + size.y - props.border_width - props.corner_radius};
+    state.cull_start = (vec2s){pos.x, pos.y + props.border_width};
+    state.cull_end = (vec2s){pos.x + size.x - props.border_width, pos.y + size.y - props.border_width};
 
     state.current_div = div;
 
     if(state.div_storage) {
-        if(get_div_index(id_hash) == -1) {
-            state.divs[state.div_count++] = div;
-            printf("Added div.\n");
+        if(state.divs[div.id].id == -1) {
+            div_push(state.divs, &state.div_capacity, &state.div_count, div);
         }
     }
 
@@ -1945,10 +1944,10 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
     return &state.divs[state.div_index_ptr - 1];
 }
 
-void draw_scrollbar_on(uint64_t div_id) {
+void draw_scrollbar_on(uint32_t div_id) {
     if(state.current_div.id == div_id) {
         state.scrollbar_div = div_id;
-        LfDiv* selected = &state.divs[get_div_index(div_id)];
+        LfDiv* selected = &state.divs[div_id];
         float scroll = selected->scroll;
         LfUIElementProps props = lf_theme()->scrollbar_props;
 
@@ -1979,9 +1978,9 @@ void draw_scrollbar_on(uint64_t div_id) {
     }
 }
 void lf_div_end() {
-    if(state.div_storage) {
-        draw_scrollbar_on(state.selected_div_id); 
-    }
+    
+    if(state.div_storage)
+        draw_scrollbar_on(state.selected_div_id);
 
     state.pos_ptr = state.prev_pos_ptr;
     state.font_stack = state.prev_font_stack;
@@ -1993,7 +1992,7 @@ void lf_div_end() {
 }
 
 void lf_next_line() {
-    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.border_width + state.div_props.padding;
+    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.border_width;
     state.pos_ptr.y += state.current_line_height;
     state.current_line_height = 0;
     state.gui_re_ev.happened = true;
@@ -2119,7 +2118,6 @@ void lf_end() {
             }
         }
     }
-    
     for(uint32_t i = 0; i < state.div_index_ptr; i++) {
         state.divs[i].hidden = false;
     }
@@ -2253,6 +2251,7 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
     
     LfUIElementProps handle_props = props;
     handle_props.corner_radius = props.corner_radius * 4.0f;
+
     lf_push_element_id(1);
     LfClickableItemState handle = button(file, line, (vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
                                                  (vec2s){handle_size, handle_size}, handle_props, handle_props.text_color, handle_props.border_width, false, false);
@@ -2400,6 +2399,7 @@ LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* f
     slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
                                   0, slider->width);
 
+
     lf_push_element_id(1);
     LfClickableItemState handle = button(file, line, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
     lf_pop_element_id();
@@ -2410,7 +2410,7 @@ LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* f
     state.pos_ptr.y -= margin_top;
     return bar;
 }
-int32_t _lf_menu_item_list_loc(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line) {
+int32_t _lf_menu_item_list_loc(const char* file, int32_t line, const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical) {
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;
     float margin_left = props.margin_left, margin_right = props.margin_right,
@@ -2527,7 +2527,7 @@ void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t
         lf_pop_style_props();
     } else {
         lf_div_hide();
-    } 
+    }
 
     state.pos_ptr.x += width + padding * 2.0f + margin_right;
     state.pos_ptr.y -= margin_top;
@@ -2541,16 +2541,6 @@ void lf_push_style_props(LfUIElementProps props) {
 
 void lf_pop_style_props() {
     state.props_on_stack = false;
-}
-
-void lf_push_element_id(int32_t id) {
-    if(state.element_id_stack == -1)
-        state.element_id_stack = 0;
-    state.element_id_stack += id;
-}
-
-void lf_pop_element_id() {
-    state.element_id_stack = -1;
 }
 
 LfCursorPosEvent lf_mouse_move_event() {
@@ -2611,6 +2601,7 @@ void lf_unset_cull_end_x() {
 LfDiv lf_get_current_div() {
     return state.current_div;
 }
+
 LfDiv lf_get_selected_div() {
     if(state.divs[state.selected_div_id].hidden || !state.div_storage) {
         return (LfDiv){0};
@@ -2625,6 +2616,7 @@ void lf_div_hide_index(uint32_t i) {
     state.divs[i].hidden = true;
     state.div_index_ptr++;
 }
+
 void lf_set_image_color(vec4s color) {
     state.image_color_stack = color;
 }
@@ -2663,4 +2655,11 @@ void lf_set_line_should_overflow(bool overflow) {
 
 void lf_set_div_hoverable(bool clickable) {
     state.div_hoverable = clickable;
+}
+void lf_push_element_id(int64_t id) {
+    state.element_id_stack = id;
+}
+
+void lf_pop_element_id() {
+    state.element_id_stack = -1;
 }
