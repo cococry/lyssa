@@ -893,6 +893,7 @@ void renderOnPlaylist() {
         }
 
 
+        bool onPlayButton = false;
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
             SoundFile& file = currentPlaylist.musicFiles[i];
             {
@@ -921,7 +922,7 @@ void renderOnPlaylist() {
                             (vec4s){0, 0, 0, 0}, 0.0f, 2.0f);
                 } 
 
-                // Index heading
+                // Index 
                 {
                     std::stringstream indexSS;
                     indexSS << i;
@@ -929,10 +930,11 @@ void renderOnPlaylist() {
                     lf_text(indexStr.c_str());
 
                     // Pointer for Title heading
-                    lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension(indexStr.c_str()).x + lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
+                    lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension(indexStr.c_str()).x +
+                                lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
                 }
 
-                // Title Heading
+                // Title 
                 {
                     std::filesystem::path fsPath(file.path);
                     std::string filename = removeFileExtension(fsPath.filename().string());
@@ -951,13 +953,35 @@ void renderOnPlaylist() {
                     lf_text(filename.c_str());
                 }
 
+                if(hovered_text_div)
+                {
+                    LfUIElementProps props = lf_theme()->button_props;
+                    props.margin_right = 15;
+                    props.border_width = 0;
+                    props.color = LYSSA_GREEN;
+                    props.corner_radius = 12;
+                    lf_push_style_props(props);
+                    LfClickableItemState playButton = lf_image_button(((LfTexture){.id = state.playTexture.id, .width = 24, .height = 24}));
+                    onPlayButton = playButton != LF_IDLE;
+                    if(playButton == LF_CLICKED) {
+                        if(i != currentPlaylist.playingFile) {
+                            playlistPlayFileWithIndex(i, state.currentPlaylist);
+                        }
+                        state.currentSoundFile = &file;
+                        state.playingPlaylist = state.currentPlaylist;
+                        state.onTrackTab.trackThumbnail = file.thumbnail;
+                        continue;
+                    }
+                    lf_pop_style_props();
+                }
+
                 if(state.playlistFileOptionsIndex == i) {
                     popupPos = (vec2s){lf_get_ptr_x() + 20, lf_get_ptr_y() + 20};
                     popupFilePath = file.path;
                     popupIndex = i;
                 }
 
-                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex == -1) {
+                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex == -1 && !onPlayButton) {
                     if(i != currentPlaylist.playingFile) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
@@ -968,7 +992,7 @@ void renderOnPlaylist() {
                 }
 
 
-                // Duration Heading
+                // Duration 
                 {
                     lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
                     lf_text(formatDurationToMins(file.duration).c_str());
@@ -1546,6 +1570,9 @@ void renderTrackDisplay() {
     {
         lf_set_ptr_x(state.winWidth - containerSize.x + margin / 2.0f - DIV_START_X - margin);
         lf_set_ptr_y(lf_get_ptr_y() + margin / 2.0f);
+        if(lf_hovered(LF_PTR, (vec2s){thumbnailSize, thumbnailSize}) && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+            changeTabTo(GuiTab::OnTrack);
+        }
         lf_rect_render(LF_PTR, 
                 (vec2s){thumbnailSize, thumbnailSize}, RGB_COLOR(25, 25, 25), LF_NO_COLOR, 0.0f, 2.5f);
 
@@ -1644,7 +1671,36 @@ void renderTrackProgress() {
 
         lf_pop_style_props();
     }
+    
+    {
+        uint32_t imageSize = 32;
+        lf_next_line();
+        lf_set_ptr_x((state.winWidth - (lf_text_dimension(state.playlists[state.playingPlaylist].name.c_str()).x + 
+                    lf_theme()->image_props.margin_right + imageSize)) / 2.0f);
 
+        {
+            LfUIElementProps props = lf_theme()->button_props;
+            props.margin_left = 0;
+            props.margin_top = -5;
+            props.margin_bottom = 0;
+            props.padding = 0;
+            props.corner_radius = 3;
+            lf_push_style_props(props);
+            if(lf_image_button(((LfTexture){.id = state.musicNoteTexture.id, .width = imageSize, .height = imageSize})) == LF_CLICKED) {
+                state.currentPlaylist = state.playingPlaylist;
+                changeTabTo(GuiTab::OnPlaylist);
+            }
+            lf_pop_style_props();
+        }
+        {
+            LfUIElementProps props = lf_theme()->text_props;
+            props.text_color = LYSSA_BLUE;
+            props.margin_top = 2.5f;
+            lf_push_style_props(props);
+            lf_text(state.playlists[state.playingPlaylist].name.c_str());
+            lf_pop_style_props();
+        }
+    }
 }
 
 void renderTrackVolumeControl() {
@@ -1715,6 +1771,7 @@ void backButtonTo(GuiTab tab) {
     lf_pop_style_props();
 }
 void changeTabTo(GuiTab tab) {
+    if(state.currentTab == tab) return;
     state.currentTab = tab;
 
     for(uint32_t i = 0; i < lf_get_div_count(); i++) {
