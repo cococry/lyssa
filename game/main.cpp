@@ -543,7 +543,7 @@ void renderDashboard() {
             bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
             // Div
             LfUIElementProps props = lf_theme()->div_props;
-            props.color = overDiv ? RGB_COLOR(28, 28, 28) : RGB_COLOR(20, 20, 20);
+            props.color = overDiv ? RGB_COLOR(43, 43, 43) : RGB_COLOR(35, 35, 35);
             props.corner_radius = 5.0f;
             props.padding = 0;
             lf_push_style_props(props);
@@ -2114,7 +2114,7 @@ int main(int argc, char* argv[]) {
 
         // OpenGL color clearing 
         glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(LF_RGBA(0, 0, 0, 255));
+        glClearColor(LF_RGBA(20, 20, 21, 255));
         lf_begin();
         if(state.currentTab != GuiTab::OnTrack) {
             renderTrackProgress();

@@ -933,6 +933,11 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
     if(state.image_color_stack.a != 0.0) {
         color = state.image_color_stack;
     }
+    if(state.render.tex_count >= MAX_TEX_COUNT_BATCH - 1) {
+        lf_flush();
+        lf_renderer_begin();
+        state.render.tex_count = 0;
+    }
     // Initializing texture coords data
     vec2s texcoords[4] = {
         (vec2s){0.0f, 0.0f},
@@ -1283,6 +1288,11 @@ bool item_should_cull() {
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, 
                         vec4s color) {
+    if(state.render.tex_count >= MAX_TEX_COUNT_BATCH - 1) {
+        lf_flush();
+        lf_renderer_begin();
+        state.render.tex_count = 0;
+    }
     // Retrieving the texture index
     float tex_index = -1.0f;
     if(!no_render) {
@@ -1492,15 +1502,18 @@ uint64_t djb2_hash(uint64_t hash, const void* buf, size_t size) {
 }
 
 void div_push(LfDiv* arr, uint32_t* capacity, uint32_t* count, LfDiv div) {
-      if (*count == *capacity) {
-        *capacity *= 2;
-        arr = (LfDiv*)realloc(arr, *capacity * sizeof(int));
-        if (arr == NULL) {
+    (void)arr;
+    (void)capacity;
+    (void)count;
+    if (state.div_count == state.div_capacity) {
+        state.div_capacity *= 2;
+        state.divs = (LfDiv*)realloc(arr, state.div_capacity * sizeof(LfDiv));
+        if (state.divs == NULL) {
             LF_ERROR("Memory allocation failed.\n");
             exit(EXIT_FAILURE);
         }
     }
-    arr[*count++] = div;
+    state.divs[state.div_count++] = div;
 }
 // ------------------------------------
 // ------- Public API Functions -------
