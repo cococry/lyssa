@@ -163,6 +163,8 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
 
 LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip, LfTextureFiltering filter);
 
+void lf_free_texture(LfTexture tex);
+
 void lf_free_font(LfFont* font);
 
 void lf_add_key_callback(void* cb);

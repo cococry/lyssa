@@ -644,6 +644,10 @@ void lf_free_font(LfFont* font) {
     free(font->cdata);
     free(font->font_info);
 }
+void lf_free_texture(LfTexture tex) {
+    tex.id = 0;
+    glDeleteTextures(1, &tex.id);
+}
 
 bool lf_point_intersects_aabb(vec2s p, LfAABB aabb) {
     return p.x <= (aabb.size.x + (aabb.size.x / 2.0f)) && p.x >= (aabb.pos.x - (aabb.size.x / 2.0f)) && 
@@ -2120,7 +2124,7 @@ void _lf_begin_loc(const char* file, int32_t line) {
 }
 void lf_end() {
     lf_div_end();
-   
+ 
     if(state.div_storage) {
         for(int32_t i = state.div_index_ptr; i >= 0; i--) {
             LfDiv* div = &state.divs[i];

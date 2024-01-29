@@ -224,9 +224,12 @@ static void                     renderPlaylistAddFromFolder();
 static void                     renderFileOrFolderPopup();
 static void                     renderEditPlaylistPopup();
 
+
 static void                     renderTrackDisplay();
-static void                     renderTrackProgress();
+
 static void                     renderTrackVolumeControl();
+static void                     renderTrackProgress();
+static void                     renderTrackMenu();
 
 static void                     backButtonTo(GuiTab tab);
 static void                     changeTabTo(GuiTab tab);
@@ -661,7 +664,7 @@ void renderDashboard() {
 
     lf_set_ptr_y(state.winHeight - BACK_BUTTON_HEIGHT - 45 - DIV_START_Y * 2);
     lf_set_ptr_x(DIV_START_X);
-    renderTrackVolumeControl();
+    renderTrackMenu();
 
     lf_div_end();
 }
@@ -899,9 +902,8 @@ void renderOnPlaylist() {
             {
                 vec2s thumbnailContainerSize = (vec2s){48, 48};
                 vec4s selectedColor = RGB_COLOR(255, 255, 255);
-                float marginBottomThumbnail = 10.0f, 
-                      marginTopThumbnail = 5.0f, 
-                      marginLeftThumbnail = 10.0f;
+                float marginBottomThumbnail = 10.0f, marginTopThumbnail = 5.0f;
+
                 selectedColor = (vec4s){LF_ZTO_TO_RGBA(selectedColor.r, selectedColor.g, selectedColor.b, selectedColor.a)};
 
                 LfAABB fileAABB = (LfAABB){
@@ -911,15 +913,15 @@ void renderOnPlaylist() {
 
                 bool hovered_text_div = lf_hovered(fileAABB.pos, fileAABB.size);
                 if(hovered_text_div) {
-                    if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_RIGHT)) {
+                    if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_RIGHT)) {
                         state.playlistFileOptionsIndex = i;
                     }
-                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 60),
-                            (vec4s){0, 0, 0, 0}, 0.0f, 2.0f);
+                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 40),
+                            (vec4s){0, 0, 0, 0}, 0.0f, 4.0f);
                 }
                 if(currentPlaylist.playingFile == i) {
-                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 80),
-                            (vec4s){0, 0, 0, 0}, 0.0f, 2.0f);
+                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 60),
+                            (vec4s){0, 0, 0, 0}, 0.0f, 4.0f);
                 } 
 
                 // Index 
@@ -947,7 +949,7 @@ void renderOnPlaylist() {
 
                     lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE, (LfTexture){.id = file.thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
 
-                    lf_set_ptr_x(lf_get_ptr_x() + thumbnailContainerSize.x + marginLeftThumbnail);
+                    lf_set_ptr_x(lf_get_ptr_x() + thumbnailContainerSize.x);
                     lf_set_line_height(thumbnailContainerSize.y + marginBottomThumbnail);
 
                     lf_text(filename.c_str());
@@ -964,13 +966,9 @@ void renderOnPlaylist() {
                     LfClickableItemState playButton = lf_image_button(((LfTexture){.id = state.playTexture.id, .width = 24, .height = 24}));
                     onPlayButton = playButton != LF_IDLE;
                     if(playButton == LF_CLICKED) {
-                        if(i != currentPlaylist.playingFile) {
-                            playlistPlayFileWithIndex(i, state.currentPlaylist);
-                        }
+                        playlistPlayFileWithIndex(i, state.currentPlaylist);
                         state.currentSoundFile = &file;
-                        state.playingPlaylist = state.currentPlaylist;
                         state.onTrackTab.trackThumbnail = file.thumbnail;
-                        continue;
                     }
                     lf_pop_style_props();
                 }
@@ -981,12 +979,11 @@ void renderOnPlaylist() {
                     popupIndex = i;
                 }
 
-                if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex == -1 && !onPlayButton) {
+                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hovered_text_div && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex == -1 && !onPlayButton) {
                     if(i != currentPlaylist.playingFile) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
                     state.currentSoundFile = &file;
-                    state.playingPlaylist = state.currentPlaylist;
                     state.onTrackTab.trackThumbnail = file.thumbnail;
                     changeTabTo(GuiTab::OnTrack);
                 }
@@ -1002,7 +999,7 @@ void renderOnPlaylist() {
         }
         lf_div_end();
 
-        if((lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && state.playlistFileOptionsIndex != -1) && !lf_hovered(popupPos, (vec2s){150, 50})) {
+        if((lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && state.playlistFileOptionsIndex != -1) && !lf_hovered(popupPos, (vec2s){150, 50})) {
             state.playlistFileOptionsIndex = -1;
         }
         if(popupPos.x != -1 && popupPos.y != 1)
@@ -1559,8 +1556,8 @@ void renderTrackDisplay() {
         lf_theme()->button_props.margin_left, 
         thumbnailSize + margin};
 
-    lf_set_ptr_y(state.winHeight - containerSize.y - DIV_START_Y - margin);
     lf_set_ptr_x(state.winWidth - containerSize.x - DIV_START_X - margin);
+    lf_set_ptr_y(lf_get_ptr_y() - containerSize.y);
 
     // Container 
     lf_rect_render(LF_PTR, containerSize, RGBA_COLOR(255, 255, 255, 50), LF_NO_COLOR, 0.0f, 5.0f);
@@ -1569,8 +1566,8 @@ void renderTrackDisplay() {
     // Track Thumbnail 
     {
         lf_set_ptr_x(state.winWidth - containerSize.x + margin / 2.0f - DIV_START_X - margin);
-        lf_set_ptr_y(lf_get_ptr_y() + margin / 2.0f);
-        if(lf_hovered(LF_PTR, (vec2s){thumbnailSize, thumbnailSize}) && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+        lf_set_ptr_y(lf_get_ptr_y() - DIV_START_Y + margin / 2.0f);
+        if(lf_hovered(LF_PTR, (vec2s){thumbnailSize, thumbnailSize}) && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
             changeTabTo(GuiTab::OnTrack);
         }
         lf_rect_render(LF_PTR, 
@@ -1586,21 +1583,22 @@ void renderTrackDisplay() {
 
     // Track Name
     {
-        lf_set_ptr_x(lf_get_ptr_x() + thumbnailSize);
-        lf_set_ptr_y(lf_get_ptr_y() + (containerSize.y - thumbnailSize) / 2.0f + margin / 2.0f);
-
+        lf_set_ptr_x(lf_get_ptr_x() - DIV_START_X + thumbnailSize);
+        LfUIElementProps props = lf_theme()->text_props;
+        props.margin_top = (thumbnailSize - lf_text_dimension(filename.c_str()).y) / 2.0f;
+        lf_push_style_props(props);
         lf_text(filename.c_str());
+        lf_pop_style_props();
     }
 
+    // Controls
     {
-
-        lf_set_ptr_y(lf_get_ptr_y() + (containerSize.y - thumbnailSize) / 2.0f + margin / 2.0f);
         LfUIElementProps props = lf_theme()->button_props;
         props.color = LF_NO_COLOR;
         props.border_width = 0; 
         props.corner_radius = 0; 
-        props.margin_top = 0;
-        props.margin_left = 15;
+        props.margin_top = (thumbnailSize - iconSizeXsm) / 2.0f;
+        props.margin_left = 10;
         props.padding = 0;
 
         lf_push_style_props(props);
@@ -1614,23 +1612,21 @@ void renderTrackDisplay() {
             props.color = LF_WHITE;
             props.corner_radius = 6;
             props.padding = 0;
-            props.margin_top = 0;
+            props.margin_top = (thumbnailSize - iconSizeSm) / 2.0f;
             lf_push_style_props(props);    
-            float ptr_y = lf_get_ptr_y();
-            lf_set_ptr_y(lf_get_ptr_y() - (iconSizeSm - iconSizeXsm) / 2.0f);
             if(lf_image_button(((LfTexture){.id = state.currentSound.isPlaying ? state.pauseTexture.id : state.playTexture.id, .width = (uint32_t)iconSizeSm, .height = (uint32_t)iconSizeSm})) == LF_CLICKED) {
                 if(state.currentSound.isPlaying)
                     state.currentSound.stop();
                 else 
                     state.currentSound.play();
             }
-            lf_set_ptr_y(ptr_y);
             lf_pop_style_props();
         }
 
         props.color = LF_NO_COLOR;
         props.border_width = 0;
         props.corner_radius = 0;
+        props.margin_top = (thumbnailSize - iconSizeXsm) / 2.0f;
         props.padding = 0;
 
         lf_push_style_props(props);
@@ -1646,11 +1642,10 @@ void renderTrackProgress() {
     {
         state.trackProgressSlider.width = state.winWidth / 4.0f;
    
-        lf_set_ptr_y(state.winHeight - state.trackProgressSlider.height - 40 - DIV_START_Y);
         lf_set_ptr_x((state.winWidth - state.trackProgressSlider.width) / 2.0f);
         
         LfUIElementProps props = lf_theme()->slider_props;
-        props.margin_top = 0;
+        props.margin_top = 40;
         props.margin_left = 0;
         props.margin_right = 0;
         props.corner_radius = 1.5;
@@ -1661,17 +1656,18 @@ void renderTrackProgress() {
 
         vec2s posPtr = (vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top};
 
-        LfClickableItemState slider = lf_slider_int(&state.trackProgressSlider);
+        LfClickableItemState progressBar = lf_slider_int(&state.trackProgressSlider);
 
         lf_rect_render(posPtr, (vec2s){(float)state.trackProgressSlider.handle_pos, (float)state.trackProgressSlider.height}, LF_WHITE, LF_NO_COLOR, 0.0f, props.corner_radius);
 
-        if(slider == LF_RELEASED || slider == LF_CLICKED) {
+        if(progressBar == LF_RELEASED || progressBar == LF_CLICKED) {
             state.currentSound.setPositionInSeconds(state.currentSoundPos);
         }
 
         lf_pop_style_props();
     }
-    
+   
+    // Playlist Display
     {
         uint32_t imageSize = 32;
         lf_next_line();
@@ -1700,6 +1696,13 @@ void renderTrackProgress() {
             lf_text(state.playlists[state.playingPlaylist].name.c_str());
             lf_pop_style_props();
         }
+    }
+}
+void renderTrackMenu() {
+    renderTrackVolumeControl();
+    if(state.currentTab != GuiTab::OnTrack) {
+        renderTrackProgress();
+        renderTrackDisplay();
     }
 }
 
@@ -1750,9 +1753,7 @@ void renderTrackVolumeControl() {
                 props.text_color, LF_NO_COLOR, 0.0f, props.corner_radius);
         lf_slider_int(&state.volumeSlider);
         lf_pop_style_props();
-    }
-
-
+    } 
 }
 void backButtonTo(GuiTab tab) {
     lf_next_line();
@@ -1767,7 +1768,7 @@ void backButtonTo(GuiTab tab) {
         changeTabTo(tab);
     }
 
-    renderTrackVolumeControl();
+    renderTrackMenu();
     lf_pop_style_props();
 }
 void changeTabTo(GuiTab tab) {
@@ -1816,11 +1817,13 @@ FileStatus deletePlaylist(uint32_t playlistIndex) {
 
     return FileStatus::Success;
 }
+
 FileStatus changePlaylistDesc(const std::string& desc, uint32_t playlistIndex) {
     Playlist& playlist = state.playlists[playlistIndex];
     playlist.desc = desc; 
     return savePlaylist(playlistIndex);
 }
+
 FileStatus savePlaylist(uint32_t playlistIndex) {
     Playlist& playlist = state.playlists[playlistIndex];
     std::ofstream metdata(playlist.path + "/.metadata", std::ios::trunc);
@@ -1978,6 +1981,7 @@ void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
     state.currentSoundPos = 0.0;
     state.trackProgressSlider._init = false;
     state.trackProgressSlider.max = state.currentSound.lengthInSeconds;
+    state.playingPlaylist = playlistIndex;
 }
 
 void skipSoundUp(uint32_t playlistInedx) {
@@ -2116,10 +2120,6 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LF_RGBA(20, 20, 21, 255));
         lf_begin();
-        if(state.currentTab != GuiTab::OnTrack) {
-            renderTrackProgress();
-            renderTrackDisplay();
-        }
         switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
