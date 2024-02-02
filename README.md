@@ -1,7 +1,7 @@
 # Lyssa
 
 <img src="https://github.com/cococry/lyssa/blob/main/Lyssa.png" width="1000"  /> 
-<img src="https://github.com/cococry/lyssa/blob/main/lyssa-app.png" width="1000"  /> 
+<img src="https://github.com/cococry/lyssa/blob/main/lyssa-app2.png" width="1000"  /> 
 
 ## Overview
 
