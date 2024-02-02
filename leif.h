@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <cglm/cglm.h>
 #include <cglm/struct.h>
+#include <wchar.h>
 
 #define LF_RGBA(r, g, b, a) r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f
 #define LF_ZTO_TO_RGBA(r, g, b, a) r * 255.0f, g * 255.0f, b * 255.0f, a * 255.0f
@@ -242,9 +243,13 @@ void lf_next_line();
 
 vec2s lf_text_dimension(const char* str);
 
+vec2s lf_text_dimension_wide(const wchar_t* str);
+
 float lf_get_text_end(const char* str, float start_x);
 
 void lf_text(const char* text);
+
+void lf_text_wide(const wchar_t* text);
 
 vec2s lf_get_div_size();
 
@@ -293,6 +298,9 @@ int32_t _lf_menu_item_list_loc(const char* file, int32_t line, const char** item
 void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point,
+        int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);
+
+LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point,
         int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius);
