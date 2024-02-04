@@ -36,7 +36,6 @@
 
 #define LYSSA_DIR std::string(getenv(HOMEDIR)) + std::string("/.lyssa")
 
-
 #define RGB_COLOR(r, g, b) (vec4s){LF_RGBA(r, g, b, 255.0f)}
 #define RGBA_COLOR(r, g, b, a) (vec4s){LF_RGBA(r, g, b, a)}
 
@@ -245,6 +244,7 @@ static FileStatus               changePlaylistDesc(const std::string& desc, uint
 static FileStatus               savePlaylist(uint32_t playlistIndex);
 static FileStatus               addFileToPlaylist(const std::string& path, uint32_t playlistIndex);
 static FileStatus               removeFileFromPlaylist(const std::string& path, uint32_t playlistIndex);
+
 static void                     loadPlaylists(bool loadFiles);
 static bool                     isFileInPlaylist(const std::string& path, uint32_t playlistIndex);
 static void                     loadPlaylist(const std::filesystem::directory_entry& folder, bool loadFiles);
@@ -653,7 +653,8 @@ void renderDashboard() {
             }
             if(div->interact_state == LF_CLICKED && !overButton) {
                 state.currentPlaylist = playlistIndex;
-                loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path), true);
+                if(state.playlists[state.currentPlaylist].musicFiles.empty())
+                    loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path), true);
                 changeTabTo(GuiTab::OnPlaylist);
             } 
 
@@ -2085,10 +2086,10 @@ LfTexture getSoundThubmnail(const std::string& soundPath) {
         return tex;
     }
 
-    const ByteVector& imageData = apicFrame->picture();
+    ByteVector imageData = apicFrame->picture();
     
-    tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
-
+    tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, 64, 32);
+    
     return tex;
 }
 void updateSoundProgress() {

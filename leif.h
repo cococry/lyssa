@@ -162,7 +162,11 @@ LfFont lf_load_font(const char* filepath, uint32_t size);
 
 LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering filter);
 
+LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
+
 LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip, LfTextureFiltering filter);
+
+LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
 
 void lf_free_texture(LfTexture tex);
 
