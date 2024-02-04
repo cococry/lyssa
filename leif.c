@@ -2733,7 +2733,7 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
 
     // Check if the slider bar is pressed
 
-    if(slider_state == LF_HELD) {
+    if(slider_state == LF_CLICKED) {
         slider->handle_pos = lf_get_mouse_x() - state.pos_ptr.x;
         *(int32_t*)slider->val = map_vals(slider->handle_pos, 0, slider_width, 
                                           slider->min, slider->max);
@@ -2743,7 +2743,7 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
     if(handle == LF_HELD) {
         slider->held = true;
         slider->_init = false;
-        ret_state = LF_CLICKED;
+        ret_state = LF_HELD;
     }
     if(slider->held && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
         slider->held = false;
@@ -2758,7 +2758,7 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
         } else if(lf_get_mouse_x() <= state.pos_ptr.x) {
             *(int32_t*)slider->val = slider->min;
             slider->handle_pos = 0;
-        } else if(lf_get_mouse_x() >= state.pos_ptr.x + slider_width) {
+        } else if(lf_get_mouse_x() >= state.pos_ptr.x + slider_width - handle_size) {
             *(int32_t*)slider->val = slider->max;
             slider->handle_pos = slider_width - handle_size;
         }

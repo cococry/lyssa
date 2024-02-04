@@ -2170,7 +2170,7 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LF_RGBA(15, 15, 19, 255));
         lf_begin();
-       /* 
+
         switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
@@ -2201,12 +2201,8 @@ int main(int argc, char* argv[]) {
             } else {
                 lf_div_hide();
             }
-        }*/
-
-        if(lf_button("Close") == LF_CLICKED) {
-            glfwSetWindowShouldClose(state.win, true);
         }
-        lf_button_fixed_wide(L"Straße", 200, -1);
+
         lf_end();
 
         glfwPollEvents();
