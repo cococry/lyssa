@@ -2088,7 +2088,7 @@ LfTexture getSoundThubmnail(const std::string& soundPath) {
 
     ByteVector imageData = apicFrame->picture();
     
-    tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, 64, 32);
+    tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, 48 * 1.5, 27 * 1.5);
     
     return tex;
 }
@@ -2155,7 +2155,6 @@ int main(int argc, char* argv[]) {
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
 
-
     std::vector<std::wstring> filenames;
     while(!glfwWindowShouldClose(state.win)) { 
         // Updating the timestamp of the currently playing sound
@@ -2171,7 +2170,7 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LF_RGBA(15, 15, 19, 255));
         lf_begin();
-        
+       /* 
         switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
@@ -2202,7 +2201,12 @@ int main(int argc, char* argv[]) {
             } else {
                 lf_div_hide();
             }
+        }*/
+
+        if(lf_button("Close") == LF_CLICKED) {
+            glfwSetWindowShouldClose(state.win, true);
         }
+        lf_button_fixed_wide(L"Straße", 200, -1);
         lf_end();
 
         glfwPollEvents();

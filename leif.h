@@ -4,6 +4,7 @@
 #include <cglm/cglm.h>
 #include <cglm/struct.h>
 #include <wchar.h>
+#include <stdio.h>
 
 #define LF_RGBA(r, g, b, a) r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f
 #define LF_ZTO_TO_RGBA(r, g, b, a) r * 255.0f, g * 255.0f, b * 255.0f, a * 255.0f
@@ -71,9 +72,7 @@ typedef enum {
 
 typedef struct {
     uint32_t width, height;
-    uint32_t char_count;
-    bool reached_stop, reached_max_wraps;
-    int32_t end_x, start_x, end_y;
+    int32_t end_x, end_y;
 } LfTextProps;
 
 typedef struct {
@@ -222,11 +221,17 @@ void lf_div_end();
 #define lf_button(text) _lf_button_loc(text, __FILE__, __LINE__)
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line);
 
+#define lf_button_wide(text) _lf_button_loc_wide(text, __FILE__, __LINE__)
+LfClickableItemState _lf_button_loc_wide(const wchar_t* text, const char* file, int32_t line);
+
 #define lf_image_button(img) _lf_image_button_loc(img, __FILE__, __LINE__)
 LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32_t line);
 
 #define lf_button_fixed(text, width, height) _lf_button_fixed_loc(text, width, height, __FILE__, __LINE__)
 LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32_t height, const char* file, int32_t line);
+
+#define lf_button_fixed_wide(text, width, height) _lf_button_fixed_loc_wide(text, width, height, __FILE__, __LINE__)
+LfClickableItemState _lf_button_fixed_loc_wide(const wchar_t* text, int32_t width, int32_t height, const char* file, int32_t line);
 
 #define lf_slider_int(slider) _lf_slider_int_loc(slider, __FILE__, __LINE__)
 LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int32_t line);
@@ -242,6 +247,9 @@ LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* f
 
 #define lf_checkbox(text, val, tick_color, tex_color) _lf_checkbox_loc(text, val, tick_color, tex_color, __FILE__, __LINE__)
 LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line);
+
+#define lf_checkbox_wide(text, val, tick_color, tex_color) _lf_checkbox_loc_wide(text, val, tick_color, tex_color, __FILE__, __LINE__)
+LfClickableItemState _lf_checkbox_loc_wide(const wchar_t* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line);
 
 void lf_next_line();
 
@@ -296,16 +304,20 @@ void lf_pop_font();
 void lf_rect(uint32_t width, uint32_t height, vec4s color, float corner_radius);
 
 #define lf_menu_item_list(items, item_count, selected_index, per_cb, vertical) _lf_menu_item_list_loc(__FILE__, __LINE__, items, item_count, selected_index, per_cb, vertical)
-int32_t _lf_menu_item_list_loc(const char* file, int32_t line, const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical);
+int32_t _lf_menu_item_list_loc(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line);
+
+#define lf_menu_item_list_wide(items, item_count, selected_index, per_cb, vertical) _lf_menu_item_list_loc_wide(__FILE__, __LINE__, items, item_count, selected_index, per_cb, vertical)
+int32_t _lf_menu_item_list_loc_wide(const wchar_t** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line);
 
 #define lf_dropdown_menu(items, placeholder, item_count, width, height, selected_index, opened) _lf_dropdown_menu_loc(items, placeholder, item_count, width, height, selected_index, opened, __FILE__, __LINE__)
 void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
 
-LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point,
-        int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);
+#define lf_dropdown_menu_wide(items, placeholder, item_count, width, height, selected_index, opened) _lf_dropdown_menu_loc_wide(items, placeholder, item_count, width, height, selected_index, opened, __FILE__, __LINE__)
+void _lf_dropdown_menu_loc_wide(const wchar_t** items, const wchar_t* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
 
-LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point,
-        int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, vec4s color);
+LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, bool no_render, vec4s color);
+
+LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, bool no_render, vec4s color);
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius);
 

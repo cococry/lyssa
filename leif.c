@@ -80,7 +80,7 @@
 #define CURSOR_CALLBACK_t void*
 #endif
 #define MAX_RENDER_BATCH 10000
-#define MAX_TEX_COUNT_BATCH 32
+#define MAX_TEX_COUNT_BATCH 4
 #define MAX_KEY_CALLBACKS 4
 #define MAX_MOUSE_BTTUON_CALLBACKS 4
 #define MAX_SCROLL_CALLBACKS 4
@@ -221,6 +221,12 @@ static bool                     area_hovered(vec2s pos, vec2s size);
 static LfFont                   get_current_font(); 
 static bool                     item_should_cull();
 
+static LfClickableItemState     button_element_loc(void* text, const char* file, int32_t line, bool wide);
+static LfClickableItemState     button_fixed_element_loc(void* text, int32_t width, int32_t height, const char* file, int32_t line, bool wide);
+static LfClickableItemState     checkbox_element_loc(void* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line, bool wide);
+static void                     dropdown_menu_item_loc(void** items, void* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line, bool wide);
+static int32_t                  menu_item_list_item_loc(void** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line, bool wide);
+
 // Utility
 static int32_t                  get_max_char_height_font(LfFont font);
 static double                   get_char_width(LfFont font, char c);
@@ -246,6 +252,7 @@ static void                     clear_events();
 static uint64_t                 djb2_hash(uint64_t hash, const void* buf, size_t size);
 
 static void                     div_push(LfDiv* arr, uint32_t* capacity, uint32_t* count, LfDiv div);
+
 
 // --- Static Functions --- 
 uint32_t shader_create(GLenum type, const char* src) {
@@ -423,7 +430,7 @@ void renderer_init() {
         "flat in vec2 v_scale;\n"
         "flat in vec2 v_pos_px;\n"
         "in float v_corner_radius;\n"
-        "uniform sampler2D u_textures[32];\n"
+        "uniform sampler2D u_textures[4];\n"
         "uniform vec2 u_screen_size;\n"
         "in vec2 v_min_coord;\n"
         "in vec2 v_max_coord;\n"
@@ -843,10 +850,10 @@ LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props
 
 }
 LfTextProps text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render) {
-    return lf_text_render(pos, text, font, -1, -1, -1, -1, -1, -1, no_render, font_color);
+    return lf_text_render(pos, text, font, -1, no_render, font_color);
 }
 LfTextProps text_render_simple_wide(vec2s pos, const wchar_t* text, LfFont font, vec4s font_color, bool no_render) {
-    return lf_text_render_wchar(pos, text, font, -1, -1, -1, -1, -1, -1, no_render, font_color);
+    return lf_text_render_wchar(pos, text, font, -1, no_render, font_color);
 }
 
 #ifdef LF_GLFW
@@ -1028,17 +1035,16 @@ void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, 
     if(item_should_cull()) {
         return;
     }
+    if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
+        lf_flush();
+        lf_renderer_begin();
+    }
     // Offsetting the postion, so that pos is the top left of the rendered object
     vec2s pos_initial = pos;
     pos = (vec2s){pos.x + tex.width / 2.0f, pos.y + tex.height / 2.0f};
 
     if(state.image_color_stack.a != 0.0) {
         color = state.image_color_stack;
-    }
-    if(state.render.tex_count >= MAX_TEX_COUNT_BATCH - 1) {
-        lf_flush();
-        lf_renderer_begin();
-        state.render.tex_count = 0;
     }
     // Initializing texture coords data
     vec2s texcoords[4] = {
@@ -1207,7 +1213,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
 
     LfTextProps text_props_post_input = lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding},
                                                     input->buf, font, 
-                                                    input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, -1, -1, -1, -1, -1, true, text_color);
+                                                    input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, true, text_color);
 
     
     if(!input->expand_on_overflow)
@@ -1235,7 +1241,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     // Rendering the text in the input field
     LfTextProps text_props_rendered = lf_text_render((vec2s){(state.pos_ptr.x + padding),
         state.pos_ptr.y + padding}, input->buf,
-                                                     font, input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, -1, -1, -1, -1, -1, false, text_color);
+                                                     font, input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, false, text_color);
 
     // Handleing the cursor indicator
     if(input->selected) {
@@ -1246,9 +1252,9 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
         }
         cursor_slice[input->cursor_index] = '\0';
 
-        LfTextProps cursor_pos_props = lf_text_render((vec2s){(float)text_props_rendered.start_x,
+        LfTextProps cursor_pos_props = lf_text_render((vec2s){(float)text_props_rendered.end_x - text_props_rendered.width,
             state.pos_ptr.y + padding}, cursor_slice,
-                                                      font, input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, -1, -1, -1, -1, -1, true, text_color);
+                                                      font, input->expand_on_overflow ? state.pos_ptr.x + input->width - padding : -1, true, text_color);
 
         // Rendering the cursor indicator
         lf_rect_render((vec2s){(strlen(input->buf) != 0) ? cursor_pos_props.end_x : state.pos_ptr.x + padding,
@@ -1258,7 +1264,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
         // Rendering the placeholder
         lf_text_render((vec2s){(state.pos_ptr.x + padding),
         state.pos_ptr.y + padding},
-                    !input->placeholder ? "Type..." : input->placeholder, font, -1, -1, -1, -1, -1, -1, false, text_color);
+                    !input->placeholder ? "Type..." : input->placeholder, font, -1, false, text_color);
     }
     // Advancing the position pointer by the size of the inputf ield
     state.pos_ptr.x += input->width + margin_right + padding * 2.0f + border_width;
@@ -1387,13 +1393,309 @@ bool item_should_cull() {
     }
     return false;
 }
+LfClickableItemState button_element_loc(void* text, const char* file, int32_t line, bool wide) {
+    // Calculating ID 
+    uint64_t id = DJB2_INIT;
+    id = djb2_hash(id, file, strlen(file));
+    id = djb2_hash(id, &line, sizeof(line));
 
-LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, 
+    // Retrieving the property data of the button
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    float padding = props.padding;
+    float margin_left = props.margin_left, margin_right = props.margin_right,
+        margin_top = props.margin_top, margin_bottom = props.margin_bottom; 
+
+    vec4s color = props.color;
+    vec4s text_color = props.text_color;
+    LfFont font = get_current_font();
+
+    // If the button does not fit onto the current div, advance to the next line
+    LfTextProps text_props;
+    if(wide) 
+        text_props = text_render_simple_wide(state.pos_ptr, (const wchar_t*)text, font, text_color, true);
+    else 
+        text_props = text_render_simple(state.pos_ptr, (const char*)text, font, text_color, true);
+
+    next_line_on_overflow(
+        (vec2s){text_props.width + padding * 2.0f + margin_right + margin_left, 
+                    text_props.height + padding * 2.0f + margin_bottom + margin_top}, state.div_props.border_width);
+
+    // Advancing the position pointer by the margins
+    state.pos_ptr.x += margin_left;
+    state.pos_ptr.y += margin_top;
+
+    // Rendering the button
+    LfClickableItemState ret = button(file, line, state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
+                                              props, color, props.border_width, true, true);
+    // Rendering the text of the button
+    if(wide)
+        text_render_simple_wide((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (const wchar_t*)text, font, text_color, false);
+    else 
+        text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (const char*)text, font, text_color, false);
+
+    // Advancing the position pointer by the width of the button
+    state.pos_ptr.x += text_props.width + margin_right + padding * 2.0f;
+    state.pos_ptr.y -= margin_top;
+
+    return ret;
+}
+LfClickableItemState button_fixed_element_loc(void* text, int32_t width, int32_t height, const char* file, int32_t line, bool wide) {
+    // Retrieving the property data of the button
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    float padding = props.padding;
+    float margin_left = props.margin_left, margin_right = props.margin_right,
+        margin_top = props.margin_top, margin_bottom = props.margin_bottom;
+
+    vec4s color = props.color;
+    vec4s text_color = props.text_color;
+    LfFont font = state.font_stack ? *state.font_stack : state.theme.font;
+
+    // If the button does not fit onto the current div, advance to the next line
+    LfTextProps text_props; 
+    if(wide)
+        text_props = text_render_simple_wide(state.pos_ptr, (const wchar_t*)text, font, text_color, true);
+    else 
+        text_props = text_render_simple(state.pos_ptr, (const char*)text, font, text_color, true);
+    next_line_on_overflow(
+        (vec2s){((width == -1) ? text_props.width : width + padding * 2.0f) + margin_right + margin_left,
+            ((height == -1) ? text_props.height : height) + padding * 2.0f + margin_bottom + margin_top}, 
+        state.div_props.border_width); 
+
+    // Advancing the position pointer by the margins
+    state.pos_ptr.x += margin_left;
+    state.pos_ptr.y += margin_top; 
+
+    // Rendering the button
+    LfClickableItemState ret = button(file, line, state.pos_ptr, 
+        (vec2s){width == -1 ? text_props.width + padding * 2.0f : width + padding * 2, ((height == -1) ? text_props.height : height) + padding * 2}, props, 
+                                              color, props.border_width, false, true);
+
+    // Rendering the text of the button
+    if(wide) {
+        text_render_simple_wide((vec2s)
+        {state.pos_ptr.x + padding + ((width != -1) ? width / 2.0f - text_props.width / 2.0f : 0),
+        state.pos_ptr.y + padding + ((height != -1) ? height / 2.0f - text_props.height / 2.0f : 0)
+        }, (const wchar_t*)text, font, text_color, false);
+    } else {
+        text_render_simple((vec2s)
+        {state.pos_ptr.x + padding + ((width != -1) ? width / 2.0f - text_props.width / 2.0f : 0),
+        state.pos_ptr.y + padding + ((height != -1) ? height / 2.0f - text_props.height / 2.0f : 0)
+        }, (const char*)text, font, text_color, false);
+    }
+
+    // Advancing the position pointer by the width of the button
+    state.pos_ptr.x += ((width == -1) ? text_props.width : width) + margin_right + padding * 2.0f;
+    state.pos_ptr.y -= margin_top;
+    return ret;
+
+}
+LfClickableItemState checkbox_element_loc(void* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line, bool wide) {
+    // Retrieving the property values of the checkbox
+    LfFont font = get_current_font();
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.checkbox_props;
+    float margin_left = props.margin_left;
+    float margin_right = props.margin_right;
+    float margin_top = props.margin_top;
+    float margin_bottom = props.margin_bottom;
+
+    float checkbox_size; 
+    if(wide)
+        checkbox_size = lf_text_dimension_wide((const wchar_t*)text).y;
+    else 
+        checkbox_size = lf_text_dimension((const char*)text).y;
+
+    // Advance to next line if the object does not fit on the div
+    next_line_on_overflow((vec2s){checkbox_size + margin_left + margin_right + props.padding * 2.0f, checkbox_size + margin_top + margin_bottom + props.padding * 2.0f}, 
+                          state.div_props.border_width);
+
+    state.pos_ptr.x += margin_left; 
+    state.pos_ptr.y += margin_top;
+
+    // Render the box
+    vec4s checkbox_color = (*val) ? ((tick_color.a == 0) ? props.color : tick_color) : props.color;
+    LfClickableItemState checkbox = button(file, line, state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
+                                           props, checkbox_color, props.border_width, false, false);
+
+
+    if(wide)
+        text_render_simple_wide((vec2s){state.pos_ptr.x + checkbox_size + props.padding * 2.0f + margin_right, state.pos_ptr.y + props.padding}, (const wchar_t*)text, font, props.text_color, false);
+    else 
+        text_render_simple((vec2s){state.pos_ptr.x + checkbox_size + props.padding * 2.0f + margin_right, state.pos_ptr.y + props.padding}, (const char*)text, font, props.text_color, false);
+
+    // Change the value if the checkbox is clicked
+    if(checkbox == LF_CLICKED) {
+        *val = !*val;
+    }
+    if(*val) {
+        // Render the image
+        lf_image_render(
+            (vec2s){state.pos_ptr.x + props.border_width,
+                state.pos_ptr.y + props.border_width}, 
+            tex_color, 
+            (LfTexture){
+                .id = state.tex_tick.id, 
+                .width = (uint32_t)(checkbox_size + props.padding), 
+                .height = (uint32_t)(checkbox_size + props.padding)}, 
+            (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
+    }
+    state.pos_ptr.x += checkbox_size + props.padding * 2.0f + margin_right + 
+        ((wide) ? lf_text_dimension_wide((const wchar_t*)text).x : lf_text_dimension((const char*)text).x) + margin_right;
+    state.pos_ptr.y -= margin_top;
+
+    return checkbox;
+
+}
+void dropdown_menu_item_loc(void** items, void* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line, bool wide) {
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    float margin_left = props.margin_left, margin_right = props.margin_right,
+    margin_top = props.margin_top, margin_bottom = props.margin_bottom;
+    float padding = props.padding;
+    LfFont font = get_current_font();
+
+    int32_t placeholder_strlen = (wide) ? wcslen((const wchar_t*)placeholder) : strlen((const char*)placeholder);
+    void* button_text = (void*)((*selected_index != -1) ? items[*selected_index] : (placeholder_strlen != 0) ? placeholder : "Select");
+
+    LfTextProps text_props;  
+    if(wide)
+        text_props = text_render_simple_wide((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (const wchar_t*)button_text, font, props.text_color, true);
+    else
+        text_props = text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (const char*)button_text, font, props.text_color, true);
+
+    float item_height = get_max_char_height_font(font) + ((*opened) ? height + padding * 4.0f + margin_top : padding * 2.0f); 
+    next_line_on_overflow(
+        (vec2s){width + padding * 2.0f + margin_right,
+                item_height + margin_top + margin_bottom}, 0.0f);
+
+    state.pos_ptr.x += margin_left;
+    state.pos_ptr.y += margin_top;
+
+    vec2s button_pos = state.pos_ptr;
+    LfClickableItemState dropdown_button = button(file, line, state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
+
+    if(wide)
+        text_render_simple_wide((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (const wchar_t*)button_text, font, props.text_color, false);
+    else 
+        text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (const char*)button_text, font, props.text_color, false);
+
+    // Render dropdown arrow
+    {
+        vec2s image_size = (vec2s){14, 8};
+        lf_image_render((vec2s){state.pos_ptr.x + width + padding - image_size.x, state.pos_ptr.y + ((text_props.height + padding * 2) - image_size.y) / 2.0f}, props.text_color,
+                        (LfTexture){.id = state.tex_arrow_down.id, .width = (uint32_t)image_size.x, .height = (uint32_t)image_size.y}, LF_NO_COLOR, 0.0f, 0.0f);
+    }
+
+    if(dropdown_button == LF_CLICKED) {
+        *opened = !*opened;
+    }
+
+    if(*opened) {
+        LfUIElementProps div_props = lf_theme()->div_props;
+        div_props.color = props.color;
+        div_props.corner_radius = props.corner_radius;
+        div_props.border_width = props.border_width;
+        div_props.border_color = props.border_color;
+        lf_push_style_props(div_props);
+        _lf_div_begin_loc(((vec2s){button_pos.x, button_pos.y + (text_props.height + padding * 2.0f) + margin_top}), ((vec2s){(float)width + padding * 2, (float)height + padding * 2}), file, line);
+
+        for(uint32_t i = 0; i < item_count; i++) {
+            LfUIElementProps text_props = lf_theme()->text_props;
+            text_props.text_color = props.text_color;
+            lf_push_style_props(text_props);
+
+            bool item_hovered = lf_hovered(state.pos_ptr, (vec2s){width + padding * 2.0f - props.corner_radius, (float)font.font_size});
+            if(item_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+                *selected_index = i;
+                *opened = false;
+                break;
+            } else if(item_hovered) {
+                vec4s color_rgba = (vec4s){LF_RGBA(props.color.r, props.color.g, props.color.b, props.color.a)};
+                vec4s color_darkened = LF_COLOR_BRIGHTNESS(color_rgba, 0.8);
+                lf_rect_render(state.pos_ptr, (vec2s){width + padding * 2.0f - props.border_width * 2.0f, (float)font.font_size}, (vec4s){color_darkened.r, color_darkened.g, color_darkened.b, 0.5f}, LF_NO_COLOR, 0.0f, props.corner_radius / 2.0f);
+            }
+
+            if(wide)
+                lf_text_wide((const wchar_t*)items[i]);
+            else 
+                lf_text((const char*)items[i]);
+
+            lf_next_line();
+            lf_pop_style_props();
+        }
+
+        lf_div_end();
+        lf_pop_style_props();
+    } else {
+        lf_div_hide();
+    }
+
+    state.pos_ptr.x += width + padding * 2.0f + margin_right;
+    state.pos_ptr.y -= margin_top;
+
+    lf_push_style_props(props);
+
+}
+int32_t menu_item_list_item_loc(void** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line, bool wide) {
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    float padding = props.padding;
+    float margin_left = props.margin_left, margin_right = props.margin_right,
+    margin_top = props.margin_top, margin_bottom = props.margin_bottom; 
+    vec4s color = props.color;
+    LfFont font = get_current_font();
+
+    LfTextProps text_props[item_count];
+    uint32_t width = 0;
+    for(uint32_t i  = 0; i < item_count; i++) {
+        if(wide)
+            text_props[i] = text_render_simple_wide((vec2s){state.pos_ptr.x, state.pos_ptr.y + margin_top}, (const wchar_t*)items[i], font, props.text_color, true);
+        else 
+            text_props[i] = text_render_simple((vec2s){state.pos_ptr.x, state.pos_ptr.y + margin_top}, (const char*)items[i], font, props.text_color, true);
+        width += text_props[i].width + padding * 2.0f;
+    }
+    next_line_on_overflow(
+        (vec2s){width + padding * 2.0f + margin_right + margin_left, 
+            font.font_size + padding * 2.0f + margin_bottom + margin_top}, 
+        state.div_props.border_width);
+
+
+    state.pos_ptr.y += margin_top; 
+    state.pos_ptr.x += margin_left;
+
+    uint32_t element_width = 0;
+    uint32_t clicked_item = -1;
+    for(uint32_t i = 0; i < item_count; i++) {
+        LfUIElementProps props = state.theme.button_props;
+        props.margin_left = 0;
+        props.margin_right = 0;
+        LfUIElementProps button_props = state.theme.button_props;
+        lf_push_style_props(props);
+        if(i == selected_index) {
+            props.color = LF_COLOR_BRIGHTNESS(props.color, 1.2); 
+        }
+        lf_push_style_props(props);
+        if(wide) {
+            if(_lf_button_loc_wide((const wchar_t*)items[i], file, line) == LF_CLICKED) {
+                clicked_item = i;  
+            } 
+        } else {
+            if(_lf_button_loc((const char*)items[i], file, line) == LF_CLICKED) {
+                clicked_item = i;  
+            } 
+        }
+        lf_pop_style_props();
+        per_cb(&i);
+    } 
+    next_line_on_overflow((vec2s){element_width + margin_right, font.font_size + margin_top + margin_bottom}, state.div_props.border_width);
+
+
+    state.pos_ptr.y -= margin_top;
+    return clicked_item;
+}
+
+LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, bool no_render, 
                         vec4s color) {
-    if(state.render.tex_count >= MAX_TEX_COUNT_BATCH - 1) {
+    if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
         lf_flush();
         lf_renderer_begin();
-        state.render.tex_count = 0;
     }
     // Retrieving the texture index
     float tex_index = -1.0f;
@@ -1413,22 +1715,17 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
     }
     // Local variables needed for rendering
     LfTextProps ret = {0};
+
     float x = pos.x;
     float y = pos.y;
+
     int32_t max_descended_char_height = get_max_char_height_font(font);
-
-    bool reached_stop = false;
-
+    
     float last_x = x;
     float last_char_width = 0, first_char_width = -1;
-    int32_t first_char_index = 0;
-    int32_t i = 0;
 
     int32_t height = get_max_char_height_font(font);
     float width = 0;
-    int32_t char_count = 0;
-
-    int32_t wrap_count = 0;
     
     bool item_culled = item_should_cull();
 
@@ -1446,37 +1743,15 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
             if(*str == ' ') {
                 skip = true; 
             }
-            if(max_wrap_count != -1)
-                wrap_count++; 
-        }
-
-        if(wrap_count >= max_wrap_count && max_wrap_count != -1) { 
-            ret.reached_max_wraps = true;
-            break;
         }
         if(!skip) {
             // Retrieving the vertex data of the current character & submitting it to the batch  
             stbtt_aligned_quad q;
             stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, *str-32, &x, &y, &q, 1);
 
-            // Return if reached stop
-            if((x - pos.x > stop_point_x && stop_point_x != -1) || (y > stop_point_y && stop_point_y != -1)) {
-                reached_stop = true;
-                if(x - pos.x > width) {
-                    width = x - pos.x;
-                }
-                ret.width = width; 
-                ret.height = height;
-                ret.char_count = i - first_char_index; 
-                ret.reached_stop = reached_stop;
-                ret.end_x = x;
-                return ret;
-            }
-            if(((start_point_x != -1 && x >= start_point_x) || start_point_x == -1) && ((start_point_y != -1 && y + pos.y >= start_point_y) || start_point_y == -1) && !item_culled)  {
+            if(!item_culled)  {
                 if(first_char_width == -1) { 
                     first_char_width = x - last_x;
-                    first_char_index = i; 
-                    ret.start_x = q.x0;
                 }
                 // Adding the vertices to the batch if rendering the text
                 if(!no_render) {
@@ -1531,13 +1806,11 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
                     state.render.index_count += 6;
 
                 }
-                char_count++;
                 last_char_width = x - last_x;
                 last_x = x;
             }
         }
         str++;
-        i++;
     }
 
     // Populating the return value
@@ -1546,8 +1819,6 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
     }
     ret.width = width;
     ret.height = height;
-    ret.char_count = i - first_char_index; 
-    ret.reached_stop = (x > stop_point_x);
     ret.end_x = x;
     ret.end_y = y;
     return ret;
@@ -1564,12 +1835,10 @@ bool is_symbol(char ch) {
     }
 }
 
-LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, int32_t stop_point_x, int32_t start_point_x, int32_t stop_point_y, int32_t start_point_y, int32_t max_wrap_count, bool no_render, 
-                        vec4s color) {
-    if(state.render.tex_count >= MAX_TEX_COUNT_BATCH - 1) {
-lf_flush();
+LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, bool no_render, vec4s color) {
+    if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
+        lf_flush();
         lf_renderer_begin();
-        state.render.tex_count = 0;
     }
     // Retrieving the texture index
     float tex_index = -1.0f;
@@ -1591,19 +1860,16 @@ lf_flush();
     LfTextProps ret = {0};
     float x = pos.x;
     float y = pos.y;
+
     int32_t max_descended_char_height = get_max_char_height_font(font);
 
     bool reached_stop = false;
 
     float last_x = x;
     float last_char_width = 0, first_char_width = -1;
-    int32_t first_char_index = 0;
 
     int32_t height = get_max_char_height_font(font);
     float width = 0;
-    int32_t char_count = 0;
-
-    int32_t wrap_count = 0;
     
     bool item_culled = item_should_cull();
 
@@ -1626,37 +1892,15 @@ lf_flush();
             if(str[i] == L' ') {
                 skip = true; 
             }
-            if(max_wrap_count != -1)
-                wrap_count++; 
-        }
-
-        if(wrap_count >= max_wrap_count && max_wrap_count != -1) { 
-            ret.reached_max_wraps = true;
-            break;
         }
         if(!skip) {
             // Retrieving the vertex data of the current character & submitting it to the batch  
             stbtt_aligned_quad q;
             stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
 
-            // Return if reached stop
-            if((x - pos.x > stop_point_x && stop_point_x != -1) || (y > stop_point_y && stop_point_y != -1)) {
-                reached_stop = true;
-                if(x - pos.x > width) {
-                    width = x - pos.x;
-                }
-                ret.width = width; 
-                ret.height = height;
-                ret.char_count = i - first_char_index; 
-                ret.reached_stop = reached_stop;
-                ret.end_x = x;
-                return ret;
-            }
-            if(((start_point_x != -1 && x >= start_point_x) || start_point_x == -1) && ((start_point_y != -1 && y + pos.y >= start_point_y) || start_point_y == -1) && !item_culled)  {
+            if(!item_culled)  {
                 if(first_char_width == -1) { 
                     first_char_width = x - last_x;
-                    first_char_index = i; 
-                    ret.start_x = q.x0;
                 }
                 // Adding the vertices to the batch if rendering the text
                 if(!no_render) {
@@ -1711,7 +1955,6 @@ lf_flush();
                     state.render.index_count += 6;
 
                 }
-                char_count++;
                 last_char_width = x - last_x;
                 last_x = x;
             }
@@ -1724,8 +1967,6 @@ lf_flush();
     }
     ret.width = width;
     ret.height = height;
-    ret.char_count = i - first_char_index; 
-    ret.reached_stop = (x > stop_point_x);
     ret.end_x = x;
     ret.end_y = y;
     return ret;
@@ -1736,6 +1977,7 @@ void lf_renderer_begin() {
     state.render.vert_count = 0;
     state.render.index_count = 0;
     state.render.tex_index = 0;
+    state.render.tex_count = 0;
 }
 void lf_flush() {
     if(state.render.vert_count <= 0) return;
@@ -2069,42 +2311,10 @@ double lf_get_mouse_scroll_y() {
 }
 
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line) {
-    // Calculating ID 
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
-    // Retrieving the property data of the button
-    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
-    float padding = props.padding;
-    float margin_left = props.margin_left, margin_right = props.margin_right,
-        margin_top = props.margin_top, margin_bottom = props.margin_bottom; 
-
-    vec4s color = props.color;
-    vec4s text_color = props.text_color;
-    LfFont font = get_current_font();
-
-    // If the button does not fit onto the current div, advance to the next line
-    LfTextProps text_props = text_render_simple(state.pos_ptr, text, font, text_color, true);
-    next_line_on_overflow(
-        (vec2s){text_props.width + padding * 2.0f + margin_right + margin_left, 
-                    text_props.height + padding * 2.0f + margin_bottom + margin_top}, state.div_props.border_width);
-
-    // Advancing the position pointer by the margins
-    state.pos_ptr.x += margin_left;
-    state.pos_ptr.y += margin_top;
-
-    // Rendering the button
-    LfClickableItemState ret = button(file, line, state.pos_ptr, (vec2s){text_props.width + padding * 2, text_props.height + padding * 2}, 
-                                              props, color, props.border_width, true, true);
-    // Rendering the text of the button
-    text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, text_color, false);
-
-    // Advancing the position pointer by the width of the button
-    state.pos_ptr.x += text_props.width + margin_right + padding * 2.0f;
-    state.pos_ptr.y -= margin_top;
-
-    return ret;
+    return button_element_loc((void*)text, file, line, false);
+}
+LfClickableItemState _lf_button_loc_wide(const wchar_t* text, const char* file, int32_t line) {
+    return button_element_loc((void*)text, file, line, true);
 }
 LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32_t line) {
     // Retrieving the property data of the button
@@ -2140,42 +2350,11 @@ LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32
     return ret; 
 }
 LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32_t height, const char* file, int32_t line) {
-    // Retrieving the property data of the button
-    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
-    float padding = props.padding;
-    float margin_left = props.margin_left, margin_right = props.margin_right,
-        margin_top = props.margin_top, margin_bottom = props.margin_bottom;
+    return button_fixed_element_loc((void*)text, width, height, file, line, false);
+}
 
-    vec4s color = props.color;
-    vec4s text_color = props.text_color;
-    LfFont font = state.font_stack ? *state.font_stack : state.theme.font;
-
-    // If the button does not fit onto the current div, advance to the next line
-    LfTextProps text_props = text_render_simple(state.pos_ptr, text, font, text_color, true);
-    next_line_on_overflow(
-        (vec2s){((width == -1) ? text_props.width : width + padding * 2.0f) + margin_right + margin_left,
-            ((height == -1) ? text_props.height : height) + padding * 2.0f + margin_bottom + margin_top}, 
-        state.div_props.border_width); 
-
-    // Advancing the position pointer by the margins
-    state.pos_ptr.x += margin_left;
-    state.pos_ptr.y += margin_top; 
-
-    // Rendering the button
-    LfClickableItemState ret = button(file, line, state.pos_ptr, 
-        (vec2s){width == -1 ? text_props.width + padding * 2.0f : width + padding * 2, ((height == -1) ? text_props.height : height) + padding * 2}, props, 
-                                              color, props.border_width, false, true);
-
-    // Rendering the text of the button
-    text_render_simple((vec2s)
-        {state.pos_ptr.x + padding + ((width != -1) ? width / 2.0f - text_props.width / 2.0f : 0),
-        state.pos_ptr.y + padding + ((height != -1) ? height / 2.0f - text_props.height / 2.0f : 0)
-        }, text, font, text_color, false);
-
-    // Advancing the position pointer by the width of the button
-    state.pos_ptr.x += ((width == -1) ? text_props.width : width) + margin_right + padding * 2.0f;
-    state.pos_ptr.y -= margin_top;
-    return ret;
+LfClickableItemState _lf_button_fixed_loc_wide(const wchar_t* text, int32_t width, int32_t height, const char* file, int32_t line) {
+    return button_fixed_element_loc((void*)text, width, height, file, line, true);
 }
 
 LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) {
@@ -2330,8 +2509,7 @@ void lf_text(const char* text) {
 
     // Advancing to the next line if the the text does not fit on the current div
     LfTextProps text_props = lf_text_render(state.pos_ptr, text, font, 
-                                        state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1,
-                                         -1, -1, -1, 1, -1, true, text_color);
+                                        state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, true, text_color);
     next_line_on_overflow(
         (vec2s){text_props.width + padding * 2.0f + margin_left + margin_right,
                     text_props.height + padding * 2.0f + margin_top + margin_bottom}, 
@@ -2344,7 +2522,7 @@ void lf_text(const char* text) {
     // Rendering a colored text box if a color is specified
     // Rendering the text
     lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, 
-                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, -1, -1, -1, -1, -1, false, text_color);
+                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, false, text_color);
 
     // Advancing the position pointer by the width of the text
     state.pos_ptr.x += text_props.width + margin_right + padding;
@@ -2367,8 +2545,7 @@ void lf_text_wide(const wchar_t* text) {
 
     // Advancing to the next line if the the text does not fit on the current div
     LfTextProps text_props = lf_text_render_wchar(state.pos_ptr, text, font, 
-                                            state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1,
-                                            -1, -1, -1, 1, -1, true, text_color);
+                                            state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, true, text_color);
     next_line_on_overflow(
         (vec2s){text_props.width + padding * 2.0f + margin_left + margin_right,
             text_props.height + padding * 2.0f + margin_top + margin_bottom}, 
@@ -2381,7 +2558,7 @@ void lf_text_wide(const wchar_t* text) {
     // Rendering a colored text box if a color is specified
     // Rendering the text
     lf_text_render_wchar((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, 
-                   state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, -1, -1, -1, -1, -1, false, text_color);
+                   state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, false, text_color);
 
     // Advancing the position pointer by the width of the text
     state.pos_ptr.x += text_props.width + margin_right + padding;
@@ -2488,59 +2665,14 @@ void lf_push_font(LfFont* font) {
 void lf_pop_font() {
     state.font_stack = NULL;
 }
-LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_color, vec4s img_color, const char* file, int32_t line) { 
-    // Retrieving the property values of the checkbox
-    LfFont font = get_current_font();
-    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.checkbox_props;
-    float margin_left = props.margin_left;
-    float margin_right = props.margin_right;
-    float margin_top = props.margin_top;
-    float margin_bottom = props.margin_bottom;
-
-
-    float checkbox_size = lf_text_dimension(text).y;
-
-
-    // Render the text of the checkbox
-
-    // Advance to next line if the object does not fit on the div
-    next_line_on_overflow((vec2s){checkbox_size + margin_left + margin_right + props.padding * 2.0f, checkbox_size + margin_top + margin_bottom + props.padding * 2.0f}, 
-                          state.div_props.border_width);
- 
-    state.pos_ptr.x += margin_left; 
-    state.pos_ptr.y += margin_top;
-
-
-
-    // Render the box
-    vec4s checkbox_color = (*val) ? ((tick_color.a == 0) ? props.color : tick_color) : props.color;
-    LfClickableItemState checkbox = button(file, line, state.pos_ptr, (vec2s){checkbox_size + props.padding * 2.0f, checkbox_size + props.padding * 2.0f}, 
-                                                   props, checkbox_color, props.border_width, false, false);
-
-
-    text_render_simple((vec2s){state.pos_ptr.x + checkbox_size + props.padding * 2.0f + margin_right, state.pos_ptr.y + props.padding}, text, font, props.text_color, false);
-
-    // Change the value if the checkbox is clicked
-    if(checkbox == LF_CLICKED) {
-        *val = !*val;
-    }
-    if(*val) {
-        // Render the image
-        lf_image_render(
-            (vec2s){state.pos_ptr.x + props.border_width,
-                    state.pos_ptr.y + props.border_width}, 
-            img_color, 
-            (LfTexture){
-                .id = state.tex_tick.id, 
-                .width = (uint32_t)(checkbox_size + props.padding), 
-                .height = (uint32_t)(checkbox_size + props.padding)}, 
-            (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
-    }
-    state.pos_ptr.x += checkbox_size + props.padding * 2.0f + margin_right + lf_text_dimension(text).x + margin_right;
-    state.pos_ptr.y -= margin_top;
-
-    return checkbox;
+LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line) { 
+    return checkbox_element_loc((void*)text, val, tick_color, tex_color, file, line, false);
 }
+
+LfClickableItemState _lf_checkbox_loc_wide(const wchar_t* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line) {
+    return checkbox_element_loc((void*)text, val, tick_color, tex_color, file, line, true);
+}
+
 void lf_rect(uint32_t width, uint32_t height, vec4s color, float corner_radius) {
     // Rendering the rect
     next_line_on_overflow((vec2s){(float)width, (float)height}, 
@@ -2750,130 +2882,22 @@ LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* f
     state.pos_ptr.y -= margin_top;
     return bar;
 }
-int32_t _lf_menu_item_list_loc(const char* file, int32_t line, const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical) {
-    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
-    float padding = props.padding;
-    float margin_left = props.margin_left, margin_right = props.margin_right,
-    margin_top = props.margin_top, margin_bottom = props.margin_bottom; 
-    vec4s color = props.color;
-    LfFont font = get_current_font();
-    
-    LfTextProps text_props[item_count];
-    uint32_t width = 0;
-    for(uint32_t i  = 0; i < item_count; i++) {
-        text_props[i] = text_render_simple((vec2s){state.pos_ptr.x, state.pos_ptr.y + margin_top},items[i], font, props.text_color, true);
-        width += text_props[i].width + padding * 2.0f;
-    }
-    next_line_on_overflow(
-        (vec2s){width + padding * 2.0f + margin_right + margin_left, 
-                    font.font_size + padding * 2.0f + margin_bottom + margin_top}, 
-        state.div_props.border_width);
+int32_t _lf_menu_item_list_loc(const char** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line) {
+    return menu_item_list_item_loc((void**)items, item_count, selected_index, per_cb, vertical, file, line, false);
+}
 
-
-    state.pos_ptr.y += margin_top; 
-    state.pos_ptr.x += margin_left;
-
-    uint32_t element_width = 0;
-    uint32_t clicked_item = -1;
-    for(uint32_t i = 0; i < item_count; i++) {
-        LfUIElementProps props = state.theme.button_props;
-        props.margin_left = 0;
-        props.margin_right = 0;
-        LfUIElementProps button_props = state.theme.button_props;
-        lf_push_style_props(props);
-        if(i == selected_index) {
-            props.color = LF_COLOR_BRIGHTNESS(props.color, 1.2); 
-        }
-        lf_push_style_props(props);
-        if(_lf_button_loc(items[i], file, line) == LF_CLICKED) {
-            clicked_item = i;  
-        } 
-        lf_pop_style_props();
-        per_cb(&i);
-    } 
-    next_line_on_overflow((vec2s){element_width + margin_right, font.font_size + margin_top + margin_bottom}, state.div_props.border_width);
- 
-    
-    state.pos_ptr.y -= margin_top;
-    return clicked_item;
+int32_t _lf_menu_item_list_loc_wide(const wchar_t** items, uint32_t item_count, int32_t selected_index, LfMenuItemCallback per_cb, bool vertical, const char* file, int32_t line) {
+    return menu_item_list_item_loc((void**)items, item_count, selected_index, per_cb, vertical, file, line, true);
 }
 
 void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line) {
-    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
-    float margin_left = props.margin_left, margin_right = props.margin_right,
-    margin_top = props.margin_top, margin_bottom = props.margin_bottom;
-    float padding = props.padding;
-    LfFont font = get_current_font();
-
-    const char* button_text = ((*selected_index != -1) ? items[*selected_index] : (strlen(placeholder) != 0) ? placeholder : "Select");
-
-    LfTextProps text_props = text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, button_text, font, props.text_color, true);
-    float item_height = get_max_char_height_font(font) + ((*opened) ? height + padding * 4.0f + margin_top : padding * 2.0f); 
-    next_line_on_overflow(
-        (vec2s){width + padding * 2.0f + margin_right,
-                item_height + margin_top + margin_bottom}, 0.0f);
-
-    state.pos_ptr.x += margin_left;
-    state.pos_ptr.y += margin_top;
-
-    vec2s button_pos = state.pos_ptr;
-    LfClickableItemState dropdown_button = button(file, line, state.pos_ptr, (vec2s){(float)width + padding * 2.0f, (float)text_props.height + padding * 2.0f},  props, props.color, props.border_width, false, true);
-
-    text_render_simple((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, button_text, font, props.text_color, false);
-
-    // Render dropdown arrow
-    {
-        vec2s image_size = (vec2s){14, 8};
-        lf_image_render((vec2s){state.pos_ptr.x + width + padding - image_size.x, state.pos_ptr.y + ((text_props.height + padding * 2) - image_size.y) / 2.0f}, props.text_color,
-                        (LfTexture){.id = state.tex_arrow_down.id, .width = (uint32_t)image_size.x, .height = (uint32_t)image_size.y}, LF_NO_COLOR, 0.0f, 0.0f);
-    }
-
-    if(dropdown_button == LF_CLICKED) {
-        *opened = !*opened;
-    }
-
-    if(*opened) {
-        LfUIElementProps div_props = lf_theme()->div_props;
-        div_props.color = props.color;
-        div_props.corner_radius = props.corner_radius;
-        div_props.border_width = props.border_width;
-        div_props.border_color = props.border_color;
-        lf_push_style_props(div_props);
-        _lf_div_begin_loc(((vec2s){button_pos.x, button_pos.y + (text_props.height + padding * 2.0f) + margin_top}), ((vec2s){(float)width + padding * 2, (float)height + padding * 2}), file, line);
-
-        for(uint32_t i = 0; i < item_count; i++) {
-            LfUIElementProps text_props = lf_theme()->text_props;
-            text_props.text_color = props.text_color;
-            lf_push_style_props(text_props);
-
-            bool item_hovered = lf_hovered(state.pos_ptr, (vec2s){width + padding * 2.0f - props.corner_radius, (float)font.font_size});
-            if(item_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-                *selected_index = i;
-                *opened = false;
-                break;
-            } else if(item_hovered) {
-                vec4s color_rgba = (vec4s){LF_RGBA(props.color.r, props.color.g, props.color.b, props.color.a)};
-                vec4s color_darkened = LF_COLOR_BRIGHTNESS(color_rgba, 0.8);
-                lf_rect_render(state.pos_ptr, (vec2s){width + padding * 2.0f - props.border_width * 2.0f, (float)font.font_size}, (vec4s){color_darkened.r, color_darkened.g, color_darkened.b, 0.5f}, LF_NO_COLOR, 0.0f, props.corner_radius / 2.0f);
-            }
-
-            lf_text(items[i]);
-
-            lf_next_line();
-            lf_pop_style_props();
-        }
-
-        lf_div_end();
-        lf_pop_style_props();
-    } else {
-        lf_div_hide();
-    }
-
-    state.pos_ptr.x += width + padding * 2.0f + margin_right;
-    state.pos_ptr.y -= margin_top;
-
-    lf_push_style_props(props);
+    return dropdown_menu_item_loc((void**)items, (void*)placeholder, item_count, width, height, selected_index, opened, file, line, false);
 }
+
+void _lf_dropdown_menu_loc_wide(const wchar_t** items, const wchar_t* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line) {
+    return dropdown_menu_item_loc((void**)items, (void*)placeholder, item_count, width, height, selected_index, opened, file, line, true);
+}
+
 void lf_push_style_props(LfUIElementProps props) {
     state.props_stack = props;
     state.props_on_stack = true;
