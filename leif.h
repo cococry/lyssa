@@ -142,9 +142,9 @@ typedef struct {
 
     bool init, hidden;
     
-    float scroll;
+    float scroll, scroll_velocity;
 
-    vec2s total_area;
+    vec2s total_area, init_area;
 } LfDiv;
 
 typedef void (*LfMenuItemCallback)(uint32_t*);

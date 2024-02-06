@@ -88,6 +88,9 @@
 
 #define DJB2_INIT 5381
 
+#define SCROLL_ACCELERATION_FACTOR 1.6f 
+#define SCROLL_MAX_VELOCITY 100 
+
 // -- Struct Defines ---
 typedef struct {
     uint32_t id;
@@ -747,8 +750,8 @@ void lf_free_font(LfFont* font) {
     free(font->font_info);
 }
 void lf_free_texture(LfTexture tex) {
-    tex.id = 0;
     glDeleteTextures(1, &tex.id);
+    tex.id = 0;
 }
 
 bool lf_point_intersects_aabb(vec2s p, LfAABB aabb) {
@@ -919,14 +922,14 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     LfDiv* selected_div = &state.divs[state.selected_div_id];
     if(yoffset == -1) {
         if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
-            selected_div->scroll -= LF_SCROLL_AMOUNT;
+            selected_div->scroll_velocity -= SCROLL_ACCELERATION_FACTOR;
         } 
     } else if (yoffset == 1) {
         if(selected_div->scroll) {
-            selected_div->scroll += LF_SCROLL_AMOUNT;
+            selected_div->scroll_velocity += SCROLL_ACCELERATION_FACTOR;
         }        
     } 
-
+    selected_div->scroll_velocity = MIN(MAX(selected_div->scroll_velocity, -SCROLL_MAX_VELOCITY), SCROLL_MAX_VELOCITY);
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
@@ -1386,19 +1389,17 @@ LfFont get_current_font() {
 bool item_should_cull() {
     if(state.div_storage && state.div_cull) {
         LfDiv* selected_div = &state.divs[state.selected_div_id];
-        if((state.pos_ptr.y > state.dsp_h 
-            || state.pos_ptr.x > state.dsp_w) && state.current_div.id == state.scrollbar_div) {
+        if(((state.pos_ptr.y > state.dsp_h 
+            || state.pos_ptr.x > state.dsp_w) || 
+            (state.pos_ptr.y < 0 || 
+            state.pos_ptr.x < 0))  && 
+            state.current_div.id == state.scrollbar_div) {
             return true;
         }
     }
     return false;
 }
 LfClickableItemState button_element_loc(void* text, const char* file, int32_t line, bool wide) {
-    // Calculating ID 
-    uint64_t id = DJB2_INIT;
-    id = djb2_hash(id, file, strlen(file));
-    id = djb2_hash(id, &line, sizeof(line));
-
     // Retrieving the property data of the button
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;
@@ -2073,6 +2074,11 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
     state.div_capacity = LF_MAX_DIVS;
     state.divs = (LfDiv*)malloc(sizeof(LfDiv) * state.div_capacity);
     memset(state.divs, -1, sizeof(LfDiv) * state.div_capacity);
+    for(uint32_t i = 0; i < state.div_capacity; i++) {
+        state.divs[i].scroll_velocity = 0;
+        state.divs[i].scroll = 0;
+        state.divs[i].init_area = (vec2s){-1, -1};
+    }
 
     // Setting glfw callbacks
     glfwSetKeyCallback((GLFWwindow*)state.window_handle, glfw_key_callback);
@@ -2373,6 +2379,14 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
 
     state.div_props = props;
 
+    if(state.divs[state.div_index_ptr].aabb.pos.x != pos.x - props.padding || state.divs[state.div_index_ptr].aabb.pos.y != 
+        pos.y - props.padding || state.divs[state.div_index_ptr].aabb.size.x != size.x + props.padding * 2.0f || 
+        state.divs[state.div_index_ptr].aabb.size.y != size.y + props.padding * 2.0f) {
+        state.divs[state.div_index_ptr].scroll = 0;
+        state.divs[state.div_index_ptr].scroll_velocity = 0;
+        state.divs[state.div_index_ptr].init_area.x = state.divs[state.div_index_ptr].total_area.x;
+        state.divs[state.div_index_ptr].init_area.y = state.divs[state.div_index_ptr].total_area.y;
+    }
     // Updating the aabb
     state.divs[state.div_index_ptr].aabb.pos = (vec2s){pos.x - props.padding, pos.y - props.padding};
     state.divs[state.div_index_ptr].aabb.size = (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f};
@@ -2385,9 +2399,21 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
     if(div.scroll == -1) {
         div.scroll = 0;
     }
+    div.scroll += div.scroll_velocity;
+    div.scroll_velocity *= 0.95; 
+
+    if(div.scroll > 0) 
+        div.scroll = 0;
+
+    if(div.scroll < -div.init_area.y && div.init_area.y != -1) {
+        div.scroll = -div.init_area.y;
+        div.scroll_velocity = 0;
+    }
+    if(div.scroll < -((div.total_area.y - div.scroll) - div.aabb.pos.y - div.aabb.size.y)) {
+        div.scroll_velocity = 0;
+    }
 
     state.pos_ptr = pos; 
-
     state.current_div = div;
 
     div.interact_state = div_container((vec2s){pos.x - props.padding, pos.y - props.padding}, 
@@ -2410,6 +2436,7 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
         }
     }
 
+
     state.divs[state.div_index_ptr] = div;
     state.div_index_ptr++;
 
@@ -2430,6 +2457,8 @@ void draw_scrollbar_on(uint32_t div_id) {
         selected->total_area.x = state.pos_ptr.x;
         selected->total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
         float total_area = selected->total_area.y - scroll;
+        selected->init_area.x = selected->total_area.x; 
+        selected->init_area.y = total_area;
         float visible_area = selected->aabb.size.y + selected->aabb.pos.y;
         if(total_area > visible_area) {
             const float scrollbar_width = 8;
@@ -2457,6 +2486,7 @@ void lf_div_end() {
     
     if(state.div_storage)
         draw_scrollbar_on(state.selected_div_id);
+
 
     state.pos_ptr = state.prev_pos_ptr;
     state.font_stack = state.prev_font_stack;

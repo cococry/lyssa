@@ -6,11 +6,13 @@
 #include <functional>
 #include <iostream>
 #include <filesystem>
+#include <mutex>
 #include <sstream>
 #include <string>
-#include <taglib/tfile.h>
 #include <vector>
 #include <cstdlib>
+#include <future>
+
 #include <wchar.h>
 
 #include <glad/glad.h>
@@ -27,6 +29,7 @@
 #include <taglib/id3v2frame.h>
 #include <taglib/mpegheader.h>
 #include <taglib/attachedpictureframe.h>
+#include <taglib/tfile.h>
 
 #ifdef _WIN32
 #define HOMEDIR "USERPROFILE"
@@ -207,7 +210,10 @@ struct GlobalState {
 
     LfSlider trackProgressSlider;
     LfSlider volumeSlider;
-    bool showVolumeSliderTrackDisplay = false;
+    bool showVolumeSliderTrackDisplay = false; 
+
+    std::vector<uint32_t> soundDurationsAsync;
+    std::vector<std::future<void>> soundDurationFutures;
 };
 
 static GlobalState state;
@@ -234,7 +240,7 @@ static void                     renderTrackVolumeControl();
 static void                     renderTrackProgress();
 static void                     renderTrackMenu();
 
-static void                     backButtonTo(GuiTab tab);
+static void                     backButtonTo(GuiTab tab, const std::function<void()>& clickCb = nullptr);
 static void                     changeTabTo(GuiTab tab);
 
 static FileStatus               createPlaylist(const std::string& name, const std::string& desc);
@@ -247,7 +253,7 @@ static FileStatus               removeFileFromPlaylist(const std::string& path, 
 
 static void                     loadPlaylists(bool loadFiles);
 static bool                     isFileInPlaylist(const std::string& path, uint32_t playlistIndex);
-static void                     loadPlaylist(const std::filesystem::directory_entry& folder, bool loadFiles);
+static Playlist                 loadPlaylist(const std::filesystem::directory_entry& folder, bool loadFiles, bool* notLoaded = nullptr);
 
 static std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folderPath);
 static void                     playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex);
@@ -257,7 +263,7 @@ static void                     skipSoundDown(uint32_t playlistIndex);
 
 static double                   getSoundDuration(const std::string& soundPath);
 static std::string              formatDurationToMins(int32_t duration);
-static LfTexture                getSoundThubmnail(const std::string& soundPath);
+static LfTexture                getSoundThubmnail(const std::string& soundPath, vec2s size = (vec2s){-1, -1});
 static void                     updateSoundProgress();
 
 static std::string              removeFileExtension(const std::string& filename);
@@ -653,8 +659,15 @@ void renderDashboard() {
             }
             if(div->interact_state == LF_CLICKED && !overButton) {
                 state.currentPlaylist = playlistIndex;
-                if(state.playlists[state.currentPlaylist].musicFiles.empty())
-                    loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path), true);
+                if(state.playlists[state.currentPlaylist].musicFiles.empty()) {
+                    bool notLoaded;
+                    Playlist playlist = loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path), true, &notLoaded);
+                    if(notLoaded) {
+                        state.playlists.push_back(playlist);
+                    } else {
+                        state.playlists[state.currentPlaylist] = playlist;
+                    }
+                }
                 changeTabTo(GuiTab::OnPlaylist);
             } 
 
@@ -959,7 +972,9 @@ void renderOnPlaylist() {
                     if(playButton == LF_CLICKED) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                         state.currentSoundFile = &file;
-                        state.onTrackTab.trackThumbnail = file.thumbnail;
+                        if(state.onTrackTab.trackThumbnail.width != 0)
+                            lf_free_texture(state.onTrackTab.trackThumbnail);
+                        state.onTrackTab.trackThumbnail = getSoundThubmnail(state.currentSoundFile->path);
                     }
                     lf_pop_style_props();
                 }
@@ -995,7 +1010,9 @@ void renderOnPlaylist() {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
                     state.currentSoundFile = &file;
-                    state.onTrackTab.trackThumbnail = file.thumbnail;
+                    if(state.onTrackTab.trackThumbnail.width != 0)
+                        lf_free_texture(state.onTrackTab.trackThumbnail);
+                    state.onTrackTab.trackThumbnail = getSoundThubmnail(state.currentSoundFile->path);
                     changeTabTo(GuiTab::OnTrack);
                 }
 
@@ -1175,7 +1192,10 @@ void renderOnTrack() {
         lf_pop_style_props();
     }
 
-    backButtonTo(GuiTab::OnPlaylist);    
+    backButtonTo(GuiTab::OnPlaylist, [&](){
+            if(tab.trackThumbnail.width != 0)
+                lf_free_texture(tab.trackThumbnail);
+            });    
 
     lf_div_end();
 }
@@ -1702,8 +1722,15 @@ void renderTrackProgress() {
             if(lf_image_button(((LfTexture){.id = state.musicNoteTexture.id, .width = imageSize, .height = imageSize})) == LF_CLICKED) {
                 state.currentPlaylist = state.playingPlaylist;
                 // If Playlist unloaded, load it
-                if(state.playlists[state.currentPlaylist].musicFiles.empty())
-                    loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path), true);
+                if(state.playlists[state.currentPlaylist].musicFiles.empty()) {
+                    bool notLoaded;
+                    Playlist playlist = loadPlaylist(std::filesystem::directory_entry(state.playlists[state.currentPlaylist].path), true, &notLoaded);
+                    if(notLoaded) {
+                        state.playlists.push_back(playlist);
+                    } else {
+                        state.playlists[state.currentPlaylist] = playlist;
+                    }
+                }
                 changeTabTo(GuiTab::OnPlaylist);
             }
             lf_pop_style_props();
@@ -1775,7 +1802,7 @@ void renderTrackVolumeControl() {
         lf_pop_style_props();
     } 
 }
-void backButtonTo(GuiTab tab) {
+void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
     lf_next_line();
 
     lf_set_ptr_y(state.winHeight - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2);
@@ -1785,6 +1812,8 @@ void backButtonTo(GuiTab tab) {
     lf_push_style_props(props);
 
     if(lf_image_button(((LfTexture){.id = state.backTexture.id, .width = BACK_BUTTON_WIDTH, .height = BACK_BUTTON_HEIGHT})) == LF_CLICKED) {
+        if(clickCb)
+            clickCb();
         changeTabTo(tab);
     }
 
@@ -1794,10 +1823,6 @@ void backButtonTo(GuiTab tab) {
 void changeTabTo(GuiTab tab) {
     if(state.currentTab == tab) return;
     state.currentTab = tab;
-
-    for(uint32_t i = 0; i < lf_get_div_count(); i++) {
-        lf_get_divs()[i].scroll = 0;
-    }
 }
 
 FileStatus createPlaylist(const std::string& name, const std::string& desc) {
@@ -1901,95 +1926,114 @@ bool isFileInPlaylist(const std::string& path, uint32_t playlistIndex) {
     }
     return false;
 }
-void loadPlaylist(const std::filesystem::directory_entry& folder, bool loadFiles) {
-    if (folder.is_directory()) {
-        Playlist* loadedPlaylist = nullptr;
-        for(auto& playlist : state.playlists) {
-            if(playlist.path == folder.path().string()) {
-                loadedPlaylist = &playlist;
-                break;
-            }
-        }
 
-        std::ifstream metadata(folder.path().string() + "/.metadata");
-
-        if(!metadata.is_open()) {
-            std::cerr << "[Error] Failed to open the metadata of playlist on path '" << folder.path().string() << "'\n";
-            return;
-        }
-        std::string name, desc;
-        std::vector<SoundFile> files;
-        std::vector<std::wstring> displayFiles;
-
-        std::string line;
-        while(std::getline(metadata, line)) {
-            std::istringstream iss(line);
-            std::string key;
-            iss >> key;
-
-            if(key == "name:") {
-                std::getline(iss, name);
-                name.erase(0, name.find_first_not_of(" \t"));
-                name.erase(name.find_last_not_of(" \t") + 1);
-            }
-            if(key == "desc:") {
-                std::getline(iss, desc);
-                desc.erase(0, desc.find_first_not_of(" \t"));
-                desc.erase(desc.find_last_not_of(" \t") + 1);
-            }
-            if (line.find("files:") != std::string::npos && loadFiles) {
-                // If the line contains "files:", extract paths from the rest of the line
-                std::istringstream iss(line.substr(line.find("files:") + std::string("files:").length()));
-                std::string path;
-           
-                while (iss >> std::quoted(path)) {
-                    files.push_back((SoundFile){
-                            .path = path, 
-                            .duration = static_cast<int32_t>(getSoundDuration(path)), 
-                            .thumbnail = getSoundThubmnail(path)});
-                }
-            }
-        }
-        metadata.close();
-
-        {
-            std::wifstream wmetadata(folder.path().string() + "/.metadata");
-            std::wstring wline;
-
-            while(std::getline(wmetadata, wline)) {
-                if (wline.find(L"files:") != std::wstring::npos && loadFiles) {
-                    // If the line contains "files:", extract paths from the rest of the line
-                    std::wistringstream iss(wline.substr(wline.find(L"files:") + std::wstring(L"files:").length()));
-                    std::wstring path;
-
-                    while (iss >> std::quoted(path)) {
-                        displayFiles.push_back(path);
-                    }
-                }
-            }
-            wmetadata.close();
-        }
-
-        if(!loadedPlaylist) {
-            Playlist playlist;
-            playlist.path = folder.path().string();
-            playlist.name = name;
-            playlist.musicFiles = files;
-            playlist.desc = desc;
-            playlist.displayFiles = displayFiles;
-            state.playlists.push_back(playlist);
-        } else {
-            loadedPlaylist->path = folder.path().string();
-            loadedPlaylist->name = name;
-            loadedPlaylist->desc = desc;
-            loadedPlaylist->musicFiles = files;
-            loadedPlaylist->displayFiles = displayFiles;
+static std::mutex _durationMutex;
+static void getSoundDurationAsync(std::vector<uint32_t>* durations, std::string soundPath) {
+    uint32_t duration = getSoundDuration(soundPath);
+    std::lock_guard<std::mutex> lock(_durationMutex);
+    durations->push_back(duration);
+}
+Playlist loadPlaylist(const std::filesystem::directory_entry& folder, bool loadFiles, bool* notLoaded) {
+    Playlist playlist;
+    if (!folder.is_directory()) return playlist;
+    Playlist* loadedPlaylist = nullptr;
+    for(auto& playlist : state.playlists) {
+        if(playlist.path == folder.path().string()) {
+            loadedPlaylist = &playlist;
+            break;
         }
     }
+
+    std::ifstream metadata(folder.path().string() + "/.metadata");
+
+    if(!metadata.is_open()) {
+        std::cerr << "[Error] Failed to open the metadata of playlist on path '" << folder.path().string() << "'\n";
+        return playlist;
+    }
+    std::string name, desc;
+    std::vector<SoundFile> files;
+    std::vector<std::wstring> displayFiles;
+
+    std::string line;
+    while(std::getline(metadata, line)) {
+        std::istringstream iss(line);
+        std::string key;
+        iss >> key;
+
+        if(key == "name:") {
+            std::getline(iss, name);
+            name.erase(0, name.find_first_not_of(" \t"));
+            name.erase(name.find_last_not_of(" \t") + 1);
+        }
+        if(key == "desc:") {
+            std::getline(iss, desc);
+            desc.erase(0, desc.find_first_not_of(" \t"));
+            desc.erase(desc.find_last_not_of(" \t") + 1);
+        }
+        if (line.find("files:") != std::string::npos && loadFiles) {
+            // If the line contains "files:", extract paths from the rest of the line
+            std::istringstream iss(line.substr(line.find("files:") + std::string("files:").length()));
+            std::string path;
+
+            while (iss >> std::quoted(path)) {
+                files.push_back((SoundFile){
+                        .path = path, 
+                        .duration = 0, 
+                        .thumbnail = getSoundThubmnail(path, (vec2s){48 * 1.5f, 27 * 1.5f})});
+            }
+        }
+    }
+    metadata.close();
+
+    for(auto& file : files) {
+        state.soundDurationFutures.push_back(std::async(std::launch::async, getSoundDurationAsync, &state.soundDurationsAsync, file.path)) ;
+    }
+
+    for(uint32_t i = 0; i < files.size(); i++) {
+        files[i].duration = static_cast<int32_t>(state.soundDurationsAsync[i]);
+    }
+    state.soundDurationFutures.clear();
+    state.soundDurationsAsync.clear();
+
+    {
+        std::wifstream wmetadata(folder.path().string() + "/.metadata");
+        std::wstring wline;
+
+        while(std::getline(wmetadata, wline)) {
+            if (wline.find(L"files:") != std::wstring::npos && loadFiles) {
+                // If the line contains "files:", extract paths from the rest of the line
+                std::wistringstream iss(wline.substr(wline.find(L"files:") + std::wstring(L"files:").length()));
+                std::wstring path;
+
+                while (iss >> std::quoted(path)) {
+                    displayFiles.push_back(path);
+                }
+            }
+        }
+        wmetadata.close();
+    }
+
+    if(notLoaded != nullptr)
+        *notLoaded = (loadedPlaylist == nullptr);
+
+    playlist.path = folder.path().string();
+    playlist.name = name;
+    playlist.musicFiles = files;
+    playlist.desc = desc;
+    playlist.displayFiles = displayFiles;
+    return playlist;
 }
 void loadPlaylists(bool loadFiles) {
+    uint32_t playlistI = 0;
     for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
-        loadPlaylist(folder, loadFiles);
+        bool notLoaded = false;
+        Playlist playlist = loadPlaylist(folder, loadFiles, &notLoaded);
+        if(notLoaded) {
+            state.playlists.push_back(playlist);
+        } else {
+            state.playlists[playlistI] = playlist;
+        }
+        playlistI++;
     }
 }
 
@@ -2033,7 +2077,10 @@ void skipSoundUp(uint32_t playlistInedx) {
         playlist.playingFile = 0;
 
     state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-    state.onTrackTab.trackThumbnail = state.currentSoundFile->thumbnail;
+    if(state.onTrackTab.trackThumbnail.width != 0) {
+        lf_free_texture(state.onTrackTab.trackThumbnail);
+    }
+    state.onTrackTab.trackThumbnail = getSoundThubmnail(state.currentSoundFile->path);
 
     playlistPlayFileWithIndex(playlist.playingFile, playlistInedx);
 
@@ -2048,20 +2095,29 @@ void skipSoundDown(uint32_t playlistIndex) {
         playlist.playingFile = playlist.musicFiles.size() - 1; 
 
     state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-    state.onTrackTab.trackThumbnail = state.currentSoundFile->thumbnail;
+    if(state.onTrackTab.trackThumbnail.width != 0)
+        lf_free_texture(state.onTrackTab.trackThumbnail);
+    state.onTrackTab.trackThumbnail = getSoundThubmnail(state.currentSoundFile->path);
 
     playlistPlayFileWithIndex(playlist.playingFile, playlistIndex);
 }
 
 double getSoundDuration(const std::string& soundPath) {
-    Sound sound; 
-    sound.init(soundPath);
-    double duration = sound.lengthInSeconds;
-    sound.uninit();
-    return duration;
+    ma_decoder decoder;
+    if (ma_decoder_init_file(soundPath.c_str(), NULL, &decoder) != MA_SUCCESS) {
+        return -1.0f; // Error opening file
+    }
+
+    ma_uint64 frameCount;
+    ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
+    float durationInSeconds = (float)frameCount / decoder.outputSampleRate;
+
+    ma_decoder_uninit(&decoder);
+
+    return durationInSeconds;
 }
 
-LfTexture getSoundThubmnail(const std::string& soundPath) {    
+LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size) {    
     MPEG::File file(soundPath.c_str());
 
     LfTexture tex = {0};
@@ -2088,7 +2144,10 @@ LfTexture getSoundThubmnail(const std::string& soundPath) {
 
     ByteVector imageData = apicFrame->picture();
     
-    tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, 48 * 1.5, 27 * 1.5);
+    if(size.x == -1)
+        tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
+    else 
+        tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, size.x, size.y);
     
     return tex;
 }
