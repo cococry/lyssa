@@ -88,9 +88,6 @@
 
 #define DJB2_INIT 5381
 
-#define SCROLL_ACCELERATION_FACTOR 1.6f 
-#define SCROLL_MAX_VELOCITY 100 
-
 // -- Struct Defines ---
 typedef struct {
     uint32_t id;
@@ -918,18 +915,26 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     state.scr_ev.yoffset = yoffset;
 
     if(state.div_index_ptr > LF_MAX_DIVS - 1) return;
-    
+   
+    // Scrolling the current div
     LfDiv* selected_div = &state.divs[state.selected_div_id];
     if(yoffset == -1) {
         if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
-            selected_div->scroll_velocity -= SCROLL_ACCELERATION_FACTOR;
+            if(state.theme.div_smooth_scroll)
+                selected_div->scroll_velocity -= state.theme.div_scroll_acceleration;
+            else 
+                selected_div->scroll -= state.theme.div_scroll_amount_px;
         } 
     } else if (yoffset == 1) {
         if(selected_div->scroll) {
-            selected_div->scroll_velocity += SCROLL_ACCELERATION_FACTOR;
+            if(state.theme.div_smooth_scroll)
+                selected_div->scroll_velocity += state.theme.div_scroll_acceleration;
+            else 
+                selected_div->scroll += state.theme.div_scroll_amount_px;
         }        
-    } 
-    selected_div->scroll_velocity = MIN(MAX(selected_div->scroll_velocity, -SCROLL_MAX_VELOCITY), SCROLL_MAX_VELOCITY);
+    }
+    if(state.theme.div_smooth_scroll)
+        selected_div->scroll_velocity = MIN(MAX(selected_div->scroll_velocity, -state.theme.div_scroll_max_veclocity), state.theme.div_scroll_max_veclocity);
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
@@ -2077,7 +2082,6 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
     for(uint32_t i = 0; i < state.div_capacity; i++) {
         state.divs[i].scroll_velocity = 0;
         state.divs[i].scroll = 0;
-        state.divs[i].init_area = (vec2s){-1, -1};
     }
 
     // Setting glfw callbacks
@@ -2192,6 +2196,12 @@ LfTheme lf_default_theme() {
         .corner_radius = 0
     };
     theme.font = load_font_asset("inter", "ttf", 24);
+
+    theme.div_scroll_max_veclocity = 100.0f; 
+    theme.div_scroll_acceleration = 1.6f;
+    theme.div_scroll_amount_px = 20.0f;
+    theme.div_smooth_scroll = true;
+
     return theme;
 }
 
@@ -2384,8 +2394,6 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
         state.divs[state.div_index_ptr].aabb.size.y != size.y + props.padding * 2.0f) {
         state.divs[state.div_index_ptr].scroll = 0;
         state.divs[state.div_index_ptr].scroll_velocity = 0;
-        state.divs[state.div_index_ptr].init_area.x = state.divs[state.div_index_ptr].total_area.x;
-        state.divs[state.div_index_ptr].init_area.y = state.divs[state.div_index_ptr].total_area.y;
     }
     // Updating the aabb
     state.divs[state.div_index_ptr].aabb.pos = (vec2s){pos.x - props.padding, pos.y - props.padding};
@@ -2396,21 +2404,19 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
     if(div.id == -1) {
         div.id = state.div_count;
     }
-    if(div.scroll == -1) {
+    if(div.scroll == -1) 
         div.scroll = 0;
-    }
-    div.scroll += div.scroll_velocity;
-    div.scroll_velocity *= 0.95; 
 
     if(div.scroll > 0) 
         div.scroll = 0;
 
-    if(div.scroll < -div.init_area.y && div.init_area.y != -1) {
-        div.scroll = -div.init_area.y;
-        div.scroll_velocity = 0;
-    }
-    if(div.scroll < -((div.total_area.y - div.scroll) - div.aabb.pos.y - div.aabb.size.y)) {
-        div.scroll_velocity = 0;
+    if(state.theme.div_smooth_scroll) {
+        div.scroll += div.scroll_velocity;
+        div.scroll_velocity *= 0.95; 
+
+        if(div.scroll < -((div.total_area.y - div.scroll) - div.aabb.pos.y - div.aabb.size.y) && div.scroll_velocity < 0) {
+            div.scroll_velocity = 0;
+        }
     }
 
     state.pos_ptr = pos; 
@@ -2457,8 +2463,6 @@ void draw_scrollbar_on(uint32_t div_id) {
         selected->total_area.x = state.pos_ptr.x;
         selected->total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
         float total_area = selected->total_area.y - scroll;
-        selected->init_area.x = selected->total_area.x; 
-        selected->init_area.y = total_area;
         float visible_area = selected->aabb.size.y + selected->aabb.pos.y;
         if(total_area > visible_area) {
             const float scrollbar_width = 8;

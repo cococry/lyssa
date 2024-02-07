@@ -1,17 +1,10 @@
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <fstream>
 #include <functional>
 #include <iostream>
 #include <filesystem>
-#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <cstdlib>
-#include <future>
 
 #include <wchar.h>
 
@@ -44,7 +37,8 @@
 
 #define LYSSA_GREEN RGB_COLOR(13, 181, 108)
 #define LYSSA_BLUE  RGB_COLOR(83, 150, 237) 
-#define LYSSA_RED  RGB_COLOR(150, 12, 14) 
+#define LYSSA_RED  RGB_COLOR(150, 12, 14)
+#define LYSSA_BACKGROUND_COLOR RGB_COLOR(15, 15, 19) 
 
 #define DIV_START_X 20  
 #define DIV_START_Y 20
@@ -210,10 +204,7 @@ struct GlobalState {
 
     LfSlider trackProgressSlider;
     LfSlider volumeSlider;
-    bool showVolumeSliderTrackDisplay = false; 
-
-    std::vector<uint32_t> soundDurationsAsync;
-    std::vector<std::future<void>> soundDurationFutures;
+    bool showVolumeSliderTrackDisplay = false;
 };
 
 static GlobalState state;
@@ -267,8 +258,9 @@ static LfTexture                getSoundThubmnail(const std::string& soundPath, 
 static void                     updateSoundProgress();
 
 static std::string              removeFileExtension(const std::string& filename);
-
 static std::wstring             removeFileExtensionW(const std::wstring& filename);
+
+static void                     inputFieldStyled(LfInputField* input, vec4s bgColor = LYSSA_BACKGROUND_COLOR);
 
 
 template<typename T>
@@ -376,6 +368,7 @@ void initWin(uint32_t width, uint32_t height) {
     LfTheme theme = lf_default_theme();
     theme.div_props.color = (vec4s){LF_RGBA(0, 0, 0, 0)};
     theme.scrollbar_props.corner_radius = 1.5;
+    theme.div_smooth_scroll = false;
     lf_init_glfw(width, height, &theme, state.win);   
     lf_set_text_wrap(true);
 
@@ -704,35 +697,14 @@ void renderCreatePlaylist() {
     // Form Input
     {
         lf_next_line();
-        LfUIElementProps props = lf_theme()->inputfield_props;
-        props.padding = 15; 
-        props.border_width = 1;
-        props.color = LF_NO_COLOR; 
-        props.border_color = LF_WHITE;
-        props.corner_radius = 10;
-        props.margin_top = 20;
-        props.text_color = LF_WHITE;
         state.createPlaylistTab.nameInput.width = 600;
-        lf_push_style_props(props);
-        lf_input_text(&state.createPlaylistTab.nameInput);
+        inputFieldStyled(&state.createPlaylistTab.nameInput);
         lf_next_line();
-        lf_pop_style_props();
     }
     {
         lf_next_line();
-        LfUIElementProps props = lf_theme()->inputfield_props;
-        props.padding = 15; 
-        props.border_width = 1;
-        props.color = LF_NO_COLOR; 
-        props.border_color = LF_WHITE;
-        props.corner_radius = 10;
-        props.margin_top = 20;
-        props.text_color = LF_WHITE;
-        state.createPlaylistTab.descInput.width = 600;
-        lf_push_style_props(props);
-        lf_input_text(&state.createPlaylistTab.descInput);
+        inputFieldStyled(&state.createPlaylistTab.descInput);
         lf_next_line();
-        lf_pop_style_props();
     }
 
     // Create Button
@@ -1213,18 +1185,8 @@ void renderPlaylistAddFromFile() {
     // Form Input 
     {
         lf_next_line();
-        LfUIElementProps props = lf_theme()->inputfield_props;
-        props.padding = 15; 
-        props.border_width = 1;
-        props.color = (vec4s){0, 0, 0, 0};
-        props.border_color = (vec4s){1, 1, 1, 1};
-        props.corner_radius = 10;
-        props.margin_top = 20;
-        props.text_color = (vec4s){1, 1, 1, 1};
-        lf_push_style_props(props);
-        lf_input_text(&state.playlistAddFromFileTab.pathInput);
+        inputFieldStyled(&state.playlistAddFromFileTab.pathInput);
         lf_next_line();
-        lf_pop_style_props();
     }
     // Add Button 
     {
@@ -1289,18 +1251,8 @@ void renderPlaylistAddFromFolder() {
     // Input 
     {
         lf_next_line();
-        LfUIElementProps props = lf_theme()->inputfield_props;
-        props.padding = 15; 
-        props.color = (vec4s){0, 0, 0, 0};
-        props.border_color = (vec4s){1, 1, 1, 1};
-        props.corner_radius = 10;
-        props.border_width = 1;
-        props.margin_top = 20;
-        props.text_color = (vec4s){1, 1, 1, 1};
-        lf_push_style_props(props);
-        lf_input_text(&state.playlistAddFromFolderTab.pathInput);
+        inputFieldStyled(&state.playlistAddFromFolderTab.pathInput);
         lf_next_line();
-        lf_pop_style_props();
     }
     lf_next_line();
     // Load Button 
@@ -1473,13 +1425,13 @@ void renderFileOrFolderPopup() {
 void renderEditPlaylistPopup() {
     // Beginning a new div
     const vec2s popupSize = (vec2s){500.0f, 350.0f};
-    LfUIElementProps props = lf_theme()->div_props;
-    props.color = RGB_COLOR(10, 10, 10);
-    props.border_color = RGB_COLOR(50, 50, 50);
-    props.border_width = 3;
-    props.padding = 5;
-    props.corner_radius = 10;
-    lf_push_style_props(props);
+    LfUIElementProps div_props = lf_theme()->div_props;
+    div_props.color = RGB_COLOR(10, 10, 10);
+    div_props.border_color = RGB_COLOR(50, 50, 50);
+    div_props.border_width = 3;
+    div_props.padding = 5;
+    div_props.corner_radius = 10;
+    lf_push_style_props(div_props);
     // Centering the div/popup
     lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize);
     // Close Button
@@ -1492,9 +1444,9 @@ void renderEditPlaylistPopup() {
         props.margin_right = 0;
         props.margin_top = 0;
         props.margin_bottom = 0;
-        props.text_color = RGB_COLOR(255, 255, 255);
-        props.color = RGBA_COLOR(0, 0, 0, 0);
         props.border_width = 0;
+        props.text_color = LF_WHITE;
+        props.color = LF_NO_COLOR;
 
         lf_push_style_props(props);
         if(lf_button("X") == LF_CLICKED) {
@@ -1514,20 +1466,10 @@ void renderEditPlaylistPopup() {
         lf_pop_style_props();
     }
     lf_next_line();
-    {
-        LfUIElementProps props = lf_theme()->inputfield_props;
-        props.margin_bottom = 15;
-        props.padding = 15; 
-        props.border_width = 1;
-        props.color = RGB_COLOR(25, 25, 25); 
-        props.border_color = LF_WHITE;
-        props.corner_radius = 10;
-        props.text_color = LF_WHITE;
+    { 
         state.createPlaylistTab.nameInput.width = 457;
-        lf_push_style_props(props);
-        lf_input_text(&state.createPlaylistTab.nameInput);
+        inputFieldStyled(&state.createPlaylistTab.nameInput, div_props.color);
         lf_next_line();
-        lf_pop_style_props();
     }
 
     lf_next_line();
@@ -1539,19 +1481,10 @@ void renderEditPlaylistPopup() {
         lf_pop_style_props();
     }
     lf_next_line();
-    {
-        LfUIElementProps props = lf_theme()->inputfield_props;
-        props.padding = 15; 
-        props.border_width = 1;
-        props.color = RGB_COLOR(25, 25, 25); 
-        props.border_color = LF_WHITE;
-        props.corner_radius = 10;
-        props.text_color = LF_WHITE;
+    { 
         state.createPlaylistTab.descInput.width = 457;
-        lf_push_style_props(props);
-        lf_input_text(&state.createPlaylistTab.descInput);
+        inputFieldStyled(&state.createPlaylistTab.descInput, div_props.color);
         lf_next_line();
-        lf_pop_style_props();
     }
     lf_next_line();
     {
@@ -1823,6 +1756,10 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
 void changeTabTo(GuiTab tab) {
     if(state.currentTab == tab) return;
     state.currentTab = tab;
+
+    for(uint32_t i = 0; i < lf_get_div_count(); i++) {
+        lf_get_divs()[i].scroll = 0;
+    }
 }
 
 FileStatus createPlaylist(const std::string& name, const std::string& desc) {
@@ -1926,13 +1863,6 @@ bool isFileInPlaylist(const std::string& path, uint32_t playlistIndex) {
     }
     return false;
 }
-
-static std::mutex _durationMutex;
-static void getSoundDurationAsync(std::vector<uint32_t>* durations, std::string soundPath) {
-    uint32_t duration = getSoundDuration(soundPath);
-    std::lock_guard<std::mutex> lock(_durationMutex);
-    durations->push_back(duration);
-}
 Playlist loadPlaylist(const std::filesystem::directory_entry& folder, bool loadFiles, bool* notLoaded) {
     Playlist playlist;
     if (!folder.is_directory()) return playlist;
@@ -1978,22 +1908,12 @@ Playlist loadPlaylist(const std::filesystem::directory_entry& folder, bool loadF
             while (iss >> std::quoted(path)) {
                 files.push_back((SoundFile){
                         .path = path, 
-                        .duration = 0, 
+                        .duration = static_cast<int32_t>(getSoundDuration(path)), 
                         .thumbnail = getSoundThubmnail(path, (vec2s){48 * 1.5f, 27 * 1.5f})});
             }
         }
     }
     metadata.close();
-
-    for(auto& file : files) {
-        state.soundDurationFutures.push_back(std::async(std::launch::async, getSoundDurationAsync, &state.soundDurationsAsync, file.path)) ;
-    }
-
-    for(uint32_t i = 0; i < files.size(); i++) {
-        files[i].duration = static_cast<int32_t>(state.soundDurationsAsync[i]);
-    }
-    state.soundDurationFutures.clear();
-    state.soundDurationsAsync.clear();
 
     {
         std::wifstream wmetadata(folder.path().string() + "/.metadata");
@@ -2022,6 +1942,9 @@ Playlist loadPlaylist(const std::filesystem::directory_entry& folder, bool loadF
     playlist.desc = desc;
     playlist.displayFiles = displayFiles;
     return playlist;
+}
+static void loadPlaylistParallel(std::vector<Playlist>& playlists, std::filesystem::directory_entry folder, bool loadFiles) {
+    auto playlist = loadPlaylist(folder, loadFiles);
 }
 void loadPlaylists(bool loadFiles) {
     uint32_t playlistI = 0;
@@ -2103,18 +2026,11 @@ void skipSoundDown(uint32_t playlistIndex) {
 }
 
 double getSoundDuration(const std::string& soundPath) {
-    ma_decoder decoder;
-    if (ma_decoder_init_file(soundPath.c_str(), NULL, &decoder) != MA_SUCCESS) {
-        return -1.0f; // Error opening file
-    }
-
-    ma_uint64 frameCount;
-    ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
-    float durationInSeconds = (float)frameCount / decoder.outputSampleRate;
-
-    ma_decoder_uninit(&decoder);
-
-    return durationInSeconds;
+    Sound sound; 
+    sound.init(soundPath);
+    double duration = sound.lengthInSeconds;
+    sound.uninit();
+    return duration;
 }
 
 LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size) {    
@@ -2191,6 +2107,20 @@ std::wstring removeFileExtensionW(const std::wstring& filename) {
     }
 }
 
+void inputFieldStyled(LfInputField* input, vec4s bgColor) {
+    LfUIElementProps props = lf_theme()->inputfield_props;
+    props.padding = 15; 
+    props.border_width = 1;
+    props.color = bgColor; 
+    props.border_color = LF_WHITE;
+    props.corner_radius = 10;
+    props.margin_top = 20;
+    props.text_color = LF_WHITE;
+    lf_push_style_props(props);
+    lf_input_text(input);
+    lf_pop_style_props();
+}
+
 std::string formatDurationToMins(int32_t duration) {
     int32_t minutes = duration / 60;
     int32_t seconds = duration % 60;
@@ -2227,7 +2157,7 @@ int main(int argc, char* argv[]) {
 
         // OpenGL color clearing 
         glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(LF_RGBA(15, 15, 19, 255));
+        glClearColor(LYSSA_BACKGROUND_COLOR.r, LYSSA_BACKGROUND_COLOR.g, LYSSA_BACKGROUND_COLOR.b, LYSSA_BACKGROUND_COLOR.a);
         lf_begin();
 
         switch(state.currentTab) {

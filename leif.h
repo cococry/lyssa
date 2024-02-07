@@ -17,7 +17,6 @@
 #define LF_NO_COLOR (vec4s){LF_RGBA(0.0f, 0.0f, 0.0f, 0.0f)}
 
 #define LF_COLOR_BRIGHTNESS(color, brightness) (vec4s){LF_RGBA(color.r * (float)brightness, color.g * (float)brightness, color.b * (float)brightness, color.a)}
-#define LF_SCROLL_AMOUNT 20
 #define LF_MAX_DIVS 64
 
 #define LF_PRIMARY_ITEM_COLOR (vec4s){LF_RGBA(133, 138, 148, 255)} 
@@ -132,6 +131,9 @@ typedef struct {
     LfUIElementProps button_props, div_props, text_props, image_props,
                      inputfield_props, checkbox_props, slider_props, scrollbar_props;
     LfFont font;
+    bool div_smooth_scroll;
+    float div_scroll_acceleration, div_scroll_max_veclocity;
+    float div_scroll_amount_px;
 } LfTheme;
 
 typedef struct {
@@ -144,7 +146,7 @@ typedef struct {
     
     float scroll, scroll_velocity;
 
-    vec2s total_area, init_area;
+    vec2s total_area;
 } LfDiv;
 
 typedef void (*LfMenuItemCallback)(uint32_t*);
