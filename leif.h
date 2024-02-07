@@ -142,7 +142,7 @@ typedef struct {
     LfAABB aabb;
     LfClickableItemState interact_state;
 
-    bool init, hidden;
+    bool init, hidden, scrollable;
     
     float scroll, scroll_velocity;
 
@@ -215,8 +215,7 @@ double lf_get_mouse_scroll_x();
 
 double lf_get_mouse_scroll_y();
 
-#define lf_div_begin(pos, size) _lf_div_begin_loc(pos, size, __FILE__, __LINE__)
-LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line);
+LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable);
 
 void lf_div_end();
 

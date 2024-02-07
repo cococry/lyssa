@@ -368,7 +368,6 @@ void initWin(uint32_t width, uint32_t height) {
     LfTheme theme = lf_default_theme();
     theme.div_props.color = (vec4s){LF_RGBA(0, 0, 0, 0)};
     theme.scrollbar_props.corner_radius = 1.5;
-    theme.div_smooth_scroll = false;
     lf_init_glfw(width, height, &theme, state.win);   
     lf_set_text_wrap(true);
 
@@ -482,7 +481,7 @@ static bool area_hovered(vec2s pos, vec2s size) {
     return hovered;
 }
 void renderDashboard() {
-    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), true);
 
     lf_push_font(&state.h1Font);
     lf_text("Your Playlists");
@@ -559,7 +558,7 @@ void renderDashboard() {
             lf_push_style_props(props);
             lf_set_div_hoverable(true);
             lf_push_element_id(playlistIndex);
-            LfDiv* div = lf_div_begin(((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}), ((vec2s){width, overDiv ? height + 20 : height}));
+            LfDiv* div = lf_div_begin(((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}), ((vec2s){width, overDiv ? height + 20 : height}), false);
             lf_pop_element_id();
             lf_set_div_hoverable(false);
             lf_pop_style_props();
@@ -683,7 +682,7 @@ void renderDashboard() {
     lf_div_end();
 }
 void renderCreatePlaylist() {
-    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), false);
     // Heading
     {
         LfUIElementProps props = lf_theme()->text_props;
@@ -763,7 +762,7 @@ void renderCreatePlaylist() {
 void renderOnPlaylist() {
     if(state.currentPlaylist == -1) return;
 
-    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), false);
 
     auto& currentPlaylist = state.playlists[state.currentPlaylist];
 
@@ -885,7 +884,7 @@ void renderOnPlaylist() {
         
         // Begin a new div container for the files
         {
-            lf_div_begin(LF_PTR, ((vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}));
+            lf_div_begin(LF_PTR, ((vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true);
         }
 
 
@@ -1009,7 +1008,7 @@ void renderOnPlaylist() {
             props.corner_radius = 5;
             props.border_width = 0;
             lf_push_style_props(props);
-            lf_div_begin(popupPos, ((vec2s){150, 50}));
+            lf_div_begin(popupPos, ((vec2s){150, 50}), false);
             lf_pop_style_props();
 
                 {
@@ -1043,7 +1042,7 @@ void renderOnPlaylist() {
 void renderOnTrack() {
     OnTrackTab& tab = state.onTrackTab;
 
-    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), false);
     // Sound Title
     {
 
@@ -1172,7 +1171,7 @@ void renderOnTrack() {
     lf_div_end();
 }
 void renderPlaylistAddFromFile() {
-    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), false);
     
     // Heading
     {
@@ -1240,7 +1239,7 @@ void renderPlaylistAddFromFile() {
     lf_div_end();
 }
 void renderPlaylistAddFromFolder() {
-    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}));
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), false);
 
     // Heading
     {
@@ -1310,7 +1309,7 @@ void renderPlaylistAddFromFolder() {
             lf_push_style_props(props);
 
             state.playlistAddFromFolderTab.fileContainer = lf_div_begin(LF_PTR, ((vec2s){(float)state.winWidth - (DIV_START_X * 2), 
-                                                                        (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}));
+                                                                        (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true);
 
             for(auto& file : selectedFolder.files) {
                 LfAABB file_aabb = (LfAABB){
@@ -1365,7 +1364,7 @@ void renderFileOrFolderPopup() {
     props.corner_radius = 10;
     lf_push_style_props(props);
     // Centering the div/popup
-    lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize);
+    lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize, false);
     // Close Button
     {
         // Put the X Button in the top left of the div 
@@ -1433,7 +1432,7 @@ void renderEditPlaylistPopup() {
     div_props.corner_radius = 10;
     lf_push_style_props(div_props);
     // Centering the div/popup
-    lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize);
+    lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize, false);
     // Close Button
     {
         // Put the X Button in the top left of the div 
@@ -1461,6 +1460,7 @@ void renderEditPlaylistPopup() {
     {
         LfUIElementProps props = lf_theme()->text_props;
         props.margin_left = 20;
+        props.margin_bottom = 5;
         lf_push_style_props(props);
         lf_text("Name");
         lf_pop_style_props();
@@ -1476,6 +1476,8 @@ void renderEditPlaylistPopup() {
     {
         LfUIElementProps props = lf_theme()->text_props;
         props.margin_left = 20;
+        props.margin_bottom = 5;
+        props.margin_top = 15;
         lf_push_style_props(props);
         lf_text("Description");
         lf_pop_style_props();
@@ -2114,7 +2116,6 @@ void inputFieldStyled(LfInputField* input, vec4s bgColor) {
     props.color = bgColor; 
     props.border_color = LF_WHITE;
     props.corner_radius = 10;
-    props.margin_top = 20;
     props.text_color = LF_WHITE;
     lf_push_style_props(props);
     lf_input_text(input);

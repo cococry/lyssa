@@ -918,6 +918,8 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
    
     // Scrolling the current div
     LfDiv* selected_div = &state.divs[state.selected_div_id];
+    if(!selected_div->scrollable) return;
+
     if(yoffset == -1) {
         if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
             if(state.theme.div_smooth_scroll)
@@ -1601,7 +1603,7 @@ void dropdown_menu_item_loc(void** items, void* placeholder, uint32_t item_count
         div_props.border_width = props.border_width;
         div_props.border_color = props.border_color;
         lf_push_style_props(div_props);
-        _lf_div_begin_loc(((vec2s){button_pos.x, button_pos.y + (text_props.height + padding * 2.0f) + margin_top}), ((vec2s){(float)width + padding * 2, (float)height + padding * 2}), file, line);
+        lf_div_begin(((vec2s){button_pos.x, button_pos.y + (text_props.height + padding * 2.0f) + margin_top}), ((vec2s){(float)width + padding * 2, (float)height + padding * 2}), true);
 
         for(uint32_t i = 0; i < item_count; i++) {
             LfUIElementProps text_props = lf_theme()->text_props;
@@ -2373,7 +2375,7 @@ LfClickableItemState _lf_button_fixed_loc_wide(const wchar_t* text, int32_t widt
     return button_fixed_element_loc((void*)text, width, height, file, line, true);
 }
 
-LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) {
+LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable) {
     if(state.div_index_ptr > LF_MAX_DIVS - 1) {
         LF_ERROR("Reached maximum div count.");
         return NULL;
@@ -2406,16 +2408,17 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
     }
     if(div.scroll == -1) 
         div.scroll = 0;
+    if(div.scrollable) {
+        if(div.scroll > 0) 
+            div.scroll = 0;
 
-    if(div.scroll > 0) 
-        div.scroll = 0;
+        if(state.theme.div_smooth_scroll) {
+            div.scroll += div.scroll_velocity;
+            div.scroll_velocity *= 0.95; 
 
-    if(state.theme.div_smooth_scroll) {
-        div.scroll += div.scroll_velocity;
-        div.scroll_velocity *= 0.95; 
-
-        if(div.scroll < -((div.total_area.y - div.scroll) - div.aabb.pos.y - div.aabb.size.y) && div.scroll_velocity < 0) {
-            div.scroll_velocity = 0;
+            if(div.scroll < -((div.total_area.y - div.scroll) - div.aabb.pos.y - div.aabb.size.y) && div.scroll_velocity < 0) {
+                div.scroll_velocity = 0;
+            }
         }
     }
 
@@ -2426,7 +2429,7 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, const char* file, int32_t line) 
                                                       (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, state.div_hoverable);
 
     // Culling & Scrolling
-    if(state.div_storage) {
+    if(state.div_storage && div.scrollable) {
         lf_set_ptr_y(div.scroll + props.border_width + props.corner_radius);
     } else {
         lf_set_ptr_y(props.border_width + props.corner_radius);
@@ -2487,10 +2490,8 @@ void draw_scrollbar_on(uint32_t div_id) {
     }
 }
 void lf_div_end() {
-    
-    if(state.div_storage)
+    if(state.div_storage && state.current_div.scrollable)
         draw_scrollbar_on(state.selected_div_id);
-
 
     state.pos_ptr = state.prev_pos_ptr;
     state.font_stack = state.prev_font_stack;
@@ -2653,7 +2654,7 @@ void _lf_begin_loc(const char* file, int32_t line) {
     LfUIElementProps props = lf_theme()->div_props; 
     props.color = (vec4s){0, 0, 0, 0};
     lf_push_style_props(props);
-    lf_div_begin(((vec2s){0, 0}), ((vec2s){(float)state.dsp_w, (float)state.dsp_h}));
+    lf_div_begin(((vec2s){0, 0}), ((vec2s){(float)state.dsp_w, (float)state.dsp_h}), false);
     lf_pop_style_props();
 }
 void lf_end() {
