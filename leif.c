@@ -234,9 +234,6 @@ static float                    get_kerning(int32_t prev_character_codepoint, in
 static void                     remove_i_str(char *str, int32_t index);
 static void                     insert_i_str(char *str, char ch, int32_t index);
 
-static LfTexture                load_texture_asset(const char* asset_name, const char* file_extension); 
-static LfFont                   load_font_asset(const char* asset_name, const char* file_extension, uint32_t font_size); 
-
 // --- Input ---
 #ifdef LF_GLFW
 static void                     glfw_key_callback(GLFWwindow* window, int32_t key, int scancode, int action, int mods);
@@ -740,6 +737,9 @@ LfFont load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, u
 }
 LfFont lf_load_font(const char* filepath, uint32_t size) {
     return load_font(filepath, size, 1024, 1024, 1536, 0);
+}
+LfFont lf_load_font_ex(const char* filepath, uint32_t size, uint32_t bitmap_w, uint32_t bitmap_h, uint32_t num_glyphs) {
+    return load_font(filepath, size, bitmap_w, bitmap_h, num_glyphs, 0);
 }
 
 void lf_free_font(LfFont* font) {
@@ -1328,7 +1328,7 @@ void insert_i_str(char *str, char ch, int32_t index) {
 }
 
 
-LfTexture load_texture_asset(const char* asset_name, const char* file_extension) {
+LfTexture lf_load_texture_asset(const char* asset_name, const char* file_extension) {
     char leif_dir[strlen(getenv(HOMEDIR)) + strlen("/.leif")];
     memset(leif_dir, 0, sizeof(leif_dir));
     strcat(leif_dir, getenv(HOMEDIR));
@@ -1345,7 +1345,7 @@ LfTexture load_texture_asset(const char* asset_name, const char* file_extension)
     return lf_load_texture(path, false, LF_TEX_FILTER_LINEAR);
 }
 
-LfFont load_font_asset(const char* asset_name, const char* file_extension, uint32_t font_size) {
+LfFont lf_load_font_asset(const char* asset_name, const char* file_extension, uint32_t font_size) {
     char leif_dir[strlen(getenv(HOMEDIR)) + strlen("/.leif")];
     memset(leif_dir, 0, sizeof(leif_dir));
     strcat(leif_dir, getenv(HOMEDIR));
@@ -1871,8 +1871,6 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
 
     int32_t max_descended_char_height = get_max_char_height_font(font);
 
-    bool reached_stop = false;
-
     float last_x = x;
     float last_char_width = 0, first_char_width = -1;
 
@@ -1883,13 +1881,12 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
 
     uint32_t i = 0;
     for(; str[i] != L'\0'; i++) { 
-        bool skip = false;
         if(stbtt_FindGlyphIndex((const stbtt_fontinfo*)font.font_info, str[i]-32) == 0 && 
-            str[i] != ' ' && str[i] != '\n' && !iswdigit(str[i]) && !is_symbol(str[i]))  {
-            skip = true;
+            str[i] != L' ' && str[i] != L'\n' && !iswdigit(str[i]) && !iswpunct(str[i]))  {
+            continue;
         }
         // If the current character is a new line or the wrap point has been reached, advance to the next line
-        if(str[i] == '\n' || (x >= wrap_point && wrap_point != -1)) {
+        if(str[i] == L'\n' || (x >= wrap_point && wrap_point != -1)) {
             y += font.font_size;
             height += font.font_size;
             if(x - pos.x > width) {
@@ -1898,62 +1895,61 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
             x = pos.x;
             last_x = x;
             if(str[i] == L' ') {
-                skip = true; 
+                continue;
             }
         }
-        if(!skip) {
-            // Retrieving the vertex data of the current character & submitting it to the batch  
-            stbtt_aligned_quad q;
-            stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
+        // Retrieving the vertex data of the current character & submitting it to the batch  
+        stbtt_aligned_quad q;
+        stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
 
-            if(!item_culled)  {
-                if(first_char_width == -1) { 
-                    first_char_width = x - last_x;
-                }
-                // Adding the vertices to the batch if rendering the text
-                if(!no_render) {
-                    vec2s texcoords[4] = {
-                        q.s0, q.t0, 
-                        q.s1, q.t0, 
-                        q.s1, q.t1, 
-                        q.s0, q.t1
-                    };
-                    vec2s verts[4] = {
-                        (vec2s){q.x0, q.y0 + max_descended_char_height}, 
-                        (vec2s){q.x1, q.y0 + max_descended_char_height}, 
-                        (vec2s){q.x1, q.y1 + max_descended_char_height},
-                        (vec2s){q.x0, q.y1 + max_descended_char_height}
-                    }; 
-                    for(uint32_t i = 0; i < 4; i++) {
-                        if(state.render.vert_count >= MAX_RENDER_BATCH) {
-                            lf_flush();
-                            lf_renderer_begin();
-                        }
-                        const vec2 verts_arr = {verts[i].x, verts[i].y};
-                        memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
+        if(!item_culled)  {
+            if(first_char_width == -1) { 
+                first_char_width = x - last_x;
+            }
+            // Adding the vertices to the batch if rendering the text
+            if(!no_render) {
+                vec2s texcoords[4] = {
+                    q.s0, q.t0, 
+                    q.s1, q.t0, 
+                    q.s1, q.t1, 
+                    q.s0, q.t1
+                };
+                vec2s verts[4] = {
+                    (vec2s){q.x0, q.y0 + max_descended_char_height}, 
+                    (vec2s){q.x1, q.y0 + max_descended_char_height}, 
+                    (vec2s){q.x1, q.y1 + max_descended_char_height},
+                    (vec2s){q.x0, q.y1 + max_descended_char_height}
+                }; 
+                for(uint32_t i = 0; i < 4; i++) {
+                    if(state.render.vert_count >= MAX_RENDER_BATCH) {
+                        lf_flush();
+                        lf_renderer_begin();
+                    }
+                    const vec2 verts_arr = {verts[i].x, verts[i].y};
+                    memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
 
-                        const vec4 border_color = {0, 0, 0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
+                    const vec4 border_color = {0, 0, 0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
 
-                        state.render.verts[state.render.vert_count].border_width = 0;
+                    state.render.verts[state.render.vert_count].border_width = 0;
 
-                        const vec4 color_arr = {color.r, color.g, color.b, color.a};
-                        memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
+                    const vec4 color_arr = {color.r, color.g, color.b, color.a};
+                    memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
 
-                        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
-                        memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+                    const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
+                    memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
 
-                        state.render.verts[state.render.vert_count].tex_index = tex_index;
+                    state.render.verts[state.render.vert_count].tex_index = tex_index;
 
-                        const vec2 scale_arr = {0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
+                    const vec2 scale_arr = {0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
 
-                        const vec2 pos_px_arr = {0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
+                    const vec2 pos_px_arr = {0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
 
-                        state.render.verts[state.render.vert_count].corner_radius = 0;
+                    state.render.verts[state.render.vert_count].corner_radius = 0;
 
-                        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
+                    const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
                         const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
                         memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
                         memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
@@ -1966,7 +1962,6 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
                 last_char_width = x - last_x;
                 last_x = x;
             }
-        }
     }
 
     // Populating the return value
@@ -2097,8 +2092,8 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
     lf_set_div_storage(true);
     lf_set_div_cull(true);
 
-    state.tex_arrow_down = load_texture_asset("arrow-down", "png");
-    state.tex_tick = load_texture_asset("tick", "png");
+    state.tex_arrow_down = lf_load_texture_asset("arrow-down", "png");
+    state.tex_tick = lf_load_texture_asset("tick", "png");
     
     setlocale(LC_CTYPE, "en_US.UTF-8");
 
@@ -2197,7 +2192,7 @@ LfTheme lf_default_theme() {
         .border_width = 0,
         .corner_radius = 0
     };
-    theme.font = load_font_asset("inter", "ttf", 24);
+    theme.font = lf_load_font_asset("inter", "ttf", 24);
 
     theme.div_scroll_max_veclocity = 100.0f; 
     theme.div_scroll_acceleration = 1.6f;
@@ -2580,7 +2575,7 @@ void lf_text_wide(const wchar_t* text) {
 
     // Advancing to the next line if the the text does not fit on the current div
     LfTextProps text_props = lf_text_render_wchar(state.pos_ptr, text, font, 
-                                            state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, true, text_color);
+                                            (state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1), true, text_color);
     next_line_on_overflow(
         (vec2s){text_props.width + padding * 2.0f + margin_left + margin_right,
             text_props.height + padding * 2.0f + margin_top + margin_bottom}, 
@@ -2593,7 +2588,7 @@ void lf_text_wide(const wchar_t* text) {
     // Rendering a colored text box if a color is specified
     // Rendering the text
     lf_text_render_wchar((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, 
-                   state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, false, text_color);
+                   (state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1), false, text_color);
 
     // Advancing the position pointer by the width of the text
     state.pos_ptr.x += text_props.width + margin_right + padding;

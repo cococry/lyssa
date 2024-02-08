@@ -161,6 +161,8 @@ void lf_resize_display(uint32_t display_width, uint32_t display_height);
 
 LfFont lf_load_font(const char* filepath, uint32_t size);
 
+LfFont lf_load_font_ex(const char* filepath, uint32_t size, uint32_t bitmap_w, uint32_t bitmap_h, uint32_t num_glyphs);
+
 LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering filter);
 
 LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
@@ -393,3 +395,8 @@ void lf_set_div_hoverable(bool hoverable);
 void lf_push_element_id(int64_t id);
 
 void lf_pop_element_id();
+
+
+LfFont lf_load_font_asset(const char* asset_name, const char* file_extension, uint32_t font_size);
+
+LfTexture lf_load_texture_asset(const char* asset_name, const char* file_extension); 
