@@ -276,6 +276,10 @@ void lf_set_ptr_x(float x);
 
 void lf_set_ptr_y(float y);
 
+void lf_set_ptr_x_absolute(float x);
+
+void lf_set_ptr_y_absolute(float y);
+
 float lf_get_ptr_x();
 
 float lf_get_ptr_y();

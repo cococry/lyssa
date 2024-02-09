@@ -344,6 +344,8 @@ static void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
     glViewport(0, 0, width, height);
     state.winWidth = width;
     state.winHeight = height;
+
+    state.trackProgressSlider._init = false;
 }
 void initWin(uint32_t width, uint32_t height) {
     state.winWidth = width;
@@ -463,6 +465,20 @@ void handleTabKeyStrokes() {
                 skipSoundDown(state.currentPlaylist);
             } else {
                 skipSoundUp(state.currentPlaylist);
+            }
+        }
+        if(lf_key_went_down(GLFW_KEY_LEFT)) {
+            if(state.currentSound.getPositionInSeconds() - 5 >= 0) {
+                state.currentSound.setPositionInSeconds(state.currentSound.getPositionInSeconds() - 5);
+                state.currentSoundPos = state.currentSound.getPositionInSeconds();
+                state.trackProgressSlider._init = false;
+            }
+        }
+        else if(lf_key_went_down(GLFW_KEY_RIGHT)) {
+            if(state.currentSound.getPositionInSeconds() + 5 <= state.currentSound.lengthInSeconds) {
+                state.currentSound.setPositionInSeconds(state.currentSound.getPositionInSeconds() + 5);
+                state.currentSoundPos = state.currentSound.getPositionInSeconds();
+                state.trackProgressSlider._init = false;
             }
         }
     }
@@ -1562,6 +1578,12 @@ void renderTrackDisplay() {
     lf_set_ptr_x(state.winWidth - containerSize.x - DIV_START_X - margin);
     lf_set_ptr_y(lf_get_ptr_y() - containerSize.y);
 
+    bool containerOverflow = false;
+    if(lf_get_ptr_x() - DIV_START_X < (state.winWidth - state.trackProgressSlider.width) / 2.0f + state.trackProgressSlider.width) {
+        containerSize.x = (state.winWidth - (state.winWidth + state.trackProgressSlider.width) / 2.0f) - margin * 4;
+        lf_set_ptr_x(state.winWidth - containerSize.x - DIV_START_X - margin);
+        containerOverflow = true;
+    }
     // Container 
     lf_rect_render(LF_PTR, containerSize, RGBA_COLOR(255, 255, 255, 50), LF_NO_COLOR, 0.0f, 5.0f);
 
@@ -1586,16 +1608,24 @@ void renderTrackDisplay() {
 
     // Track Name
     {
+        lf_set_cull_end_x(state.winWidth - DIV_START_X - (iconSizeXsm * 2.0f + iconSizeSm + 30));
+        lf_set_text_wrap(false);
+        lf_set_line_should_overflow(false);
         lf_set_ptr_x(lf_get_ptr_x() - DIV_START_X + thumbnailSize);
         LfUIElementProps props = lf_theme()->text_props;
         props.margin_top = (thumbnailSize - lf_text_dimension_wide(filename.c_str()).y) / 2.0f;
         lf_push_style_props(props);
         lf_text_wide(filename.c_str());
         lf_pop_style_props();
+        lf_unset_cull_end_x();
+        lf_set_text_wrap(true);
     }
 
     // Controls
     {
+        if(containerOverflow) {
+            lf_set_ptr_x_absolute(state.winWidth - DIV_START_X - (iconSizeXsm * 2.0f + iconSizeSm + 30));
+        }
         LfUIElementProps props = lf_theme()->button_props;
         props.color = LF_NO_COLOR;
         props.border_width = 0; 
@@ -1638,6 +1668,7 @@ void renderTrackDisplay() {
         }
         lf_pop_style_props();
     }
+        lf_set_line_should_overflow(true);
 }
 void renderTrackProgress() {
     if(state.currentSoundFile == NULL) return;

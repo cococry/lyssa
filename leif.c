@@ -1370,7 +1370,7 @@ bool lf_hovered(vec2s pos, vec2s size) {
 }
 
 void next_line_on_overflow(vec2s size, float xoffset) {
-    if(state.line_overflow) return;
+    if(!state.line_overflow) return;
 
     // If the object does not fit in the area of the current div, advance to the next line
     if(state.pos_ptr.x - state.current_div.aabb.pos.x + size.x > state.current_div.aabb.size.x) {
@@ -2063,10 +2063,11 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, LfTheme* them
     state.input.mouse.first_mouse_press = true;
     state.render.tex_count = 0;
     state.pos_ptr = (vec2s){0, 0};
-    state.text_wrap = false;
     state.props_on_stack = false;
     state.image_color_stack = LF_NO_COLOR;
     state.active_element_id = 0;
+    state.text_wrap = false;
+    state.line_overflow = true;
     if(theme != NULL) {
         state.theme = *theme;
     } else {
@@ -2604,6 +2605,13 @@ void lf_set_ptr_x(float x) {
 
 void lf_set_ptr_y(float y) {
     state.pos_ptr.y = y + state.current_div.aabb.pos.y;
+}
+void lf_set_ptr_x_absolute(float x) {
+    state.pos_ptr.x = x;
+}
+
+void lf_set_ptr_y_absolute(float y) {
+    state.pos_ptr.y = y;
 }
 float lf_get_ptr_x() {
     return state.pos_ptr.x;
