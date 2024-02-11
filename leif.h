@@ -224,6 +224,8 @@ void lf_div_end();
 #define lf_button(text) _lf_button_loc(text, __FILE__, __LINE__)
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line);
 
+vec2s lf_button_dimension(const char* text);
+
 #define lf_button_wide(text) _lf_button_loc_wide(text, __FILE__, __LINE__)
 LfClickableItemState _lf_button_loc_wide(const wchar_t* text, const char* file, int32_t line);
 

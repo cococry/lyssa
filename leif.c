@@ -2327,9 +2327,18 @@ double lf_get_mouse_scroll_y() {
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line) {
     return button_element_loc((void*)text, file, line, false);
 }
+
+vec2s lf_button_dimension(const char* text) {
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    float padding = props.padding;
+    vec2s text_dimension = lf_text_dimension(text);
+    return (vec2s){text_dimension.x + padding * 2.0f, text_dimension.y + padding * 2.0f};
+}
+
 LfClickableItemState _lf_button_loc_wide(const wchar_t* text, const char* file, int32_t line) {
     return button_element_loc((void*)text, file, line, true);
 }
+
 LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32_t line) {
     // Retrieving the property data of the button
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;

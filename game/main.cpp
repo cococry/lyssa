@@ -50,6 +50,9 @@
 #define MAX_PLAYLIST_NAME_LENGTH 16
 #define MAX_PLAYLIST_DESC_LENGTH 20 
 
+#define MAX(a, b) a > b ? a : b
+#define MIN(a, b) a < b ? a : b
+
 using namespace TagLib;
 
 enum class GuiTab {
@@ -1056,7 +1059,7 @@ void renderOnTrack() {
     lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), false);
 
     // Sound Thumbnail
-    const vec2s thumbnailContainerSize = (vec2s){350, 350};
+    const vec2s thumbnailContainerSize = (vec2s){state.winHeight / 2.0f, state.winHeight / 2.0f};
     {
         lf_set_ptr_x(((state.winWidth - thumbnailContainerSize.x) / 2.0f - DIV_START_X));
 
@@ -1131,8 +1134,11 @@ void renderOnTrack() {
 
     // Progress Bar 
     {
-        const vec2s progressBarSize = {400, 10}; 
-   
+        vec2s progressBarSize = {MAX(state.winWidth / 3.0f, 200), 10}; 
+        /*if(state.winWidth < state.trackProgressSlider.width) {
+            progressBarSize.x = state.winWidth - 20;
+        }*/ 
+         
         lf_set_ptr_x((state.winWidth - progressBarSize.x) / 2.0f - DIV_START_X);
         
         LfUIElementProps props = lf_theme()->slider_props;
@@ -1143,7 +1149,7 @@ void renderOnTrack() {
         props.border_width = 0;
         lf_push_style_props(props);
 
-        state.trackProgressSlider.width = 400;
+        state.trackProgressSlider.width = progressBarSize.x;
 
         vec2s posPtr = (vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top};
 
@@ -2221,7 +2227,6 @@ int main(int argc, char* argv[]) {
         // OpenGL color clearing 
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(LYSSA_BACKGROUND_COLOR.r, LYSSA_BACKGROUND_COLOR.g, LYSSA_BACKGROUND_COLOR.b, LYSSA_BACKGROUND_COLOR.a);
-        lf_begin();
         switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
@@ -2253,7 +2258,7 @@ int main(int argc, char* argv[]) {
                 lf_div_hide();
             }
         }
-        //lf_image((LfTexture){.id = state.musicTitleFont.bitmap.id, .width = 512, .height = 512});
+      
         lf_end();
 
         glfwPollEvents();
