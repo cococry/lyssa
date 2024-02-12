@@ -2,6 +2,7 @@
 #include <functional>
 #include <iostream>
 #include <filesystem>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -40,6 +41,9 @@
 
 #define DIV_START_X 20  
 #define DIV_START_Y 20
+
+#define WIN_START_W 1280 
+#define WIN_START_H 720 
 
 #define BACK_BUTTON_MARGIN_BOTTOM 50
 #define BACK_BUTTON_WIDTH 20 
@@ -203,7 +207,9 @@ struct GlobalState {
 
     LfSlider trackProgressSlider;
     LfSlider volumeSlider;
-    bool showVolumeSliderTrackDisplay = false;
+    bool showVolumeSliderTrackDisplay = false, showVolumeSliderOverride = false;
+
+    float volumeBeforeMute = 100.0f;
 };
 
 static GlobalState state;
@@ -253,7 +259,7 @@ static void                     skipSoundDown(uint32_t playlistIndex);
 
 static double                   getSoundDuration(const std::string& soundPath);
 static std::string              formatDurationToMins(int32_t duration);
-static LfTexture                getSoundThubmnail(const std::string& soundPath, vec2s size = (vec2s){-1, -1});
+static LfTexture                getSoundThubmnail(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
 static void                     updateSoundProgress();
 
 static std::string              removeFileExtension(const std::string& filename);
@@ -483,6 +489,34 @@ void handleTabKeyStrokes() {
                 state.currentSoundPos = state.currentSound.getPositionInSeconds();
                 state.trackProgressSlider._init = false;
             }
+        }
+        if(lf_key_went_down(GLFW_KEY_DOWN)) {
+           state.volumeSlider._init = false;
+           state.showVolumeSliderTrackDisplay = true;
+           state.showVolumeSliderOverride = true;
+            if(*(int32_t*)state.volumeSlider.val - 5 >= 0)
+                *(int32_t*)state.volumeSlider.val -= 5; 
+            else 
+                *(int32_t*)state.volumeSlider.val = 0;
+        }
+        if(lf_key_went_down(GLFW_KEY_UP)) {
+           state.volumeSlider._init = false;
+           state.showVolumeSliderTrackDisplay = true;
+           state.showVolumeSliderOverride = true;
+            if(*(int32_t*)state.volumeSlider.val + 5 <= 100)
+                *(int32_t*)state.volumeSlider.val += 5; 
+            else 
+                *(int32_t*)state.volumeSlider.val = 100;
+
+        }
+        if(lf_key_went_down(GLFW_KEY_M)) {
+            if(state.currentSound.volume != 0.0f) {
+                state.volumeBeforeMute = state.currentSound.volume;
+            }
+            state.currentSound.volume = (state.currentSound.volume != 0.0f) ? 0.0f : state.volumeBeforeMute;
+           state.volumeSlider._init = false;
+           state.showVolumeSliderTrackDisplay = true;
+           state.showVolumeSliderOverride = true;
         }
     }
 }
@@ -963,7 +997,7 @@ void renderOnPlaylist() {
                     lf_pop_style_props();
                 }
 
-                // Thumbnail + Title 
+                // Thumbnail + Title
                 {
                     float aspect = (float)file.thumbnail.width / (float)file.thumbnail.height;
                     float thumbnailHeight = thumbnailContainerSize.y / aspect; 
@@ -971,7 +1005,9 @@ void renderOnPlaylist() {
                     lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + marginTopThumbnail}, thumbnailContainerSize, 
                             RGBA_COLOR(40, 40, 40, 255), LF_NO_COLOR, 0.0f, 3.0f);
 
-                    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE, (LfTexture){.id = file.thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
+                    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + 
+                            (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE,
+                            (LfTexture){.id = file.thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
 
                     lf_set_ptr_x(lf_get_ptr_x() + thumbnailContainerSize.x);
                     lf_set_line_height(thumbnailContainerSize.y + marginBottomThumbnail);
@@ -979,9 +1015,9 @@ void renderOnPlaylist() {
                     std::filesystem::path fsPath(file.path);
                     std::wstring filename = removeFileExtensionW(fsPath.filename().wstring());
                     lf_set_cull_end_x(state.winWidth - DIV_START_X * 2.0f - 100);
-                    lf_text_render_wchar(LF_PTR, filename.c_str(), lf_theme()->font, -1, false, LF_WHITE);
+                    lf_text_render_wchar((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - lf_text_dimension_wide(filename.c_str()).y) / 2.0f}, filename.c_str(), lf_theme()->font, -1, false, LF_WHITE);
                     lf_unset_cull_end_x();
-                }
+                } 
 
 
                 if(state.playlistFileOptionsIndex == i) {
@@ -1005,9 +1041,13 @@ void renderOnPlaylist() {
                 // Duration 
                 {
                     lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
+                    LfUIElementProps props = lf_theme()->text_props;
+                    props.margin_top = (thumbnailContainerSize.y - lf_text_dimension(formatDurationToMins(file.duration).c_str()).y) / 2.0f;
+                    lf_push_style_props(props);
                     lf_text(formatDurationToMins(file.duration).c_str());
-                    lf_next_line();    
+                    lf_pop_style_props();
                 }
+                lf_next_line();    
             }
         }
         lf_div_end();
@@ -1054,12 +1094,24 @@ void renderOnPlaylist() {
     lf_div_end();
 }
 void renderOnTrack() {
+    const float iconSizeSm = 48;
+    const float iconSizeXsm = 36;
     OnTrackTab& tab = state.onTrackTab;
 
     lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth, (float)state.winHeight}), false);
 
     // Sound Thumbnail
-    const vec2s thumbnailContainerSize = (vec2s){state.winHeight / 2.0f, state.winHeight / 2.0f};
+    vec2s thumbnailContainerSize = (vec2s){state.winHeight / 2.0f, state.winHeight / 2.0f};
+    if(state.winWidth - 200 < thumbnailContainerSize.x) {
+        thumbnailContainerSize = (vec2s){state.winWidth / 2.0f, state.winWidth / 2.0f};
+    }
+
+    float ptr_y = lf_get_ptr_y();
+    if((state.winWidth - 200 < thumbnailContainerSize.x || state.winWidth > WIN_START_W) && state.winHeight > WIN_START_H) {
+        // Center the elements
+        lf_set_ptr_y_absolute((state.winHeight - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2 - 
+                    (thumbnailContainerSize.y + lf_theme()->font.font_size * 6 + state.trackProgressSlider.height + iconSizeSm)) / 2.0f);
+    }
     {
         lf_set_ptr_x(((state.winWidth - thumbnailContainerSize.x) / 2.0f - DIV_START_X));
 
@@ -1135,9 +1187,6 @@ void renderOnTrack() {
     // Progress Bar 
     {
         vec2s progressBarSize = {MAX(state.winWidth / 3.0f, 200), 10}; 
-        /*if(state.winWidth < state.trackProgressSlider.width) {
-            progressBarSize.x = state.winWidth - 20;
-        }*/ 
          
         lf_set_ptr_x((state.winWidth - progressBarSize.x) / 2.0f - DIV_START_X);
         
@@ -1166,9 +1215,8 @@ void renderOnTrack() {
 
     lf_next_line();
 
+    // Sound Controls
     {
-        const float iconSizeSm = 48;
-        const float iconSizeXsm = 36;
 
         LfUIElementProps props = lf_theme()->button_props;
         props.margin_left = 15;
@@ -1215,6 +1263,8 @@ void renderOnTrack() {
         }
         lf_pop_style_props();
     } 
+
+    lf_set_ptr_y_absolute(ptr_y);;
 
     backButtonTo(GuiTab::OnPlaylist, [&](){
             if(tab.trackThumbnail.width != 0)
@@ -1599,6 +1649,9 @@ void renderTrackDisplay() {
         lf_set_ptr_x(state.winWidth - containerSize.x + margin / 2.0f - DIV_START_X - margin);
         lf_set_ptr_y(lf_get_ptr_y() - DIV_START_Y + margin / 2.0f);
         if(lf_hovered(LF_PTR, (vec2s){thumbnailSize, thumbnailSize}) && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+            if(state.onTrackTab.trackThumbnail.width != 0)
+                lf_free_texture(state.onTrackTab.trackThumbnail);
+            state.onTrackTab.trackThumbnail = getSoundThubmnail(state.currentSoundFile->path);
             changeTabTo(GuiTab::OnTrack);
         }
         lf_rect_render(LF_PTR, 
@@ -1741,7 +1794,7 @@ void renderTrackProgress() {
         {
             LfUIElementProps props = lf_theme()->text_props;
             props.text_color = LYSSA_BLUE;
-            props.margin_top = 2.5f;
+                props.margin_top = 2.5f;
             lf_push_style_props(props);
             lf_text(state.playlists[state.playingPlaylist].name.c_str());
             lf_pop_style_props();
@@ -1781,11 +1834,14 @@ void renderTrackVolumeControl() {
         if(overControlArea && !state.showVolumeSliderTrackDisplay) {
             state.showVolumeSliderTrackDisplay = true; 
         }
-        else if(!overControlArea && !state.volumeSlider.held) {
+        else if(!overControlArea && !state.volumeSlider.held && !state.showVolumeSliderOverride) {
             state.showVolumeSliderTrackDisplay = false;
         }
         else if(soundButton == LF_CLICKED) { 
-            state.currentSound.volume = (state.currentSound.volume != 0.0f) ? 0.0f : 100;
+            if(state.currentSound.volume != 0.0f) {
+                state.volumeBeforeMute = state.currentSound.volume;
+            }
+            state.currentSound.volume = (state.currentSound.volume != 0.0f) ? 0.0f : state.volumeBeforeMute;
             state.volumeSlider._init = false;
         }
         lf_pop_style_props();
@@ -1979,7 +2035,7 @@ Playlist loadPlaylist(const std::filesystem::directory_entry& folder, bool loadF
                 files.push_back((SoundFile){
                         .path = path, 
                         .duration = static_cast<int32_t>(getSoundDuration(path)), 
-                        .thumbnail = getSoundThubmnail(path, (vec2s){48 * 1.5f, 27 * 1.5f})});
+                        .thumbnail = getSoundThubmnail(path, (vec2s){0.1, 0.1})});
             }
         }
     }
@@ -2103,7 +2159,7 @@ double getSoundDuration(const std::string& soundPath) {
     return duration;
 }
 
-LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size) {    
+LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size_factor) {    
     MPEG::File file(soundPath.c_str());
 
     LfTexture tex = {0};
@@ -2130,10 +2186,10 @@ LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size) {
 
     ByteVector imageData = apicFrame->picture();
     
-    if(size.x == -1)
+    if(size_factor.x == -1 || size_factor.y == -1)
         tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
     else 
-        tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, size.x, size.y);
+        tex = lf_load_texture_from_memory_resized_factor(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, size_factor.x, size_factor.y);
     
     return tex;
 }
@@ -2200,7 +2256,7 @@ std::string formatDurationToMins(int32_t duration) {
 }
 int main(int argc, char* argv[]) {
     // Initialization 
-    initWin(1280, 720); 
+    initWin(WIN_START_W, WIN_START_H); 
     initUI();
 
     if(!std::filesystem::exists(LYSSA_DIR)) { 

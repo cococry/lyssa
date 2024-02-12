@@ -678,6 +678,47 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, b
 
     return tex;
 }
+LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
+    LfTexture tex; 
+    int32_t width, height, channels;
+    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
+
+    int32_t w = wfactor * width;
+    int32_t h = hfactor * height;
+    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * channels);
+
+    // Resize the original image to the downscaled size
+    stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
+    glBindTexture(GL_TEXTURE_2D, tex.id);
+
+    switch(filter) {
+        case LF_TEX_FILTER_LINEAR:
+            glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            break;
+        case LF_TEX_FILTER_NEAREST:
+            glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            break;
+    }
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, downscaled_image);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    stbi_image_free(image_data);
+    free(downscaled_image);
+
+    tex.width = width;
+    tex.height = height;
+
+    return tex;
+
+}
 
 LfFont load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add) {
     LfFont font = {0};
@@ -2332,7 +2373,7 @@ vec2s lf_button_dimension(const char* text) {
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
     float padding = props.padding;
     vec2s text_dimension = lf_text_dimension(text);
-    return (vec2s){text_dimension.x + padding * 2.0f, text_dimension.y + padding * 2.0f};
+    return (vec2s){text_dimension.x + padding * 2.0f, text_dimension.y + padding};
 }
 
 LfClickableItemState _lf_button_loc_wide(const wchar_t* text, const char* file, int32_t line) {

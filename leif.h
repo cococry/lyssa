@@ -171,6 +171,8 @@ LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip
 
 LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
 
+LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor);
+
 void lf_free_texture(LfTexture tex);
 
 void lf_free_font(LfFont* font);
