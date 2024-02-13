@@ -1,15 +1,40 @@
-CC=cc
-INCS=`pkg-config --cflags glfw3 cglm` -Ivendor/glad/include -Ivendor/stb_image/ -Ivendor/stb_truetype -Ivendor/stb_image_resize
-CFLAGS+=${INCS} -DLF_GLFW -O3 -ffast-math 
-all: bin/leif.a
+CPP=g++
+INCS=-Ivendor/miniaudio -Ivendor/leif/include -Ivendor/leif/vendor/glad/include
+LIBS=-lleif -Lvendor/leif/lib -lglfw -ltag -lm
+CFLAGS=-O3 -ffast-math -DGLFW_INCLUDE_NONE 
 
-bin/leif.a: bin/leif.o
-	ar rcs bin/libleif.a bin/*.o
-bin/leif.o: bin
-	${CC} -c ${CFLAGS} leif.c -o bin/leif.o
+LEIF_LIB_DIR := ./vendor/leif/lib/
+
+.PHONY: check-leif leif build 
+
+all: check-leif build  
+
+check-leif:
+	@if [ ! -d $(LEIF_LIB_DIR) ]; then \
+		echo "[INFO] Building leif."; \
+        $(MAKE) leif; \
+    else \
+		echo "[INFO]: Leif already built."; \
+    fi
+
+leif:
+	$(MAKE) -C ./vendor/leif/
+
+build: bin
+	${CPP} ${CFLAGS} src/*.cpp -o bin/lyssa ${INCS} ${LIBS} 
+
 bin:
 	mkdir bin
-clean:
-	rm -r ./bin
 
-.PHONY: all test clean
+clean:
+	rm -rf ./bin 
+	rm -rf ./vendor/leif/lib 
+
+run: 
+	cd ./bin && ./lyssa
+
+rebuild:
+	$(MAKE) clean
+	$(MAKE) leif
+	$(MAKE) build 
+
