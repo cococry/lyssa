@@ -1,3 +1,4 @@
 bin/
 vendor/leif/lib 
 *.json
+.cache
