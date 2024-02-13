@@ -10,11 +10,10 @@ The Lyssa application is written in C++ 17. It uses the [Leif Library](https://g
 written in C, for the entire User Interface of the Application. For windowing, the [GLFW Library](https://github.com/glfw/glfw) is used. Additionally, Lyssa depends on [taglib](https://github.com/taglib/taglib) for handling 
 ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https://github.com/mackron/miniaudio).
 
-<div style="display: flex;">
-    <img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-playlist.png" alt="On Playlist Tab" style="height: 320px; margin-right: 20px;">
-    <img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-track.png" alt="On Track Tab" style="height: 320px;">
+<div>
+    <img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-playlist.png" alt="Alt text" style="height:320px;">
+    <img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-track.png" alt="Alt text" style="height:320px;">
 </div>
-
 # Dependencies 
 
 #### Dependency List
