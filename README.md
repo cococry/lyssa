@@ -14,6 +14,7 @@ ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https:
     <img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-playlist.png" alt="Alt text" style="height:320px;">
     <img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-track.png" alt="Alt text" style="height:320px;">
 </div>
+
 # Dependencies 
 
 #### Dependency List
