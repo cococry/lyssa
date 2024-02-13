@@ -2,9 +2,6 @@
 #include <functional>
 #include <iostream>
 #include <filesystem>
-#include <iterator>
-#include <sstream>
-#include <string>
 #include <vector>
 
 #include <glad/glad.h>
@@ -12,9 +9,6 @@
 extern "C" {
     #include <leif.h>
 }
-
-#define MINIAUDIO_IMPLEMENTATION
-#include <miniaudio.h>
 
 #include <taglib/tag.h>
 #include <taglib/fileref.h>
@@ -24,6 +18,11 @@ extern "C" {
 #include <taglib/mpegheader.h>
 #include <taglib/attachedpictureframe.h>
 #include <taglib/tfile.h>
+
+#include <miniaudio.h>
+
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef _WIN32
 #define HOMEDIR "USERPROFILE"
@@ -62,6 +61,7 @@ extern "C" {
 #define MIN(a, b) a < b ? a : b
 
 using namespace TagLib;
+
 
 enum class GuiTab {
     Dashboard = 0, 

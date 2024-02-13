@@ -1,6 +1,6 @@
 CPP=g++
 INCS=-Ivendor/miniaudio -Ivendor/leif/include -Ivendor/leif/vendor/glad/include
-LIBS=-lleif -Lvendor/leif/lib -lglfw -ltag -lm
+LIBS=-lleif -Lvendor/leif/lib -lglfw -ltag -lm -Lvendor/miniaudio/lib -lminiaudio
 CFLAGS=-O3 -ffast-math -DGLFW_INCLUDE_NONE 
 
 LEIF_LIB_DIR := ./vendor/leif/lib/
@@ -21,6 +21,7 @@ leif:
 	$(MAKE) -C ./vendor/leif/
 
 build: bin
+	@echo "[INFO]: Building Lyssa."
 	${CPP} ${CFLAGS} src/*.cpp -o bin/lyssa ${INCS} ${LIBS} 
 
 bin:
