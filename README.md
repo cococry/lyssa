@@ -59,44 +59,27 @@ As lyssa uses the leif library which also depends on a few things there are four
 ## Build Instructions
 
 ### Notes 
-- The building process will be reworked entirely in the future
 - Lyssa is currently only able to build (easily) on linux system at the moment
 
 ### Installation
-
-Clone the repository:
-```console
-git clone https://github.com/cococry/lyssa
-```
 
 Install dependencies: 
 
 #### Arch: 
 ```console
-sudo pacman -S glfw-x11 cglm taglib
+sudo pacman -S make gccglfw-x11 cglm taglib
 ```
 
 #### Debian
 ```console
-sudo apt install libglfw3 libglfw3-dev libcglm-dev libtag1-dev
+sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev
 ```
-
-Run the install script:
+Build the application
 ```console
-cd lyssa/scripts
-./install.sh
+make
 ```
 
 ### Running the Application
-
-Run the build_run script
 ```console
-cd lyssa/scripts
-./build_run.sh
-```
-
-Or run the run_game script
-```console
-cd lyssa/scripts
-./run_game
+make run 
 ```
