@@ -1,7 +1,5 @@
 # Lyssa
 
-<img src="https://github.com/cococry/lyssa/blob/main/Lyssa.png"  /> 
-<img src="https://github.com/cococry/lyssa/blob/main/lyssa-app2.png" width="1000"  /> 
 
 ## Overview
 
@@ -27,6 +25,8 @@ As lyssa uses the leif library which also depends on a few things there are four
 - [stb_truetype](https://github.com/nothings/stb/blob/master/stb_truetype.h)
 - [glad](https://github.com/Dav1dde/glad)
 
+<img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-playlist.png"  width ="550px"/> 
+<img src="https://github.com/cococry/lyssa/blob/main/branding/app-on-track.png"  width="400px"/> 
 
 ## Features
 
