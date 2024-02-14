@@ -65,9 +65,9 @@ As lyssa uses the leif library which also depends on a few things there are four
 
 Install dependencies: 
 
-#### Arch: 
+#### Arch (paru): 
 ```console
-sudo pacman -S make gccglfw-x11 cglm taglib
+sudo paru -S make gcc glfw cglm taglib
 ```
 
 #### Debian
