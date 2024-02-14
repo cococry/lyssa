@@ -219,7 +219,7 @@ LfFont                          load_font(const char* filepath, uint32_t pixelsi
 static void                     next_line_on_overflow(vec2s size, float xoffset);
 static bool                     area_hovered(vec2s pos, vec2s size);
 static LfFont                   get_current_font(); 
-static bool                     item_should_cull();
+static bool                     item_should_cull(vec2s size);
 
 static LfClickableItemState     button_element_loc(void* text, const char* file, int32_t line, bool wide);
 static LfClickableItemState     button_fixed_element_loc(void* text, int32_t width, int32_t height, const char* file, int32_t line, bool wide);
@@ -823,7 +823,7 @@ LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s siz
         return LF_IDLE;
     }
 
-    if(item_should_cull()) {
+    if(item_should_cull((vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f})) {
         return LF_IDLE;
     }
 
@@ -864,7 +864,7 @@ LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props
         return LF_IDLE;
     }
 
-    if(item_should_cull()) {
+    if(item_should_cull(size)) {
         return LF_IDLE;
     }
 
@@ -1015,7 +1015,7 @@ void glfw_char_callback(GLFWwindow* window, uint32_t charcode) {
 #endif
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius) {
-    if(item_should_cull()) {
+    if(item_should_cull(size)) {
         return;
     }
     // Offsetting the postion, so that pos is the top left of the rendered object
@@ -1083,7 +1083,7 @@ void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, floa
 }
 
 void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width, float corner_radius) {
-    if(item_should_cull()) {
+    if(item_should_cull((vec2s){tex.width, tex.height})) {
         return;
     }
     if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
@@ -1434,13 +1434,13 @@ LfFont get_current_font() {
     return state.font_stack ? *state.font_stack : state.theme.font;
 }
 
-bool item_should_cull() {
+bool item_should_cull(vec2s size) {
     if(state.div_storage && state.div_cull) {
         LfDiv* selected_div = &state.divs[state.selected_div_id];
-        if(((state.pos_ptr.y > state.dsp_h 
-            || state.pos_ptr.x > state.dsp_w) || 
-            (state.pos_ptr.y < 0 || 
-            state.pos_ptr.x < 0))  && 
+        if(((state.pos_ptr.y  > state.dsp_h + size.y 
+            || state.pos_ptr.x  > state.dsp_w + size.x) || 
+            (state.pos_ptr.y < -size.y || 
+            state.pos_ptr.x < -size.x))  && 
             state.current_div.id == state.scrollbar_div) {
             return true;
         }
@@ -1775,8 +1775,6 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
 
     int32_t height = get_max_char_height_font(font);
     float width = 0;
-    
-    bool item_culled = item_should_cull();
 
     while(*str) { 
         bool skip = false;
@@ -1798,66 +1796,64 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
             stbtt_aligned_quad q;
             stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, *str-32, &x, &y, &q, 1);
 
-            if(!item_culled)  {
-                if(first_char_width == -1) { 
-                    first_char_width = x - last_x;
-                }
-                // Adding the vertices to the batch if rendering the text
-                if(!no_render) {
-                    vec2s texcoords[4] = {
-                        q.s0, q.t0, 
-                        q.s1, q.t0, 
-                        q.s1, q.t1, 
-                        q.s0, q.t1
-                    };
-                    vec2s verts[4] = {
-                        (vec2s){q.x0, q.y0 + max_descended_char_height}, 
-                        (vec2s){q.x1, q.y0 + max_descended_char_height}, 
-                        (vec2s){q.x1, q.y1 + max_descended_char_height},
-                        (vec2s){q.x0, q.y1 + max_descended_char_height}
-                    }; 
-                    for(uint32_t i = 0; i < 4; i++) {
-                        if(state.render.vert_count >= MAX_RENDER_BATCH) {
-                            lf_flush();
-                            lf_renderer_begin();
-                        }
-                        const vec2 verts_arr = {verts[i].x, verts[i].y};
-                        memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
-
-                        const vec4 border_color = {0, 0, 0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
-
-                        state.render.verts[state.render.vert_count].border_width = 0;
-
-                        const vec4 color_arr = {color.r, color.g, color.b, color.a};
-                        memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-
-                        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
-                        memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
-
-                        state.render.verts[state.render.vert_count].tex_index = tex_index;
-
-                        const vec2 scale_arr = {0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
-
-                        const vec2 pos_px_arr = {0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
-
-                        state.render.verts[state.render.vert_count].corner_radius = 0;
-
-                        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
-                        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
-                        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-                        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
-
-                        state.render.vert_count++;
-                    }
-                    state.render.index_count += 6;
-
-                }
-                last_char_width = x - last_x;
-                last_x = x;
+            if(first_char_width == -1) { 
+                first_char_width = x - last_x;
             }
+            // Adding the vertices to the batch if rendering the text
+            if(!no_render) {
+                vec2s texcoords[4] = {
+                    q.s0, q.t0, 
+                    q.s1, q.t0, 
+                    q.s1, q.t1, 
+                    q.s0, q.t1
+                };
+                vec2s verts[4] = {
+                    (vec2s){q.x0, q.y0 + max_descended_char_height}, 
+                    (vec2s){q.x1, q.y0 + max_descended_char_height}, 
+                    (vec2s){q.x1, q.y1 + max_descended_char_height},
+                    (vec2s){q.x0, q.y1 + max_descended_char_height}
+                }; 
+                for(uint32_t i = 0; i < 4; i++) {
+                    if(state.render.vert_count >= MAX_RENDER_BATCH) {
+                        lf_flush();
+                        lf_renderer_begin();
+                    }
+                    const vec2 verts_arr = {verts[i].x, verts[i].y};
+                    memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
+
+                    const vec4 border_color = {0, 0, 0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
+
+                    state.render.verts[state.render.vert_count].border_width = 0;
+
+                    const vec4 color_arr = {color.r, color.g, color.b, color.a};
+                    memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
+
+                    const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
+                    memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+
+                    state.render.verts[state.render.vert_count].tex_index = tex_index;
+
+                    const vec2 scale_arr = {0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
+
+                    const vec2 pos_px_arr = {0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
+
+                    state.render.verts[state.render.vert_count].corner_radius = 0;
+
+                    const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
+                    const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
+                    memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+                    memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+
+                    state.render.vert_count++;
+                }
+                state.render.index_count += 6;
+
+            }
+            last_char_width = x - last_x;
+            last_x = x;
         }
         str++;
     }
@@ -1918,7 +1914,6 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
     int32_t height = get_max_char_height_font(font);
     float width = 0;
     
-    bool item_culled = item_should_cull();
 
     uint32_t i = 0;
     for(; str[i] != L'\0'; i++) { 
@@ -1943,66 +1938,64 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
         stbtt_aligned_quad q;
         stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
 
-        if(!item_culled)  {
-            if(first_char_width == -1) { 
-                first_char_width = x - last_x;
-            }
-            // Adding the vertices to the batch if rendering the text
-            if(!no_render) {
-                vec2s texcoords[4] = {
-                    q.s0, q.t0, 
-                    q.s1, q.t0, 
-                    q.s1, q.t1, 
-                    q.s0, q.t1
-                };
-                vec2s verts[4] = {
-                    (vec2s){q.x0, q.y0 + max_descended_char_height}, 
-                    (vec2s){q.x1, q.y0 + max_descended_char_height}, 
-                    (vec2s){q.x1, q.y1 + max_descended_char_height},
-                    (vec2s){q.x0, q.y1 + max_descended_char_height}
-                }; 
-                for(uint32_t i = 0; i < 4; i++) {
-                    if(state.render.vert_count >= MAX_RENDER_BATCH) {
-                        lf_flush();
-                        lf_renderer_begin();
-                    }
-                    const vec2 verts_arr = {verts[i].x, verts[i].y};
-                    memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
-
-                    const vec4 border_color = {0, 0, 0, 0};
-                    memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
-
-                    state.render.verts[state.render.vert_count].border_width = 0;
-
-                    const vec4 color_arr = {color.r, color.g, color.b, color.a};
-                    memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-
-                    const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
-                    memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
-
-                    state.render.verts[state.render.vert_count].tex_index = tex_index;
-
-                    const vec2 scale_arr = {0, 0};
-                    memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
-
-                    const vec2 pos_px_arr = {0, 0};
-                    memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
-
-                    state.render.verts[state.render.vert_count].corner_radius = 0;
-
-                    const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
-                        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
-                        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-                        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
-
-                        state.render.vert_count++;
-                    }
-                    state.render.index_count += 6;
-
+        if(first_char_width == -1) { 
+            first_char_width = x - last_x;
+        }
+        // Adding the vertices to the batch if rendering the text
+        if(!no_render) {
+            vec2s texcoords[4] = {
+                q.s0, q.t0, 
+                q.s1, q.t0, 
+                q.s1, q.t1, 
+                q.s0, q.t1
+            };
+            vec2s verts[4] = {
+                (vec2s){q.x0, q.y0 + max_descended_char_height}, 
+                (vec2s){q.x1, q.y0 + max_descended_char_height}, 
+                (vec2s){q.x1, q.y1 + max_descended_char_height},
+                (vec2s){q.x0, q.y1 + max_descended_char_height}
+            }; 
+            for(uint32_t i = 0; i < 4; i++) {
+                if(state.render.vert_count >= MAX_RENDER_BATCH) {
+                    lf_flush();
+                    lf_renderer_begin();
                 }
-                last_char_width = x - last_x;
-                last_x = x;
+                const vec2 verts_arr = {verts[i].x, verts[i].y};
+                memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
+
+                const vec4 border_color = {0, 0, 0, 0};
+                memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
+
+                state.render.verts[state.render.vert_count].border_width = 0;
+
+                const vec4 color_arr = {color.r, color.g, color.b, color.a};
+                memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
+
+                const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
+                memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+
+                state.render.verts[state.render.vert_count].tex_index = tex_index;
+
+                const vec2 scale_arr = {0, 0};
+                memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
+
+                const vec2 pos_px_arr = {0, 0};
+                memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
+
+                state.render.verts[state.render.vert_count].corner_radius = 0;
+
+                const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
+                const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
+                memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+                memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+
+                state.render.vert_count++;
             }
+            state.render.index_count += 6;
+
+        }
+        last_char_width = x - last_x;
+        last_x = x;
     }
 
     // Populating the return value
@@ -2438,15 +2431,15 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable) {
 
     state.div_props = props;
 
-    if(state.divs[state.div_index_ptr].aabb.pos.x != pos.x - props.padding || state.divs[state.div_index_ptr].aabb.pos.y != 
-        pos.y - props.padding || state.divs[state.div_index_ptr].aabb.size.x != size.x + props.padding * 2.0f || 
-        state.divs[state.div_index_ptr].aabb.size.y != size.y + props.padding * 2.0f) {
+    if(state.divs[state.div_index_ptr].aabb.pos.x != pos.x|| state.divs[state.div_index_ptr].aabb.pos.y != 
+        pos.y|| state.divs[state.div_index_ptr].aabb.size.x != size.x || 
+        state.divs[state.div_index_ptr].aabb.size.y != size.y) {
         state.divs[state.div_index_ptr].scroll = 0;
         state.divs[state.div_index_ptr].scroll_velocity = 0;
     }
     // Updating the aabb
-    state.divs[state.div_index_ptr].aabb.pos = (vec2s){pos.x - props.padding, pos.y - props.padding};
-    state.divs[state.div_index_ptr].aabb.size = (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f};
+    state.divs[state.div_index_ptr].aabb.pos = (vec2s){pos.x, pos.y};
+    state.divs[state.div_index_ptr].aabb.size = (vec2s){size.x, size.y};
 
     LfDiv div = state.divs[state.div_index_ptr];
     div.init = true;
@@ -2469,11 +2462,11 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable) {
         }
     }
 
-    state.pos_ptr = pos; 
+    state.pos_ptr = (vec2s){pos.x + props.padding, pos.y + props.padding}; 
     state.current_div = div;
 
-    div.interact_state = div_container((vec2s){pos.x - props.padding, pos.y - props.padding}, 
-                                                      (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, props, props.color, props.border_width, false, state.div_hoverable);
+    div.interact_state = div_container((vec2s){pos.x, pos.y}, 
+                                                      (vec2s){size.x, size.y}, props, props.color, props.border_width, false, state.div_hoverable);
 
     // Culling & Scrolling
     if(state.div_storage && div.scrollable) {
@@ -2481,8 +2474,8 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable) {
     } else {
         lf_set_ptr_y(props.border_width + props.corner_radius);
     }
-    state.cull_start = (vec2s){pos.x, pos.y + props.border_width};
-    state.cull_end = (vec2s){pos.x + size.x - props.border_width, pos.y + size.y - props.border_width};
+    state.cull_start = (vec2s){pos.x + props.border_width + props.padding, pos.y + props.border_width + props.padding};
+    state.cull_end = (vec2s){pos.x + size.x - (props.border_width + props.padding), pos.y + size.y - (props.border_width + props.padding)};
 
     state.current_div = div;
 
@@ -2550,7 +2543,7 @@ void lf_div_end() {
 }
 
 void lf_next_line() {
-    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.border_width;
+    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.border_width + state.div_props.padding;
     state.pos_ptr.y += state.current_line_height;
     state.current_line_height = 0;
     state.gui_re_ev.happened = true;
