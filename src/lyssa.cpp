@@ -816,17 +816,17 @@ void renderOnPlaylist() {
         // "Add More" button
         {
             lf_push_font(&state.h5Font);
-            const char* text = "Add more Music";
+            const char* text = "Add more music";
 
             float textWidth = lf_text_dimension(text).x;
 
             LfUIElementProps props = lf_theme()->button_props;
-            props.color = RGBA_COLOR(255, 255, 255, 120);
+            props.color = RGB_COLOR(200, 200, 200);
             props.text_color = LF_BLACK;
             props.padding = 10;
             props.border_width = 0;
             props.corner_radius = 5.5f;
-            props.margin_top = 15;
+            props.margin_top = 5;
             props.margin_left = 0;
 
             // Rendering the button in the top right
