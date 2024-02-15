@@ -25,7 +25,7 @@ ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https:
 | [GLFW](https://github.com/glfw/glfw) | Handling windowing, input etc. | 
 
 
-As lyssa uses the leif library which also depends on a few things there are four more leif dependecies:
+As lyssa uses the leif library which also depends on a few things there are some more leif dependecies:
 #### Leif Dependencies 
 
 | Dependency         |  Reason of Usage    |
