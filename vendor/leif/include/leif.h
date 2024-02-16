@@ -134,18 +134,17 @@ typedef struct {
     bool div_smooth_scroll;
     float div_scroll_acceleration, div_scroll_max_veclocity;
     float div_scroll_amount_px;
+
+    float scrollbar_width;
 } LfTheme;
 
 typedef struct {
-    int32_t id;
-
+    uint64_t id;
     LfAABB aabb;
     LfClickableItemState interact_state;
 
-    bool init, hidden, scrollable;
+    bool scrollable;
     
-    float scroll, scroll_velocity;
-
     vec2s total_area;
 } LfDiv;
 
@@ -165,13 +164,20 @@ LfFont lf_load_font_ex(const char* filepath, uint32_t size, uint32_t bitmap_w, u
 
 LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering filter);
 
+unsigned char* lf_load_texture_data(const char* filepath, bool flip, int32_t* width, int32_t* height, int32_t* channels);
+
 LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
+
+unsigned char* lf_load_texture_data_resized(const char* filepath, bool flip, int32_t w, int32_t h, int32_t* channels);
 
 LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip, LfTextureFiltering filter);
 
 LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
 
+unsigned char* lf_load_texture_data_resized(const char* filepath, bool flip, int32_t w, int32_t h, int32_t* channels);
+
 LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor);
+
 
 void lf_free_texture(LfTexture tex);
 
@@ -219,7 +225,16 @@ double lf_get_mouse_scroll_x();
 
 double lf_get_mouse_scroll_y();
 
-LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable);
+#define lf_div_begin(pos, size, scrollable) {\
+    static float scroll = 0.0f; \
+    static float scroll_velocity = 0.0f; \
+    _lf_div_begin_loc(pos, size, scrollable, &scroll, &scroll_velocity, __FILE__, __LINE__);\
+}
+
+#define lf_div_begin_ex(pos, size, scrollable, scroll_ptr, scroll_velocity_ptr) _lf_div_begin_loc(pos, size, scrollable, scroll_ptr, scroll_velocity_ptr, __FILE__, __LINE__);
+
+LfDiv _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, 
+        float* scroll_velocity, const char* file, int32_t line);
 
 void lf_div_end();
 
@@ -229,16 +244,19 @@ LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t 
 vec2s lf_button_dimension(const char* text);
 
 #define lf_button_wide(text) _lf_button_loc_wide(text, __FILE__, __LINE__)
-LfClickableItemState _lf_button_loc_wide(const wchar_t* text, const char* file, int32_t line);
+LfClickableItemState _lf_button_wide_loc(const wchar_t* text, const char* file, int32_t line);
 
 #define lf_image_button(img) _lf_image_button_loc(img, __FILE__, __LINE__)
 LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32_t line);
+
+#define lf_image_button_fixed(img, width, height) _lf_image_button_fixed_loc(img, width, height, __FILE__, __LINE__)
+LfClickableItemState _lf_image_button_fixed_loc(LfTexture img, int32_t width, int32_t height, const char* file, int32_t line);
 
 #define lf_button_fixed(text, width, height) _lf_button_fixed_loc(text, width, height, __FILE__, __LINE__)
 LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32_t height, const char* file, int32_t line);
 
 #define lf_button_fixed_wide(text, width, height) _lf_button_fixed_loc_wide(text, width, height, __FILE__, __LINE__)
-LfClickableItemState _lf_button_fixed_loc_wide(const wchar_t* text, int32_t width, int32_t height, const char* file, int32_t line);
+LfClickableItemState _lf_button_fixed_wide_loc(const wchar_t* text, int32_t width, int32_t height, const char* file, int32_t line);
 
 #define lf_slider_int(slider) _lf_slider_int_loc(slider, __FILE__, __LINE__)
 LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int32_t line);
@@ -255,8 +273,8 @@ LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* f
 #define lf_checkbox(text, val, tick_color, tex_color) _lf_checkbox_loc(text, val, tick_color, tex_color, __FILE__, __LINE__)
 LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line);
 
-#define lf_checkbox_wide(text, val, tick_color, tex_color) _lf_checkbox_loc_wide(text, val, tick_color, tex_color, __FILE__, __LINE__)
-LfClickableItemState _lf_checkbox_loc_wide(const wchar_t* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line);
+#define lf_checkbox_wide(text, val, tick_color, tex_color) _lf_checkbox_wide_loc(text, val, tick_color, tex_color, __FILE__, __LINE__)
+LfClickableItemState _lf_checkbox_wide_loc(const wchar_t* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line);
 
 void lf_next_line();
 
@@ -269,8 +287,6 @@ float lf_get_text_end(const char* str, float start_x);
 void lf_text(const char* text);
 
 void lf_text_wide(const wchar_t* text);
-
-vec2s lf_get_div_size();
 
 LfDiv lf_get_current_div();
 
@@ -380,16 +396,6 @@ void lf_unset_cull_end_x();
 
 void lf_unset_cull_end_y();
 
-void lf_div_hide();
-
-void lf_div_hide_index(uint32_t i);
-
-uint32_t lf_get_div_count();
-
-LfDiv* lf_get_divs();
-
-void lf_set_div_storage(bool storage);
-
 void lf_set_div_cull(bool cull);
 
 void lf_set_line_height(uint32_t line_height);
@@ -411,3 +417,7 @@ LfTexture lf_load_texture_asset(const char* asset_name, const char* file_extensi
 LfTheme lf_get_theme();
 
 void lf_set_theme(LfTheme theme);
+
+void lf_set_current_div_scroll(float scroll); 
+
+void lf_set_current_div_scroll_velocity(float scroll_velocity); 

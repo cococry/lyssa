@@ -178,16 +178,19 @@ typedef struct {
     
     vec2s cull_start, cull_end;
 
-    LfDiv* divs;
-    uint32_t div_capacity, div_count;
-
-    uint32_t div_index_ptr, selected_div_id, scrollbar_div;
-
     LfTexture tex_arrow_down, tex_tick;
 
-    bool div_storage, div_cull, text_wrap, line_overflow, div_hoverable;
+    bool div_cull, text_wrap, line_overflow, div_hoverable;
 
     uint64_t active_element_id;
+
+    float* scroll_velocity_ptr;
+    float* scroll_ptr;
+
+    LfDiv selected_div, selected_div_tmp, scrollbar_div;
+
+
+    bool entered_div;
 } LfState;
 
 typedef enum {
@@ -219,7 +222,7 @@ LfFont                          load_font(const char* filepath, uint32_t pixelsi
 static void                     next_line_on_overflow(vec2s size, float xoffset);
 static bool                     area_hovered(vec2s pos, vec2s size);
 static LfFont                   get_current_font(); 
-static bool                     item_should_cull(vec2s size);
+static bool                     item_should_cull();
 
 static LfClickableItemState     button_element_loc(void* text, const char* file, int32_t line, bool wide);
 static LfClickableItemState     button_fixed_element_loc(void* text, int32_t width, int32_t height, const char* file, int32_t line, bool wide);
@@ -247,9 +250,6 @@ static void                     update_input();
 static void                     clear_events();
 
 static uint64_t                 djb2_hash(uint64_t hash, const void* buf, size_t size);
-
-static void                     div_push(LfDiv* arr, uint32_t* capacity, uint32_t* count, LfDiv div);
-
 
 // --- Static Functions --- 
 uint32_t shader_create(GLenum type, const char* src) {
@@ -519,8 +519,7 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
     // Loading the texture into memory with stb_image
     LfTexture tex;
     int32_t width, height, channels;
-    stbi_set_flip_vertically_on_load(flip);
-    stbi_uc* data = stbi_load(filepath, &width, &height, &channels, 0);
+    stbi_uc* data = lf_load_texture_data(filepath, flip, &width, &height, &channels);
 
     if(!data) {
         LF_ERROR("Failed to load texture file at '%s'.", filepath);
@@ -532,7 +531,8 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
     LF_ASSERT(internal_format & data_format, "Texture file at '%s' is using an unsupported format.", filepath);
     
     // Creating the textures in opengl with the loaded data
-    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
+    glGenTextures(1, &tex.id);
+    glBindTexture(GL_TEXTURE_2D, tex.id);
     glTextureStorage2D(tex.id, 1, internal_format, width, height);
     
     // Setting texture parameters
@@ -558,12 +558,19 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
 
     return tex;
 }
+
+unsigned char* lf_load_texture_data(const char* filepath, bool flip, int32_t* width, int32_t* height, int32_t* channels) {
+    LfTexture tex;
+    stbi_set_flip_vertically_on_load(flip);
+    stbi_uc* data = stbi_load(filepath, width, height, channels, 0);
+    return data;
+}
+
 LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
     // Loading the texture into memory with stb_image
     LfTexture tex;
-    int32_t width, height, channels;
-    stbi_set_flip_vertically_on_load(flip);
-    stbi_uc* data = stbi_load(filepath, &width, &height, &channels, 0);
+    int32_t channels;
+    stbi_uc* data = lf_load_texture_data_resized(filepath, flip, w, h, &channels);
 
     if(!data) {
         LF_ERROR("Failed to load texture file at '%s'.", filepath);
@@ -574,13 +581,9 @@ LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFilt
     
     LF_ASSERT(internal_format & data_format, "Texture file at '%s' is using an unsupported format.", filepath);
 
-    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * channels);
-
-    // Resize the original image to the downscaled size
-    stbir_resize_uint8_linear(data, width, height, channels, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
-
     // Creating the textures in opengl with the loaded data
-    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
+    glGenTextures(1, &tex.id);
+    glBindTexture(GL_TEXTURE_2D, tex.id);
     glTextureStorage2D(tex.id, 1, internal_format, w, h);
     
     // Setting texture parameters
@@ -596,23 +599,32 @@ LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFilt
     }
     glTextureParameteri(tex.id, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTextureParameteri(tex.id, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTextureSubImage2D(tex.id, 0, 0, 0, w, h, data_format, GL_UNSIGNED_BYTE, downscaled_image);
+    glTextureSubImage2D(tex.id, 0, 0, 0, w, h, data_format, GL_UNSIGNED_BYTE, data);
     
     // Deallocating the data when finished
     stbi_image_free(data);
-    free(downscaled_image);
 
-    tex.width = width;
-    tex.height = height;
+    tex.width = w;
+    tex.height = h;
 
     return tex;
 }
+
+unsigned char* lf_load_texture_data_resized(const char* filepath, bool flip,int32_t w, int32_t h, int32_t* channels) {
+    int32_t width, height;
+    stbi_uc* data = lf_load_texture_data(filepath, flip, &width, &height, channels);
+    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
+    stbir_resize_uint8_linear(data, width, height, *channels, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
+    stbi_image_free(data);
+    return downscaled_image;
+}
+
 LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip, LfTextureFiltering filter) {
     LfTexture tex; 
     int32_t width, height, channels;
     stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
+    glGenTextures(1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
 
     switch(filter) {
@@ -650,7 +662,7 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, b
     // Resize the original image to the downscaled size
     stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
+    glGenTextures(1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
 
     switch(filter) {
@@ -690,7 +702,7 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t 
     // Resize the original image to the downscaled size
     stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
+    glGenTextures(1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
 
     switch(filter) {
@@ -707,7 +719,7 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, downscaled_image);
+    glTexImage2D(GL_TEXTURE_2D, 0, channels == 3 ? GL_RGB : GL_RGBA, w, h, 0, channels == 3 ? GL_RGB8 : GL_RGBA8, GL_UNSIGNED_BYTE, downscaled_image);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     stbi_image_free(image_data);
@@ -818,19 +830,14 @@ LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s siz
     if(state.element_id_stack != -1) {
         id = djb2_hash(id, &state.element_id_stack, sizeof(state.element_id_stack));
     }
-    if(!state.current_div.init) {
-        LF_ERROR("Trying to render without div context. Call lf_div_begin()");
-        return LF_IDLE;
-    }
 
-    if(item_should_cull((vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f})) {
+    if(item_should_cull()) {
         return LF_IDLE;
     }
 
     vec4s color_rgb = (vec4s){LF_ZTO_TO_RGBA(color.r, color.g, color.b, color.a)};
     vec4s hover_color_rgb = hover_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.1) : color; 
     vec4s held_color_rgb = click_color ? LF_COLOR_BRIGHTNESS(color_rgb, 1.2) : color; 
-
 
     bool is_hovered = lf_hovered(pos, size);
     if(state.active_element_id == 0) {
@@ -859,12 +866,7 @@ LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s siz
     return LF_IDLE;
 }
 LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color) {
-    if(!state.current_div.init) {
-        LF_ERROR("Trying to render without div context. Call lf_div_begin()");
-        return LF_IDLE;
-    }
-
-    if(item_should_cull(size)) {
+    if(item_should_cull()) {
         return LF_IDLE;
     }
 
@@ -955,29 +957,30 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     state.scr_ev.xoffset = xoffset;
     state.scr_ev.yoffset = yoffset;
 
-    if(state.div_index_ptr > LF_MAX_DIVS - 1) return;
    
     // Scrolling the current div
-    LfDiv* selected_div = &state.divs[state.selected_div_id];
+    LfDiv* selected_div = &state.selected_div;
     if(!selected_div->scrollable) return;
 
     if(yoffset == -1) {
         if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
-            if(state.theme.div_smooth_scroll)
-                selected_div->scroll_velocity -= state.theme.div_scroll_acceleration;
-            else 
-                selected_div->scroll -= state.theme.div_scroll_amount_px;
+            if(state.theme.div_smooth_scroll) {
+                *state.scroll_velocity_ptr -= state.theme.div_scroll_acceleration;
+            } else {
+                *state.scroll_ptr -= state.theme.div_scroll_amount_px;
+            }
         } 
     } else if (yoffset == 1) {
-        if(selected_div->scroll) {
-            if(state.theme.div_smooth_scroll)
-                selected_div->scroll_velocity += state.theme.div_scroll_acceleration;
-            else 
-                selected_div->scroll += state.theme.div_scroll_amount_px;
+        if(*state.scroll_ptr) {
+            if(state.theme.div_smooth_scroll) {
+                *state.scroll_velocity_ptr += state.theme.div_scroll_acceleration;
+            } else {
+                *state.scroll_ptr += state.theme.div_scroll_amount_px;
+            }
         }        
     }
     if(state.theme.div_smooth_scroll)
-        selected_div->scroll_velocity = MIN(MAX(selected_div->scroll_velocity, -state.theme.div_scroll_max_veclocity), state.theme.div_scroll_max_veclocity);
+        *state.scroll_velocity_ptr = MIN(MAX(*state.scroll_velocity_ptr, -state.theme.div_scroll_max_veclocity), state.theme.div_scroll_max_veclocity);
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
     (void)window;
@@ -1015,7 +1018,7 @@ void glfw_char_callback(GLFWwindow* window, uint32_t charcode) {
 #endif
 
 void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, float border_width, float corner_radius) {
-    if(item_should_cull(size)) {
+    if(item_should_cull()) {
         return;
     }
     // Offsetting the postion, so that pos is the top left of the rendered object
@@ -1083,7 +1086,7 @@ void lf_rect_render(vec2s pos, vec2s size, vec4s color, vec4s border_color, floa
 }
 
 void lf_image_render(vec2s pos, vec4s color, LfTexture tex, vec4s border_color, float border_width, float corner_radius) {
-    if(item_should_cull((vec2s){tex.width, tex.height})) {
+    if(item_should_cull()) {
         return;
     }
     if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
@@ -1406,7 +1409,7 @@ LfFont lf_load_font_asset(const char* asset_name, const char* file_extension, ui
 
 bool lf_hovered(vec2s pos, vec2s size) {
     bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
-        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && ((state.div_storage) ? state.scrollbar_div == state.current_div.id : true);
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && state.selected_div.id == state.current_div.id;
     return hovered;
 }
 
@@ -1434,14 +1437,14 @@ LfFont get_current_font() {
     return state.font_stack ? *state.font_stack : state.theme.font;
 }
 
-bool item_should_cull(vec2s size) {
-    if(state.div_storage && state.div_cull) {
-        LfDiv* selected_div = &state.divs[state.selected_div_id];
-        if(((state.pos_ptr.y  > state.dsp_h + size.y 
-            || state.pos_ptr.x  > state.dsp_w + size.x) || 
-            (state.pos_ptr.y < -size.y || 
-            state.pos_ptr.x < -size.x))  && 
-            state.current_div.id == state.scrollbar_div) {
+bool item_should_cull() {
+    if(state.div_cull) {
+        LfDiv* selected_div = &state.selected_div;
+        if(((state.pos_ptr.y > state.dsp_h 
+            || state.pos_ptr.x > state.dsp_w) || 
+            (state.pos_ptr.y < 0 || 
+            state.pos_ptr.x < 0))  && 
+            state.current_div.id == state.scrollbar_div.id) {
             return true;
         }
     }
@@ -1505,9 +1508,13 @@ LfClickableItemState button_fixed_element_loc(void* text, int32_t width, int32_t
         text_props = text_render_simple_wide(state.pos_ptr, (const wchar_t*)text, font, text_color, true);
     else 
         text_props = text_render_simple(state.pos_ptr, (const char*)text, font, text_color, true);
+
+    int32_t render_width = ((width == -1) ? text_props.width : width);
+    int32_t render_height = ((height == -1) ? text_props.height : height);
+
     next_line_on_overflow(
-        (vec2s){((width == -1) ? text_props.width : width + padding * 2.0f) + margin_right + margin_left,
-            ((height == -1) ? text_props.height : height) + padding * 2.0f + margin_bottom + margin_top}, 
+        (vec2s){render_width + padding * 2.0f + margin_right + margin_left,
+             render_height + padding * 2.0f + margin_bottom + margin_top}, 
         state.div_props.border_width); 
 
     // Advancing the position pointer by the margins
@@ -1516,7 +1523,7 @@ LfClickableItemState button_fixed_element_loc(void* text, int32_t width, int32_t
 
     // Rendering the button
     LfClickableItemState ret = button(file, line, state.pos_ptr, 
-        (vec2s){width == -1 ? text_props.width + padding * 2.0f : width + padding * 2, ((height == -1) ? text_props.height : height) + padding * 2}, props, 
+        (vec2s){render_width + padding * 2, render_height + padding * 2}, props, 
                                               color, props.border_width, false, true);
 
     // Rendering the text of the button
@@ -1533,7 +1540,7 @@ LfClickableItemState button_fixed_element_loc(void* text, int32_t width, int32_t
     }
 
     // Advancing the position pointer by the width of the button
-    state.pos_ptr.x += ((width == -1) ? text_props.width : width) + margin_right + padding * 2.0f;
+    state.pos_ptr.x += render_width + margin_right + padding * 2.0f;
     state.pos_ptr.y -= margin_top;
     return ret;
 
@@ -1644,7 +1651,9 @@ void dropdown_menu_item_loc(void** items, void* placeholder, uint32_t item_count
         div_props.border_width = props.border_width;
         div_props.border_color = props.border_color;
         lf_push_style_props(div_props);
-        lf_div_begin(((vec2s){button_pos.x, button_pos.y + (text_props.height + padding * 2.0f) + margin_top}), ((vec2s){(float)width + padding * 2, (float)height + padding * 2}), true);
+        static float scroll_velocity = 0;
+        static float scroll = 0;
+        _lf_div_begin_loc(((vec2s){button_pos.x, button_pos.y + (text_props.height + padding * 2.0f) + margin_top}), ((vec2s){(float)width + padding * 2, (float)height + padding * 2}), true, &scroll, &scroll_velocity, file, line);
 
         for(uint32_t i = 0; i < item_count; i++) {
             LfUIElementProps text_props = lf_theme()->text_props;
@@ -1673,8 +1682,6 @@ void dropdown_menu_item_loc(void** items, void* placeholder, uint32_t item_count
 
         lf_div_end();
         lf_pop_style_props();
-    } else {
-        lf_div_hide();
     }
 
     state.pos_ptr.x += width + padding * 2.0f + margin_right;
@@ -1722,7 +1729,7 @@ int32_t menu_item_list_item_loc(void** items, uint32_t item_count, int32_t selec
         }
         lf_push_style_props(props);
         if(wide) {
-            if(_lf_button_loc_wide((const wchar_t*)items[i], file, line) == LF_CLICKED) {
+            if(_lf_button_wide_loc((const wchar_t*)items[i], file, line) == LF_CLICKED) {
                 clicked_item = i;  
             } 
         } else {
@@ -1775,6 +1782,8 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
 
     int32_t height = get_max_char_height_font(font);
     float width = 0;
+    
+    bool item_culled = item_should_cull();
 
     while(*str) { 
         bool skip = false;
@@ -1796,64 +1805,66 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
             stbtt_aligned_quad q;
             stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, *str-32, &x, &y, &q, 1);
 
-            if(first_char_width == -1) { 
-                first_char_width = x - last_x;
-            }
-            // Adding the vertices to the batch if rendering the text
-            if(!no_render) {
-                vec2s texcoords[4] = {
-                    q.s0, q.t0, 
-                    q.s1, q.t0, 
-                    q.s1, q.t1, 
-                    q.s0, q.t1
-                };
-                vec2s verts[4] = {
-                    (vec2s){q.x0, q.y0 + max_descended_char_height}, 
-                    (vec2s){q.x1, q.y0 + max_descended_char_height}, 
-                    (vec2s){q.x1, q.y1 + max_descended_char_height},
-                    (vec2s){q.x0, q.y1 + max_descended_char_height}
-                }; 
-                for(uint32_t i = 0; i < 4; i++) {
-                    if(state.render.vert_count >= MAX_RENDER_BATCH) {
-                        lf_flush();
-                        lf_renderer_begin();
-                    }
-                    const vec2 verts_arr = {verts[i].x, verts[i].y};
-                    memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
-
-                    const vec4 border_color = {0, 0, 0, 0};
-                    memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
-
-                    state.render.verts[state.render.vert_count].border_width = 0;
-
-                    const vec4 color_arr = {color.r, color.g, color.b, color.a};
-                    memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-
-                    const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
-                    memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
-
-                    state.render.verts[state.render.vert_count].tex_index = tex_index;
-
-                    const vec2 scale_arr = {0, 0};
-                    memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
-
-                    const vec2 pos_px_arr = {0, 0};
-                    memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
-
-                    state.render.verts[state.render.vert_count].corner_radius = 0;
-
-                    const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
-                    const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
-                    memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-                    memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
-
-                    state.render.vert_count++;
+            if(!item_culled)  {
+                if(first_char_width == -1) { 
+                    first_char_width = x - last_x;
                 }
-                state.render.index_count += 6;
+                // Adding the vertices to the batch if rendering the text
+                if(!no_render) {
+                    vec2s texcoords[4] = {
+                        q.s0, q.t0, 
+                        q.s1, q.t0, 
+                        q.s1, q.t1, 
+                        q.s0, q.t1
+                    };
+                    vec2s verts[4] = {
+                        (vec2s){q.x0, q.y0 + max_descended_char_height}, 
+                        (vec2s){q.x1, q.y0 + max_descended_char_height}, 
+                        (vec2s){q.x1, q.y1 + max_descended_char_height},
+                        (vec2s){q.x0, q.y1 + max_descended_char_height}
+                    }; 
+                    for(uint32_t i = 0; i < 4; i++) {
+                        if(state.render.vert_count >= MAX_RENDER_BATCH) {
+                            lf_flush();
+                            lf_renderer_begin();
+                        }
+                        const vec2 verts_arr = {verts[i].x, verts[i].y};
+                        memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
 
+                        const vec4 border_color = {0, 0, 0, 0};
+                        memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
+
+                        state.render.verts[state.render.vert_count].border_width = 0;
+
+                        const vec4 color_arr = {color.r, color.g, color.b, color.a};
+                        memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
+
+                        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
+                        memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+
+                        state.render.verts[state.render.vert_count].tex_index = tex_index;
+
+                        const vec2 scale_arr = {0, 0};
+                        memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
+
+                        const vec2 pos_px_arr = {0, 0};
+                        memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
+
+                        state.render.verts[state.render.vert_count].corner_radius = 0;
+
+                        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
+                        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
+                        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+                        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+
+                        state.render.vert_count++;
+                    }
+                    state.render.index_count += 6;
+
+                }
+                last_char_width = x - last_x;
+                last_x = x;
             }
-            last_char_width = x - last_x;
-            last_x = x;
         }
         str++;
     }
@@ -1914,6 +1925,7 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
     int32_t height = get_max_char_height_font(font);
     float width = 0;
     
+    bool item_culled = item_should_cull();
 
     uint32_t i = 0;
     for(; str[i] != L'\0'; i++) { 
@@ -1938,64 +1950,66 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
         stbtt_aligned_quad q;
         stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
 
-        if(first_char_width == -1) { 
-            first_char_width = x - last_x;
-        }
-        // Adding the vertices to the batch if rendering the text
-        if(!no_render) {
-            vec2s texcoords[4] = {
-                q.s0, q.t0, 
-                q.s1, q.t0, 
-                q.s1, q.t1, 
-                q.s0, q.t1
-            };
-            vec2s verts[4] = {
-                (vec2s){q.x0, q.y0 + max_descended_char_height}, 
-                (vec2s){q.x1, q.y0 + max_descended_char_height}, 
-                (vec2s){q.x1, q.y1 + max_descended_char_height},
-                (vec2s){q.x0, q.y1 + max_descended_char_height}
-            }; 
-            for(uint32_t i = 0; i < 4; i++) {
-                if(state.render.vert_count >= MAX_RENDER_BATCH) {
-                    lf_flush();
-                    lf_renderer_begin();
-                }
-                const vec2 verts_arr = {verts[i].x, verts[i].y};
-                memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
-
-                const vec4 border_color = {0, 0, 0, 0};
-                memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
-
-                state.render.verts[state.render.vert_count].border_width = 0;
-
-                const vec4 color_arr = {color.r, color.g, color.b, color.a};
-                memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-
-                const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
-                memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
-
-                state.render.verts[state.render.vert_count].tex_index = tex_index;
-
-                const vec2 scale_arr = {0, 0};
-                memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
-
-                const vec2 pos_px_arr = {0, 0};
-                memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
-
-                state.render.verts[state.render.vert_count].corner_radius = 0;
-
-                const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
-                const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
-                memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-                memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
-
-                state.render.vert_count++;
+        if(!item_culled)  {
+            if(first_char_width == -1) { 
+                first_char_width = x - last_x;
             }
-            state.render.index_count += 6;
+            // Adding the vertices to the batch if rendering the text
+            if(!no_render) {
+                vec2s texcoords[4] = {
+                    q.s0, q.t0, 
+                    q.s1, q.t0, 
+                    q.s1, q.t1, 
+                    q.s0, q.t1
+                };
+                vec2s verts[4] = {
+                    (vec2s){q.x0, q.y0 + max_descended_char_height}, 
+                    (vec2s){q.x1, q.y0 + max_descended_char_height}, 
+                    (vec2s){q.x1, q.y1 + max_descended_char_height},
+                    (vec2s){q.x0, q.y1 + max_descended_char_height}
+                }; 
+                for(uint32_t i = 0; i < 4; i++) {
+                    if(state.render.vert_count >= MAX_RENDER_BATCH) {
+                        lf_flush();
+                        lf_renderer_begin();
+                    }
+                    const vec2 verts_arr = {verts[i].x, verts[i].y};
+                    memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
 
-        }
-        last_char_width = x - last_x;
-        last_x = x;
+                    const vec4 border_color = {0, 0, 0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
+
+                    state.render.verts[state.render.vert_count].border_width = 0;
+
+                    const vec4 color_arr = {color.r, color.g, color.b, color.a};
+                    memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
+
+                    const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
+                    memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+
+                    state.render.verts[state.render.vert_count].tex_index = tex_index;
+
+                    const vec2 scale_arr = {0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
+
+                    const vec2 pos_px_arr = {0, 0};
+                    memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
+
+                    state.render.verts[state.render.vert_count].corner_radius = 0;
+
+                    const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
+                        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
+                        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+                        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+
+                        state.render.vert_count++;
+                    }
+                    state.render.index_count += 6;
+
+                }
+                last_char_width = x - last_x;
+                last_x = x;
+            }
     }
 
     // Populating the return value
@@ -2061,20 +2075,6 @@ uint64_t djb2_hash(uint64_t hash, const void* buf, size_t size) {
     return hash;
 }
 
-void div_push(LfDiv* arr, uint32_t* capacity, uint32_t* count, LfDiv div) {
-    (void)arr;
-    (void)capacity;
-    (void)count;
-    if (state.div_count == state.div_capacity) {
-        state.div_capacity *= 2;
-        state.divs = (LfDiv*)realloc(arr, state.div_capacity * sizeof(LfDiv));
-        if (state.divs == NULL) {
-            LF_ERROR("Memory allocation failed.\n");
-            exit(EXIT_FAILURE);
-        }
-    }
-    state.divs[state.div_count++] = div;
-}
 // ------------------------------------
 // ------- Public API Functions -------
 // ------------------------------------
@@ -2109,14 +2109,6 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, void* glfw_wi
     state.line_overflow = true;
     state.theme = lf_default_theme();
 
-    state.div_capacity = LF_MAX_DIVS;
-    state.divs = (LfDiv*)malloc(sizeof(LfDiv) * state.div_capacity);
-    memset(state.divs, -1, sizeof(LfDiv) * state.div_capacity);
-    for(uint32_t i = 0; i < state.div_capacity; i++) {
-        state.divs[i].scroll_velocity = 0;
-        state.divs[i].scroll = 0;
-    }
-
     // Setting glfw callbacks
     glfwSetKeyCallback((GLFWwindow*)state.window_handle, glfw_key_callback);
     glfwSetMouseButtonCallback((GLFWwindow*)state.window_handle, glfw_mouse_button_callback);
@@ -2125,7 +2117,6 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, void* glfw_wi
     glfwSetCharCallback((GLFWwindow*)state.window_handle, glfw_char_callback);
     renderer_init();
 
-    lf_set_div_storage(true);
     lf_set_div_cull(true);
 
     state.tex_arrow_down = lf_load_texture_asset("arrow-down", "png");
@@ -2235,17 +2226,12 @@ LfTheme lf_default_theme() {
     theme.div_scroll_amount_px = 20.0f;
     theme.div_smooth_scroll = true;
 
+    theme.scrollbar_width = 8;
+
     return theme;
 }
 
 void lf_resize_display(uint32_t display_width, uint32_t display_height) {
-    // Resetting the scroll for the selected div if there is no scrollable region
-    LfDiv selected_div = state.divs[state.selected_div_id]; 
-    bool scrollable_region_exists = selected_div.total_area.y > (selected_div.aabb.size.y + selected_div.aabb.pos.y);
-    if(selected_div.scroll < 0 && !scrollable_region_exists) {
-        selected_div.scroll = 0;
-    }
-
     // Setting the display height internally
     state.dsp_w = display_width;
     state.dsp_h = display_height;
@@ -2325,15 +2311,15 @@ bool lf_mouse_button_changed(uint32_t button) {
 }
 
 bool lf_mouse_button_went_down_on_div(uint32_t button) {
-    return lf_mouse_button_went_down(button) && state.scrollbar_div == state.current_div.id;
+    return lf_mouse_button_went_down(button) && state.scrollbar_div.id == state.current_div.id;
 }
 
 bool lf_mouse_button_is_released_on_div(uint32_t button) {
-    return lf_mouse_button_is_released(button) && state.scrollbar_div == state.current_div.id;
+    return lf_mouse_button_is_released(button) && state.scrollbar_div.id == state.current_div.id;
 }
 
 bool lf_mouse_button_changed_on_div(uint32_t button) {
-    return lf_mouse_button_changed(button) && state.scrollbar_div == state.current_div.id;
+    return lf_mouse_button_changed(button) && state.scrollbar_div.id == state.current_div.id;
 }
 double lf_get_mouse_x() {
     return state.input.mouse.xpos;
@@ -2370,7 +2356,7 @@ vec2s lf_button_dimension(const char* text) {
     return (vec2s){text_dimension.x + padding * 2.0f, text_dimension.y + padding};
 }
 
-LfClickableItemState _lf_button_loc_wide(const wchar_t* text, const char* file, int32_t line) {
+LfClickableItemState _lf_button_wide_loc(const wchar_t* text, const char* file, int32_t line) {
     return button_element_loc((void*)text, file, line, true);
 }
 
@@ -2398,8 +2384,9 @@ LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32
     // Rendering the button
     LfClickableItemState ret = button(file, line, state.pos_ptr, (vec2s){img.width + padding * 2, img.height + padding * 2}, 
                                               props, color, props.border_width, true, true);
-    // Rendering the text of the button
-    lf_image_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, (vec4s){1.0f, 1.0f, 1.0f, 1.0f}, img, (vec4s){0.0f, 0.0f, 0.0f, 0.0f}, 0, props.corner_radius);
+
+    vec4s imageColor = LF_WHITE;
+    lf_image_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, imageColor, img, LF_NO_COLOR, 0, props.corner_radius);
 
     // Advancing the position pointer by the width of the button
     state.pos_ptr.x += img.width + margin_right + padding * 2.0f;
@@ -2407,19 +2394,60 @@ LfClickableItemState _lf_image_button_loc(LfTexture img, const char* file, int32
 
     return ret; 
 }
+
+LfClickableItemState _lf_image_button_fixed_loc(LfTexture img, int32_t width, int32_t height, const char* file, int32_t line) {
+    // Retrieving the property data of the button
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    float padding = props.padding;
+    float margin_left = props.margin_left, margin_right = props.margin_right,
+        margin_top = props.margin_top, margin_bottom = props.margin_bottom; 
+
+    vec4s color = props.color;
+    vec4s text_color = state.theme.button_props.text_color;
+    LfFont font = get_current_font();
+
+    int32_t render_width = ((width == -1) ? img.width : width);
+    int32_t render_height = ((height == -1) ? img.height : height);
+
+    // If the button does not fit onto the current div, advance to the next line
+    next_line_on_overflow(
+        (vec2s){render_width + padding * 2.0f, 
+                    render_height + padding * 2.0f}, 
+        state.div_props.border_width);
+
+    // Advancing the position pointer by the margins
+    state.pos_ptr.x += margin_left;
+    state.pos_ptr.y += margin_top;
+
+    // Rendering the button
+    LfClickableItemState ret = button(file, line, state.pos_ptr, (vec2s){render_width + padding * 2, render_height + padding * 2}, 
+                                              props, color, props.border_width, true, true);
+    vec4s imageColor = LF_WHITE; 
+    lf_image_render((vec2s){state.pos_ptr.x + padding + (render_width - img.width) / 2.0f, state.pos_ptr.y + padding}, imageColor, img, LF_NO_COLOR, 0, props.corner_radius);
+
+    // Advancing the position pointer by the width of the button
+    state.pos_ptr.x += render_width + margin_right + padding * 2.0f;
+    state.pos_ptr.y -= margin_top;
+
+    return ret; 
+}
+
 LfClickableItemState _lf_button_fixed_loc(const char* text, int32_t width, int32_t height, const char* file, int32_t line) {
     return button_fixed_element_loc((void*)text, width, height, file, line, false);
 }
 
-LfClickableItemState _lf_button_fixed_loc_wide(const wchar_t* text, int32_t width, int32_t height, const char* file, int32_t line) {
+LfClickableItemState _lf_button_fixed_wide_loc(const wchar_t* text, int32_t width, int32_t height, const char* file, int32_t line) {
     return button_fixed_element_loc((void*)text, width, height, file, line, true);
 }
 
-LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable) {
-    if(state.div_index_ptr > LF_MAX_DIVS - 1) {
-        LF_ERROR("Reached maximum div count.");
-        return NULL;
+LfDiv _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, float* scroll_velocity, const char* file, int32_t line) {
+    uint64_t id = DJB2_INIT;
+    id = djb2_hash(id, file, strlen(file));
+    id = djb2_hash(id, &line, sizeof(line));
+    if(state.element_id_stack != -1) {
+        id = djb2_hash(id, &state.element_id_stack, sizeof(state.element_id_stack));
     }
+
     state.prev_pos_ptr = state.pos_ptr;
     state.prev_font_stack = state.font_stack;
     state.prev_props_stack = state.props_stack;
@@ -2428,87 +2456,72 @@ LfDiv* lf_div_begin(vec2s pos, vec2s size, bool scrollable) {
 
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.div_props;
 
-
     state.div_props = props;
 
-    if(state.divs[state.div_index_ptr].aabb.pos.x != pos.x|| state.divs[state.div_index_ptr].aabb.pos.y != 
-        pos.y|| state.divs[state.div_index_ptr].aabb.size.x != size.x || 
-        state.divs[state.div_index_ptr].aabb.size.y != size.y) {
-        state.divs[state.div_index_ptr].scroll = 0;
-        state.divs[state.div_index_ptr].scroll_velocity = 0;
-    }
-    // Updating the aabb
-    state.divs[state.div_index_ptr].aabb.pos = (vec2s){pos.x, pos.y};
-    state.divs[state.div_index_ptr].aabb.size = (vec2s){size.x, size.y};
+    LfDiv div;
+    div.aabb = (LfAABB){.pos = pos, .size = size};
+    div.scrollable = scrollable;
+    div.id = id;
 
-    LfDiv div = state.divs[state.div_index_ptr];
-    div.init = true;
-    if(div.id == -1) {
-        div.id = state.div_count;
-    }
-    if(div.scroll == -1) 
-        div.scroll = 0;
     if(div.scrollable) {
-        if(div.scroll > 0) 
-            div.scroll = 0;
+        if(*scroll > 0)
+            *scroll = 0;
 
         if(state.theme.div_smooth_scroll) {
-            div.scroll += div.scroll_velocity;
-            div.scroll_velocity *= 0.95; 
-
-            if(div.scroll < -((div.total_area.y - div.scroll) - div.aabb.pos.y - div.aabb.size.y) && div.scroll_velocity < 0) {
-                div.scroll_velocity = 0;
-            }
+            *scroll += *scroll_velocity;
+            *scroll_velocity *= 0.95; 
         }
     }
 
-    state.pos_ptr = (vec2s){pos.x + props.padding, pos.y + props.padding}; 
+    state.pos_ptr = pos; 
     state.current_div = div;
 
-    div.interact_state = div_container((vec2s){pos.x, pos.y}, 
-                                                      (vec2s){size.x, size.y}, props, props.color, props.border_width, false, state.div_hoverable);
+    div.interact_state = div_container((vec2s){pos.x - props.padding, pos.y - props.padding}, 
+                                       (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, 
+                                       props, props.color, props.border_width, false, state.div_hoverable);
 
     // Culling & Scrolling
-    if(state.div_storage && div.scrollable) {
-        lf_set_ptr_y(div.scroll + props.border_width + props.corner_radius);
+    if(div.scrollable) {
+        lf_set_ptr_y(*scroll + props.border_width + props.corner_radius);
     } else {
         lf_set_ptr_y(props.border_width + props.corner_radius);
     }
-    state.cull_start = (vec2s){pos.x + props.border_width + props.padding, pos.y + props.border_width + props.padding};
-    state.cull_end = (vec2s){pos.x + size.x - (props.border_width + props.padding), pos.y + size.y - (props.border_width + props.padding)};
+    state.cull_start = (vec2s){pos.x, pos.y + props.border_width};
+    state.cull_end = (vec2s){pos.x + size.x - props.border_width, pos.y + size.y - props.border_width};
 
-    state.current_div = div;
-
-    if(state.div_storage) {
-        if(state.divs[div.id].id == -1) {
-            div_push(state.divs, &state.div_capacity, &state.div_count, div);
-        }
+    if(area_hovered(div.aabb.pos, div.aabb.size)) {
+        state.selected_div_tmp = div;
+        state.scroll_velocity_ptr = scroll_velocity;
+        state.scroll_ptr = scroll;
     }
-
-
-    state.divs[state.div_index_ptr] = div;
-    state.div_index_ptr++;
+    state.current_div = div;
 
     state.current_line_height = 0;
     state.font_stack = NULL;
     state.props_on_stack = false;
 
-    return &state.divs[state.div_index_ptr - 1];
+    return div;
 }
 
-void draw_scrollbar_on(uint32_t div_id) {
-    if(state.current_div.id == div_id) {
-        state.scrollbar_div = div_id;
-        LfDiv* selected = &state.divs[div_id];
-        float scroll = selected->scroll;
+static void draw_scrollbar_on(LfDiv div) {
+    lf_next_line();
+    if(state.current_div.id == div.id) {
+        state.scrollbar_div = div;
+        LfDiv* selected = &state.selected_div_tmp;
+        float scroll = *state.scroll_ptr;
         LfUIElementProps props = lf_theme()->scrollbar_props;
 
-        selected->total_area.x = state.pos_ptr.x;
-        selected->total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
+        state.selected_div_tmp.total_area.x = state.pos_ptr.x;
+        state.selected_div_tmp.total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
+
+        if(*state.scroll_ptr < -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y) && *state.scroll_velocity_ptr < 0 && state.theme.div_smooth_scroll) {
+            *state.scroll_velocity_ptr = 0;
+            *state.scroll_ptr = -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y);
+        }
+
         float total_area = selected->total_area.y - scroll;
         float visible_area = selected->aabb.size.y + selected->aabb.pos.y;
         if(total_area > visible_area) {
-            const float scrollbar_width = 8;
             const float min_scrollbar_height = 10;
 
             float area_mapped = visible_area/total_area; 
@@ -2518,10 +2531,10 @@ void draw_scrollbar_on(uint32_t div_id) {
             lf_set_div_cull(false);
             lf_rect_render(
                 (vec2s){
-                    selected->aabb.pos.x + selected->aabb.size.x - scrollbar_width - props.margin_right - state.div_props.padding  - state.div_props.border_width,
+                    selected->aabb.pos.x + selected->aabb.size.x - state.theme.scrollbar_width - props.margin_right - state.div_props.padding  - state.div_props.border_width,
                     MIN((selected->aabb.pos.y + selected->aabb.size.y*scroll_mapped + props.margin_top + state.div_props.padding + state.div_props.border_width + state.div_props.corner_radius), visible_area - scrollbar_height)}, 
                 (vec2s){
-                    scrollbar_width, 
+                    state.theme.scrollbar_width, 
                     scrollbar_height - state.div_props.border_width * 2 - state.div_props.corner_radius * 2}, 
                 props.color,
                 props.border_color, props.border_width, props.corner_radius);
@@ -2530,8 +2543,8 @@ void draw_scrollbar_on(uint32_t div_id) {
     }
 }
 void lf_div_end() {
-    if(state.div_storage && state.current_div.scrollable)
-        draw_scrollbar_on(state.selected_div_id);
+    if(state.current_div.scrollable)
+        draw_scrollbar_on(state.selected_div_tmp);
 
     state.pos_ptr = state.prev_pos_ptr;
     state.font_stack = state.prev_font_stack;
@@ -2543,7 +2556,7 @@ void lf_div_end() {
 }
 
 void lf_next_line() {
-    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.border_width + state.div_props.padding;
+    state.pos_ptr.x = state.current_div.aabb.pos.x + state.div_props.border_width;
     state.pos_ptr.y += state.current_line_height;
     state.current_line_height = 0;
     state.gui_re_ev.happened = true;
@@ -2569,10 +2582,6 @@ float lf_get_text_end(const char* str, float start_x) {
 }
 
 void lf_text(const char* text) {
-    if(!state.current_div.init) {
-        LF_ERROR("Trying to render without div context. Call lf_div_begin()");
-        return;
-    }
     // Retrieving the property data of the text
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.text_props;
     float padding = props.padding;
@@ -2605,10 +2614,6 @@ void lf_text(const char* text) {
 }
 
 void lf_text_wide(const wchar_t* text) {
-    if(!state.current_div.init) {
-        LF_ERROR("Trying to render without div context. Call lf_div_begin()");
-        return;
-    }
     // Retrieving the property data of the text
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.text_props;
     float padding = props.padding;
@@ -2627,8 +2632,11 @@ void lf_text_wide(const wchar_t* text) {
         state.div_props.border_width);
 
     // Advancing the position pointer by the margins
+
     state.pos_ptr.x += margin_left;
     state.pos_ptr.y += margin_top;
+
+    lf_rect_render(state.pos_ptr, (vec2s){text_props.width + padding * 2.0f, text_props.height + padding * 2.0f}, props.color, props.border_color, props.border_width, props.corner_radius);
 
     // Rendering a colored text box if a color is specified
     // Rendering the text
@@ -2636,11 +2644,8 @@ void lf_text_wide(const wchar_t* text) {
                    (state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1), false, text_color);
 
     // Advancing the position pointer by the width of the text
-    state.pos_ptr.x += text_props.width + margin_right + padding;
+    state.pos_ptr.x += text_props.width + padding * 2.0f + margin_right + padding;
     state.pos_ptr.y -= margin_top;
-}
-vec2s lf_get_div_size() {
-    return state.current_div.aabb.size;
 }
 
 void lf_set_ptr_x(float x) {
@@ -2666,10 +2671,6 @@ float lf_get_ptr_y() {
 }
 
 void lf_image(LfTexture tex) {
-    if(!state.current_div.init) {
-        LF_ERROR("Trying to render without div context. Call lf_div_begin()");
-        return;
-    }
     // Retrieving the property data of the image
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.image_props;
     float margin_left = props.margin_left, margin_right = props.margin_right, 
@@ -2701,26 +2702,17 @@ void _lf_begin_loc(const char* file, int32_t line) {
     LfUIElementProps props = lf_theme()->div_props; 
     props.color = (vec4s){0, 0, 0, 0};
     lf_push_style_props(props);
-    lf_div_begin(((vec2s){0, 0}), ((vec2s){(float)state.dsp_w, (float)state.dsp_h}), false);
+    
+    static float scroll_velocity = 0;
+    static float scroll = 0;
+    _lf_div_begin_loc(((vec2s){0, 0}), ((vec2s){(float)state.dsp_w, (float)state.dsp_h}), false, &scroll, &scroll_velocity, file, line);
     lf_pop_style_props();
 }
 void lf_end() {
     lf_div_end();
- 
-    if(state.div_storage) {
-        for(int32_t i = state.div_index_ptr; i >= 0; i--) {
-            LfDiv* div = &state.divs[i];
-            if(div->hidden) continue;
-            if(area_hovered(div->aabb.pos, div->aabb.size)) {
-                state.selected_div_id = div->id;
-                break;
-            }
-        }
-    }
-    for(uint32_t i = 0; i < state.div_index_ptr; i++) {
-        state.divs[i].hidden = false;
-    }
-    state.div_index_ptr = 0;
+
+    state.selected_div = state.selected_div_tmp;
+
     update_input();
     clear_events();
     lf_flush();
@@ -2751,7 +2743,7 @@ LfClickableItemState _lf_checkbox_loc(const char* text, bool* val, vec4s tick_co
     return checkbox_element_loc((void*)text, val, tick_color, tex_color, file, line, false);
 }
 
-LfClickableItemState _lf_checkbox_loc_wide(const wchar_t* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line) {
+LfClickableItemState _lf_checkbox_wide_loc(const wchar_t* text, bool* val, vec4s tick_color, vec4s tex_color, const char* file, int32_t line) {
     return checkbox_element_loc((void*)text, val, tick_color, tex_color, file, line, true);
 }
 
@@ -3049,18 +3041,7 @@ LfDiv lf_get_current_div() {
 }
 
 LfDiv lf_get_selected_div() {
-    if(state.divs[state.selected_div_id].hidden || !state.div_storage) {
-        return (LfDiv){0};
-    }
-    return state.divs[state.selected_div_id];
-}
-void lf_div_hide() {
-    state.divs[state.div_index_ptr].hidden = true;
-    state.div_index_ptr++;
-}
-void lf_div_hide_index(uint32_t i) {
-    state.divs[i].hidden = true;
-    state.div_index_ptr++;
+    return state.selected_div;
 }
 
 void lf_set_image_color(vec4s color) {
@@ -3071,20 +3052,8 @@ void lf_unset_image_color() {
     state.image_color_stack = LF_NO_COLOR;
 }
 
-void lf_set_div_storage(bool storage) {
-    state.div_storage = storage;
-}
-
 void lf_set_div_cull(bool cull) {
     state.div_cull = cull;
-}
-
-uint32_t lf_get_div_count() {
-    return state.div_count;
-}
-
-LfDiv* lf_get_divs() {
-    return state.divs;
 }
 
 void lf_set_line_height(uint32_t line_height) {
@@ -3116,4 +3085,12 @@ LfTheme lf_get_theme() {
 
 void lf_set_theme(LfTheme theme) {
     state.theme = theme;
+}
+
+void lf_set_current_div_scroll(float scroll) {
+    *state.scroll_ptr = scroll;
+}
+
+void lf_set_current_div_scroll_velocity(float scroll_velocity) {
+    *state.scroll_velocity_ptr = scroll_velocity;
 }
