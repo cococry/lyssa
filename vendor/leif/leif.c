@@ -1944,9 +1944,6 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
 LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, bool no_render, vec4s color) {
     bool culled = item_should_cull();
 
-    if(culled) {
-        printf("culled.\n");
-    }
     // Retrieving the texture index
     float tex_index = -1.0f;
     if(!culled && !no_render) {
