@@ -164,20 +164,29 @@ LfFont lf_load_font_ex(const char* filepath, uint32_t size, uint32_t bitmap_w, u
 
 LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering filter);
 
-unsigned char* lf_load_texture_data(const char* filepath, bool flip, int32_t* width, int32_t* height, int32_t* channels);
-
 LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
 
-unsigned char* lf_load_texture_data_resized(const char* filepath, bool flip, int32_t w, int32_t h, int32_t* channels);
+LfTexture lf_load_texture_resized_factor(const char* filepath, bool flip, LfTextureFiltering filter, float wfactor, float hfactor);
 
-LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip, LfTextureFiltering filter);
+LfTexture lf_load_texture_from_memory(const void* data, size_t size, bool flip, LfTextureFiltering filter);
 
-LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
+LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h);
 
-unsigned char* lf_load_texture_data_resized(const char* filepath, bool flip, int32_t w, int32_t h, int32_t* channels);
+LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor);
 
-LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor);
+unsigned char* lf_load_texture_data(const char* filepath, int32_t* width, int32_t* height, int32_t* channels, bool flip);
 
+unsigned char* lf_load_texture_data_resized(const char* filepath, int32_t w, int32_t h, int32_t* channels, bool flip);
+
+unsigned char* lf_load_texture_data_resized_factor(const char* filepath, int32_t wfactor, int32_t hfactor, int32_t* width, int32_t* height, int32_t* channels, bool flip);
+
+unsigned char* lf_load_texture_data_from_memory(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip);
+
+unsigned char* lf_load_texture_data_from_memory_resized(const void* data, size_t size, int32_t* channels, bool flip, uint32_t w, uint32_t h);
+
+unsigned char* lf_load_texture_data_from_memory_resized_factor(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, float wfactor, float hfactor);
+
+void lf_create_texture_from_image_data(LfTextureFiltering filter, uint32_t* id, int32_t width, int32_t height, int32_t channels, unsigned char* data); 
 
 void lf_free_texture(LfTexture tex);
 
@@ -420,4 +429,5 @@ void lf_set_theme(LfTheme theme);
 
 void lf_set_current_div_scroll(float scroll); 
 
-void lf_set_current_div_scroll_velocity(float scroll_velocity); 
+void lf_set_current_div_scroll_velocity(float scroll_velocity);
+

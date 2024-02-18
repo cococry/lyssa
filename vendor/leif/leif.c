@@ -213,6 +213,7 @@ static void                     renderer_init();
 static LfTexture                tex_create(const char* filepath, bool flip, LfTextureFiltering filter);
 
 // --- UI ---
+static bool                     point_intersects_aabb(vec2s point, LfAABB box);
 static LfClickableItemState     button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
 static LfClickableItemState     div_container(vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width, bool click_color, bool hover_color);
 static LfTextProps              text_render_simple(vec2s pos, const char* text, LfFont font, vec4s font_color, bool no_render);
@@ -519,38 +520,15 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
     // Loading the texture into memory with stb_image
     LfTexture tex;
     int32_t width, height, channels;
-    stbi_uc* data = lf_load_texture_data(filepath, flip, &width, &height, &channels);
+    stbi_uc* data = lf_load_texture_data(filepath, &width, &height, &channels, flip);
 
     if(!data) {
         LF_ERROR("Failed to load texture file at '%s'.", filepath);
         return tex;
     }
-    GLenum internal_format = (channels == 4) ? GL_RGBA8 : GL_RGB8;
-    GLenum data_format = (channels == 4) ? GL_RGBA : GL_RGB;
+
+    lf_create_texture_from_image_data(filter, &tex.id, width, height, channels, data);
     
-    LF_ASSERT(internal_format & data_format, "Texture file at '%s' is using an unsupported format.", filepath);
-    
-    // Creating the textures in opengl with the loaded data
-    glGenTextures(1, &tex.id);
-    glBindTexture(GL_TEXTURE_2D, tex.id);
-    glTextureStorage2D(tex.id, 1, internal_format, width, height);
-    
-    // Setting texture parameters
-    switch(filter) {
-        case LF_TEX_FILTER_LINEAR:
-            glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            break;
-        case LF_TEX_FILTER_NEAREST:
-            glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            break;
-    }
-    glTextureParameteri(tex.id, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTextureParameteri(tex.id, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTextureSubImage2D(tex.id, 0, 0, 0, width, height, data_format, GL_UNSIGNED_BYTE, data);
-    
-    // Deallocating the data when finished
     stbi_image_free(data);
 
     tex.width = width;
@@ -559,18 +537,12 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
     return tex;
 }
 
-unsigned char* lf_load_texture_data(const char* filepath, bool flip, int32_t* width, int32_t* height, int32_t* channels) {
-    LfTexture tex;
-    stbi_set_flip_vertically_on_load(flip);
-    stbi_uc* data = stbi_load(filepath, width, height, channels, 0);
-    return data;
-}
 
 LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
-    // Loading the texture into memory with stb_image
-    LfTexture tex;
-    int32_t channels;
-    stbi_uc* data = lf_load_texture_data_resized(filepath, flip, w, h, &channels);
+     LfTexture tex;
+    int32_t width, height, channels;
+    stbi_set_flip_vertically_on_load(!flip);
+    stbi_uc* data = stbi_load(filepath, &width, &height, &channels, 0);
 
     if(!data) {
         LF_ERROR("Failed to load texture file at '%s'.", filepath);
@@ -581,9 +553,13 @@ LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFilt
     
     LF_ASSERT(internal_format & data_format, "Texture file at '%s' is using an unsupported format.", filepath);
 
+    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * channels);
+
+    // Resize the original image to the downscaled size
+    stbir_resize_uint8_linear(data, width, height, channels, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
+
     // Creating the textures in opengl with the loaded data
-    glGenTextures(1, &tex.id);
-    glBindTexture(GL_TEXTURE_2D, tex.id);
+    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
     glTextureStorage2D(tex.id, 1, internal_format, w, h);
     
     // Setting texture parameters
@@ -599,52 +575,11 @@ LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFilt
     }
     glTextureParameteri(tex.id, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTextureParameteri(tex.id, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTextureSubImage2D(tex.id, 0, 0, 0, w, h, data_format, GL_UNSIGNED_BYTE, data);
+    glTextureSubImage2D(tex.id, 0, 0, 0, w, h, data_format, GL_UNSIGNED_BYTE, downscaled_image);
     
     // Deallocating the data when finished
     stbi_image_free(data);
-
-    tex.width = w;
-    tex.height = h;
-
-    return tex;
-}
-
-unsigned char* lf_load_texture_data_resized(const char* filepath, bool flip,int32_t w, int32_t h, int32_t* channels) {
-    int32_t width, height;
-    stbi_uc* data = lf_load_texture_data(filepath, flip, &width, &height, channels);
-    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
-    stbir_resize_uint8_linear(data, width, height, *channels, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
-    stbi_image_free(data);
-    return downscaled_image;
-}
-
-LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip, LfTextureFiltering filter) {
-    LfTexture tex; 
-    int32_t width, height, channels;
-    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
-
-    glGenTextures(1, &tex.id);
-    glBindTexture(GL_TEXTURE_2D, tex.id);
-
-    switch(filter) {
-        case LF_TEX_FILTER_LINEAR:
-            glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            break;
-        case LF_TEX_FILTER_NEAREST:
-            glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            break;
-    }
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    stbi_image_free(image_data);
+    free(downscaled_image);
 
     tex.width = width;
     tex.height = height;
@@ -652,7 +587,50 @@ LfTexture lf_load_texture_from_memory(const void* data, uint32_t size, bool flip
     return tex;
 }
 
-LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
+LfTexture lf_load_texture_resized_factor(const char* filepath, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
+    // Loading the texture into memory with stb_image
+    LfTexture tex;
+    int32_t width, height, channels;
+    stbi_uc* data = lf_load_texture_data_resized_factor(filepath, wfactor, hfactor, &width, &height, &channels, flip);
+
+    if(!data) {
+        LF_ERROR("Failed to load texture file at '%s'.", filepath);
+        return tex;
+    }
+
+    int32_t w = width * wfactor;
+    int32_t h = height * hfactor;
+    lf_create_texture_from_image_data(filter, &tex.id, w, h, channels, data);
+    
+    free(data);
+
+    tex.width = w;
+    tex.height = h;
+
+    return tex;
+}
+
+LfTexture lf_load_texture_from_memory(const void* data, size_t size, bool flip, LfTextureFiltering filter) {
+    LfTexture tex; 
+    int32_t width, height, channels;
+    stbi_uc* image_data = lf_load_texture_data_from_memory((const stbi_uc*)data, size, &width, &height, &channels, flip);
+
+    if(!image_data) {
+        LF_ERROR("Failed to load texture from memory.");
+        return tex;
+    }
+
+    lf_create_texture_from_image_data(filter, &tex.id, width, height, channels, image_data);
+
+    free(image_data);
+
+    tex.width = width;
+    tex.height = height;
+
+    return tex;
+}
+
+LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
     LfTexture tex; 
     int32_t width, height, channels;
     stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
@@ -662,7 +640,7 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, b
     // Resize the original image to the downscaled size
     stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
 
-    glGenTextures(1, &tex.id);
+    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
 
     switch(filter) {
@@ -690,7 +668,7 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, uint32_t size, b
 
     return tex;
 }
-LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
+LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
     LfTexture tex; 
     int32_t width, height, channels;
     stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
@@ -702,7 +680,7 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t 
     // Resize the original image to the downscaled size
     stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
 
-    glGenTextures(1, &tex.id);
+    glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
 
     switch(filter) {
@@ -719,7 +697,7 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, channels == 3 ? GL_RGB : GL_RGBA, w, h, 0, channels == 3 ? GL_RGB8 : GL_RGBA8, GL_UNSIGNED_BYTE, downscaled_image);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, downscaled_image);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     stbi_image_free(image_data);
@@ -729,7 +707,84 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, uint32_t 
     tex.height = height;
 
     return tex;
+}
 
+unsigned char* lf_load_texture_data(const char* filepath, int32_t* width, int32_t* height, int32_t* channels, bool flip) {
+    stbi_set_flip_vertically_on_load(!flip);
+    stbi_uc* data = stbi_load(filepath, width, height, channels, 0);
+    return data;
+}
+
+unsigned char* lf_load_texture_data_resized(const char* filepath, int32_t w, int32_t h, int32_t* channels, bool flip) {
+    int32_t width, height;
+    stbi_uc* data = lf_load_texture_data(filepath, &width, &height, channels, flip);
+    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
+    stbir_resize_uint8_linear(data, width, height, *channels, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
+    stbi_image_free(data);
+    return downscaled_image;
+}
+
+unsigned char* lf_load_texture_data_resized_factor(const char* filepath, int32_t wfactor, int32_t hfactor, int32_t* width, int32_t* height, int32_t* channels, bool flip) {
+    stbi_set_flip_vertically_on_load(!flip);
+    stbi_uc* image_data = stbi_load(filepath, width, height, channels, 0);
+    int32_t w = wfactor * *width;
+    int32_t h = hfactor * *height;
+    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
+    stbir_resize_uint8_linear(image_data, *width, *height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
+    stbi_image_free(image_data);
+    return downscaled_image;
+}
+
+unsigned char* lf_load_texture_data_from_memory(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip) {
+    stbi_set_flip_vertically_on_load(!flip);
+    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, width, height, channels, 0);  
+    return image_data;
+}
+
+unsigned char* lf_load_texture_data_from_memory_resized(const void* data, size_t size, int32_t* channels, bool flip, uint32_t w, uint32_t h) {
+    int32_t width, height;
+    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, channels, 0);
+    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
+    stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
+    stbi_image_free(image_data);
+    return downscaled_image;
+}
+
+unsigned char* lf_load_texture_data_from_memory_resized_factor(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, float wfactor, float hfactor) {
+    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, width, height, channels, 0);
+    int32_t w = wfactor * *width;
+    int32_t h = hfactor * *height;
+    unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
+    stbir_resize_uint8_linear(image_data, *width, *height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
+    stbi_image_free(image_data);
+    return downscaled_image;
+}
+
+void lf_create_texture_from_image_data(LfTextureFiltering filter, uint32_t* id, int32_t width, int32_t height, int32_t channels, unsigned char* data) {
+    GLenum internal_format = (channels == 4) ? GL_RGBA8 : GL_RGB8;
+    GLenum data_format = (channels == 4) ? GL_RGBA : GL_RGB;
+    
+    LF_ASSERT(internal_format & data_format, "Texture file at '%s' is using an unsupported format.", filepath);
+    
+    // Creating the textures in opengl with the loaded data
+    glGenTextures(1, id);
+    glBindTexture(GL_TEXTURE_2D, *id);
+    glTextureStorage2D(*id, 1, internal_format, width, height);
+    
+    // Setting texture parameters
+    switch(filter) {
+        case LF_TEX_FILTER_LINEAR:
+            glTextureParameteri(*id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTextureParameteri(*id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            break;
+        case LF_TEX_FILTER_NEAREST:
+            glTextureParameteri(*id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTextureParameteri(*id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            break;
+    }
+    glTextureParameteri(*id, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTextureParameteri(*id, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTextureSubImage2D(*id, 0, 0, 0, width, height, data_format, GL_UNSIGNED_BYTE, data);
 }
 
 LfFont load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add) {
@@ -822,6 +877,19 @@ bool lf_aabb_intersects_aabb(LfAABB a, LfAABB b) {
     if(a.pos.y + a.size.y / 2.0f < b.pos.y - b.size.y / 2.0f 
         || b.pos.y + b.size.y / 2.0f < a.pos.y - a.size.y / 2.0f) return false;
     return true;
+}
+
+bool point_intersects_aabb(vec2s point, LfAABB box) {
+// Calculate the minimum and maximum points of the AABB
+    vec2s min = {box.pos.x, box.pos.y};
+    vec2s max = {box.pos.x + box.size.x, box.pos.y + box.size.y};
+
+    // Check if the point is within the AABB bounds
+    if (point.x >= min.x && point.x <= max.x &&
+        point.y >= min.y && point.y <= max.y) {
+        return true;
+    }
+    return false;
 }
 LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, vec4s color, float border_width,  bool click_color, bool hover_color) {
     uint64_t id = DJB2_INIT;
@@ -1440,10 +1508,10 @@ LfFont get_current_font() {
 bool item_should_cull() {
     if(state.div_cull) {
         LfDiv* selected_div = &state.selected_div;
-        if(((state.pos_ptr.y > state.dsp_h 
-            || state.pos_ptr.x > state.dsp_w) || 
-            (state.pos_ptr.y < 0 || 
-            state.pos_ptr.x < 0))  && 
+        if(((state.pos_ptr.y > state.current_div.aabb.size.y + state.current_div.aabb.pos.y 
+            || state.pos_ptr.x > state.current_div.aabb.size.x + state.current_div.aabb.pos.x) || 
+            (state.pos_ptr.y < state.current_div.aabb.pos.y || 
+            state.pos_ptr.x < state.current_div.aabb.pos.x))  && 
             state.current_div.id == state.scrollbar_div.id) {
             return true;
         }
@@ -1749,13 +1817,15 @@ int32_t menu_item_list_item_loc(void** items, uint32_t item_count, int32_t selec
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, bool no_render, 
                         vec4s color) {
-    if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
-        lf_flush();
-        lf_renderer_begin();
-    }
-    // Retrieving the texture index
+    bool culled = item_should_cull();
+
     float tex_index = -1.0f;
-    if(!no_render) {
+    if(!culled && !no_render) {
+        if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
+            lf_flush();
+            lf_renderer_begin();
+        }
+        // Retrieving the texture index
         for(uint32_t i = 0; i < state.render.tex_count; i++) {
             if(state.render.textures[i].id == font.bitmap.id) {
                 tex_index = (float)i;
@@ -1778,12 +1848,9 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
     int32_t max_descended_char_height = get_max_char_height_font(font);
     
     float last_x = x;
-    float last_char_width = 0, first_char_width = -1;
 
     int32_t height = get_max_char_height_font(font);
     float width = 0;
-    
-    bool item_culled = item_should_cull();
 
     while(*str) { 
         bool skip = false;
@@ -1805,157 +1872,7 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
             stbtt_aligned_quad q;
             stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, *str-32, &x, &y, &q, 1);
 
-            if(!item_culled)  {
-                if(first_char_width == -1) { 
-                    first_char_width = x - last_x;
-                }
-                // Adding the vertices to the batch if rendering the text
-                if(!no_render) {
-                    vec2s texcoords[4] = {
-                        q.s0, q.t0, 
-                        q.s1, q.t0, 
-                        q.s1, q.t1, 
-                        q.s0, q.t1
-                    };
-                    vec2s verts[4] = {
-                        (vec2s){q.x0, q.y0 + max_descended_char_height}, 
-                        (vec2s){q.x1, q.y0 + max_descended_char_height}, 
-                        (vec2s){q.x1, q.y1 + max_descended_char_height},
-                        (vec2s){q.x0, q.y1 + max_descended_char_height}
-                    }; 
-                    for(uint32_t i = 0; i < 4; i++) {
-                        if(state.render.vert_count >= MAX_RENDER_BATCH) {
-                            lf_flush();
-                            lf_renderer_begin();
-                        }
-                        const vec2 verts_arr = {verts[i].x, verts[i].y};
-                        memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
-
-                        const vec4 border_color = {0, 0, 0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
-
-                        state.render.verts[state.render.vert_count].border_width = 0;
-
-                        const vec4 color_arr = {color.r, color.g, color.b, color.a};
-                        memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-
-                        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
-                        memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
-
-                        state.render.verts[state.render.vert_count].tex_index = tex_index;
-
-                        const vec2 scale_arr = {0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
-
-                        const vec2 pos_px_arr = {0, 0};
-                        memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
-
-                        state.render.verts[state.render.vert_count].corner_radius = 0;
-
-                        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
-                        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
-                        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-                        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
-
-                        state.render.vert_count++;
-                    }
-                    state.render.index_count += 6;
-
-                }
-                last_char_width = x - last_x;
-                last_x = x;
-            }
-        }
-        str++;
-    }
-
-    // Populating the return value
-    if(x - pos.x > width) {
-        width = x - pos.x;
-    }
-    ret.width = width;
-    ret.height = height;
-    ret.end_x = x;
-    ret.end_y = y;
-    return ret;
-}
-
-bool is_symbol(char ch) {
-    if ((ch >= 33 && ch <= 47) ||   // ! " # $ % & ' ( ) * + , - . /
-        (ch >= 58 && ch <= 64) ||   // : ; < = > ? @
-        (ch >= 91 && ch <= 96) ||   // [ \ ] ^ _ `
-        (ch >= 123 && ch <= 126)) { // { | } ~
-        return true;
-    } else {
-        return false; 
-    }
-}
-
-LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, bool no_render, vec4s color) {
-    if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
-        lf_flush();
-        lf_renderer_begin();
-    }
-    // Retrieving the texture index
-    float tex_index = -1.0f;
-    if(!no_render) {
-        for(uint32_t i = 0; i < state.render.tex_count; i++) {
-            if(state.render.textures[i].id == font.bitmap.id) {
-                tex_index = (float)i;
-                break;
-            }
-        }
-        if(tex_index == -1.0f) {
-            tex_index = (float)state.render.tex_index;
-            LfTexture tex = font.bitmap;
-            state.render.textures[state.render.tex_count++] = tex;
-            state.render.tex_index++;
-        }
-    }
-    // Local variables needed for rendering
-    LfTextProps ret = {0};
-    float x = pos.x;
-    float y = pos.y;
-
-    int32_t max_descended_char_height = get_max_char_height_font(font);
-
-    float last_x = x;
-    float last_char_width = 0, first_char_width = -1;
-
-    int32_t height = get_max_char_height_font(font);
-    float width = 0;
-    
-    bool item_culled = item_should_cull();
-
-    uint32_t i = 0;
-    for(; str[i] != L'\0'; i++) { 
-        if(stbtt_FindGlyphIndex((const stbtt_fontinfo*)font.font_info, str[i]-32) == 0 && 
-            str[i] != L' ' && str[i] != L'\n' && !iswdigit(str[i]) && !iswpunct(str[i]))  {
-            continue;
-        }
-        // If the current character is a new line or the wrap point has been reached, advance to the next line
-        if(str[i] == L'\n' || (x >= wrap_point && wrap_point != -1)) {
-            y += font.font_size;
-            height += font.font_size;
-            if(x - pos.x > width) {
-                width = x - pos.x;
-            }
-            x = pos.x;
-            last_x = x;
-            if(str[i] == L' ') {
-                continue;
-            }
-        }
-        // Retrieving the vertex data of the current character & submitting it to the batch  
-        stbtt_aligned_quad q;
-        stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
-
-        if(!item_culled)  {
-            if(first_char_width == -1) { 
-                first_char_width = x - last_x;
-            }
-            // Adding the vertices to the batch if rendering the text
-            if(!no_render) {
+            if(!culled && !no_render)  {
                 vec2s texcoords[4] = {
                     q.s0, q.t0, 
                     q.s1, q.t0, 
@@ -1998,19 +1915,148 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
                     state.render.verts[state.render.vert_count].corner_radius = 0;
 
                     const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
-                        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
-                        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-                        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+                    const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
+                    memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+                    memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
 
-                        state.render.vert_count++;
-                    }
-                    state.render.index_count += 6;
-
+                    state.render.vert_count++;
                 }
-                last_char_width = x - last_x;
-                last_x = x;
+                state.render.index_count += 6;
+
             }
+            last_x = x;
+        }
+        str++;
     }
+
+    // Populating the return value
+    if(x - pos.x > width) {
+        width = x - pos.x;
+    }
+    ret.width = width;
+    ret.height = height;
+    ret.end_x = x;
+    ret.end_y = y;
+    return ret;
+}
+
+
+LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, bool no_render, vec4s color) {
+    bool culled = item_should_cull();
+
+    if(culled) {
+        printf("culled.\n");
+    }
+    // Retrieving the texture index
+    float tex_index = -1.0f;
+    if(!culled && !no_render) {
+        if(state.render.tex_count - 1 >= MAX_TEX_COUNT_BATCH - 1) {
+            lf_flush();
+            lf_renderer_begin();
+        }
+        for(uint32_t i = 0; i < state.render.tex_count; i++) {
+            if(state.render.textures[i].id == font.bitmap.id) {
+                tex_index = (float)i;
+                break;
+            }
+        }
+        if(tex_index == -1.0f) {
+            tex_index = (float)state.render.tex_index;
+            LfTexture tex = font.bitmap;
+            state.render.textures[state.render.tex_count++] = tex;
+            state.render.tex_index++;
+        }
+    }
+    // Local variables needed for rendering
+    LfTextProps ret = {0};
+    float x = pos.x;
+    float y = pos.y;
+
+    int32_t max_descended_char_height = get_max_char_height_font(font);
+
+    float last_x = x;
+
+    int32_t height = get_max_char_height_font(font);
+    float width = 0;
+    
+    bool item_culled = item_should_cull();
+
+    uint32_t i = 0;
+    for(; str[i] != L'\0'; i++) { 
+        if(stbtt_FindGlyphIndex((const stbtt_fontinfo*)font.font_info, str[i]-32) == 0 && 
+            str[i] != L' ' && str[i] != L'\n' && !iswdigit(str[i]) && !iswpunct(str[i]))  {
+            continue;
+        }
+        // If the current character is a new line or the wrap point has been reached, advance to the next line
+        if(str[i] == L'\n' || (x >= wrap_point && wrap_point != -1)) {
+            y += font.font_size;
+            height += font.font_size;
+            if(x - pos.x > width) {
+                width = x - pos.x;
+            }
+            x = pos.x;
+            last_x = x;
+            if(str[i] == L' ') {
+                continue;
+            }
+        }
+        // Retrieving the vertex data of the current character & submitting it to the batch  
+        stbtt_aligned_quad q;
+        stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
+
+        if(!item_culled && !no_render)  {
+            vec2s texcoords[4] = {
+                q.s0, q.t0, 
+                q.s1, q.t0, 
+                q.s1, q.t1, 
+                q.s0, q.t1
+            };
+            vec2s verts[4] = {
+                (vec2s){q.x0, q.y0 + max_descended_char_height}, 
+                (vec2s){q.x1, q.y0 + max_descended_char_height}, 
+                (vec2s){q.x1, q.y1 + max_descended_char_height},
+                (vec2s){q.x0, q.y1 + max_descended_char_height}
+            }; 
+            for(uint32_t i = 0; i < 4; i++) {
+                if(state.render.vert_count >= MAX_RENDER_BATCH) {
+                    lf_flush();
+                    lf_renderer_begin();
+                }
+                const vec2 verts_arr = {verts[i].x, verts[i].y};
+                memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
+
+                const vec4 border_color = {0, 0, 0, 0};
+                memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
+
+                state.render.verts[state.render.vert_count].border_width = 0;
+
+                const vec4 color_arr = {color.r, color.g, color.b, color.a};
+                memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
+
+                const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
+                memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
+
+                state.render.verts[state.render.vert_count].tex_index = tex_index;
+
+                const vec2 scale_arr = {0, 0};
+                memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
+
+                const vec2 pos_px_arr = {0, 0};
+                memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
+
+                state.render.verts[state.render.vert_count].corner_radius = 0;
+
+                const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
+                const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
+                memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
+                memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
+
+                state.render.vert_count++;
+            }
+            state.render.index_count += 6;
+        last_x = x;
+    }
+}
 
     // Populating the return value
     if(x - pos.x > width) {
