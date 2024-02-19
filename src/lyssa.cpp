@@ -37,13 +37,9 @@ extern "C" {
 
 #define LYSSA_DIR std::string(getenv(HOMEDIR)) + std::string("/.lyssa")
 
-#define RGB_COLOR(r, g, b) (vec4s){LF_RGBA(r, g, b, 255.0f)}
-#define RGBA_COLOR(r, g, b, a) (vec4s){LF_RGBA(r, g, b, a)}
-
-#define LYSSA_GREEN RGB_COLOR(13, 181, 108)
-#define LYSSA_BLUE  RGB_COLOR(83, 150, 237) 
-#define LYSSA_RED  RGB_COLOR(150, 12, 14)
-#define LYSSA_BACKGROUND_COLOR RGB_COLOR(15, 15, 19) 
+#define LYSSA_GREEN (LfColor){13, 181, 108, 255}
+#define LYSSA_BLUE  (LfColor){83, 150, 237, 255}
+#define LYSSA_RED  (LfColor){150, 12, 14, 255}
 
 #define DIV_START_X 20  
 #define DIV_START_Y 20
@@ -107,6 +103,7 @@ struct SoundFile {
     std::wstring path; 
     int32_t duration;
     LfTexture thumbnail;
+    bool loaded;
 
     bool operator==(const SoundFile& other) const {
         return path == other.path;
@@ -177,7 +174,6 @@ enum class PopupID {
 struct TextureData {
     unsigned char* data;
     int32_t width, height, channels;
-
 };
 
 struct GlobalState {
@@ -293,7 +289,7 @@ static void                     updateSoundProgress();
 static std::string              removeFileExtension(const std::string& filename);
 static std::wstring             removeFileExtensionW(const std::wstring& filename);
 
-static void                     inputFieldStyled(LfInputField* input, vec4s bgColor = LYSSA_BACKGROUND_COLOR);
+static void                     inputFieldStyled(LfInputField* input, LfColor bgColor = LYSSA_BACKGROUND_COLOR);
 
 static void                     loadIcons();
 
@@ -419,7 +415,7 @@ void initWin(uint32_t width, uint32_t height) {
     lf_init_glfw(width, height, state.win);   
     lf_set_text_wrap(true);
     LfTheme theme = lf_get_theme();
-    theme.div_props.color = (vec4s){LF_RGBA(0, 0, 0, 0)};
+    theme.div_props.color = LF_NO_COLOR;
     theme.scrollbar_props.corner_radius = 1.5;
     lf_set_theme(theme);
 
@@ -621,7 +617,7 @@ void renderDashboard() {
             bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
             // Div
             LfUIElementProps props = lf_theme()->div_props;
-            props.color = overDiv ? RGB_COLOR(43, 43, 43) : RGB_COLOR(35, 35, 35);
+            props.color = overDiv ? (LfColor){43, 43, 43, 255} : (LfColor){35, 35, 35, 255};
             props.corner_radius = 5.0f;
             props.padding = 0;
             lf_push_style_props(props);
@@ -669,7 +665,7 @@ void renderDashboard() {
                 props.margin_left = 12.5f; 
                 props.padding = 0;
                 props.border_width = 0;
-                props.text_color = RGB_COLOR(150, 150, 150);
+                props.text_color = (LfColor){150, 150, 150, 255};
                 lf_push_style_props(props);
                 lf_push_font(&state.h6Font);
                 lf_text(playlist.desc.c_str());
@@ -894,7 +890,7 @@ void renderOnPlaylist() {
             float textWidth = lf_text_dimension(text).x;
 
             LfUIElementProps props = lf_theme()->button_props;
-            props.color = RGB_COLOR(200, 200, 200);
+            props.color = (LfColor){200, 200, 200, 255};
             props.text_color = LF_BLACK;
             props.padding = 10;
             props.border_width = 0;
@@ -940,8 +936,8 @@ void renderOnPlaylist() {
             lf_push_font(&state.h6Font);
             const float buttonWidth = 175;
             LfUIElementProps props = lf_theme()->button_props;
-            props.color = RGB_COLOR(240, 240, 240);
-            props.text_color = RGB_COLOR(0, 0, 0);
+            props.color = (LfColor){240, 240, 240, 255};
+            props.text_color = LF_BLACK;
             props.corner_radius = 10; 
             props.border_width = 0;
             props.margin_top = 20;
@@ -1010,10 +1006,9 @@ void renderOnPlaylist() {
             SoundFile& file = currentPlaylist.musicFiles[i];
             {
                 vec2s thumbnailContainerSize = (vec2s){48, 48};
-                vec4s selectedColor = RGB_COLOR(255, 255, 255);
+                LfColor selectedColor = LF_WHITE;
                 float marginBottomThumbnail = 10.0f, marginTopThumbnail = 5.0f;
 
-                selectedColor = (vec4s){LF_ZTO_TO_RGBA(selectedColor.r, selectedColor.g, selectedColor.b, selectedColor.a)};
 
                 LfAABB fileAABB = (LfAABB){
                     .pos = LF_PTR,
@@ -1025,12 +1020,12 @@ void renderOnPlaylist() {
                     if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_RIGHT)) {
                         state.playlistFileOptionsIndex = i;
                     }
-                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 40),
-                            (vec4s){0, 0, 0, 0}, 0.0f, 6.0f);
+                    lf_rect_render(fileAABB.pos, fileAABB.size, lf_color_alpha(selectedColor, 40),
+                            LF_NO_COLOR, 0.0f, 6.0f);
                 }
                 if(currentPlaylist.playingFile == i) {
-                    lf_rect_render(fileAABB.pos, fileAABB.size, RGBA_COLOR(selectedColor.r, selectedColor.g, selectedColor.b, 50),
-                            (vec4s){0, 0, 0, 0}, 0.0f, 6.0f);
+                    lf_rect_render(fileAABB.pos, fileAABB.size, lf_color_alpha(selectedColor, 50),
+                            LF_NO_COLOR, 0.0f, 6.0f);
                 } 
 
                 // Index 
@@ -1052,7 +1047,7 @@ void renderOnPlaylist() {
                     props.margin_right = 4;
                     props.margin_left = -thumbnailContainerSize.x;
                     props.border_width = 0;
-                    props.color = currentPlaylist.ordered ?  LYSSA_GREEN : RGB_COLOR(70, 70, 70);
+                    props.color = currentPlaylist.ordered ?  LYSSA_GREEN : (LfColor){70, 70, 70, 255};
                     props.corner_radius = 12;
                     lf_push_style_props(props);
                     LfClickableItemState playButton = lf_image_button(((LfTexture){.id = state.icons["play"].id, .width = 24, .height = 24}));
@@ -1073,7 +1068,7 @@ void renderOnPlaylist() {
                     float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
                     lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + marginTopThumbnail}, thumbnailContainerSize, 
-                            RGBA_COLOR(40, 40, 40, 255), LF_NO_COLOR, 0.0f, 3.0f);
+                            (LfColor){40, 40, 40, 255}, LF_NO_COLOR, 0.0f, 3.0f);
 
                     lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + 
                             (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE,
@@ -1128,7 +1123,7 @@ void renderOnPlaylist() {
         if(popupPos.x != -1 && popupPos.y != 1)
         {
             LfUIElementProps props = lf_theme()->button_props;
-            props.color = RGB_COLOR(20, 20, 20);
+            props.color = (LfColor){20, 20, 20, 255};
             props.corner_radius = 5;
             props.border_width = 0;
             lf_push_style_props(props);
@@ -1190,7 +1185,7 @@ void renderOnTrack() {
         float ptrX = lf_get_ptr_x();
         float ptrY = lf_get_ptr_y();
         lf_rect_render(LF_PTR, 
-                thumbnailContainerSize, RGBA_COLOR(255, 255, 255, 30), LF_NO_COLOR, 0.0f, 8.0f);
+                thumbnailContainerSize, (LfColor){255, 255, 255, 30}, LF_NO_COLOR, 0.0f, 8.0f);
 
         float aspect = (float)tab.trackThumbnail.width / (float)tab.trackThumbnail.height;
 
@@ -1255,7 +1250,7 @@ void renderOnTrack() {
         LfUIElementProps props = lf_theme()->slider_props;
         props.margin_top = 20;
         props.corner_radius = 1.5;
-        props.color = RGBA_COLOR(255, 255, 255, 30);
+        props.color = (LfColor){255, 255, 255, 30};
         props.text_color = LF_WHITE;
         props.border_width = 0;
         lf_push_style_props(props);
@@ -1430,7 +1425,7 @@ void renderPlaylistAddFromFolder() {
         LfUIElementProps props = lf_theme()->button_props;
         props.border_width = 0.0f;
         props.corner_radius = 4.0f;
-        props.color = RGB_COLOR(80, 80, 80);
+        props.color = (LfColor){80, 80, 80, 255};
         lf_push_style_props(props);
         if(lf_image_button_fixed(backIcon, 50, -1) == LF_CLICKED) {
             tab.currentFolderPath = std::filesystem::path(tab.currentFolderPath).parent_path().wstring();
@@ -1441,7 +1436,7 @@ void renderPlaylistAddFromFolder() {
         lf_pop_style_props();
 
         props = lf_theme()->text_props;
-        props.color = RGB_COLOR(80, 80, 80);
+        props.color = (LfColor){80, 80, 80, 255};
         props.corner_radius = 4.0f;
         props.padding = 12.0f;
         props.border_width = 0.0f;
@@ -1453,7 +1448,7 @@ void renderPlaylistAddFromFolder() {
         props = lf_theme()->button_props;
         props.border_width = 0.0f;
         props.corner_radius = 4.0f;
-        props.color = RGB_COLOR(80, 80, 80);
+        props.color = (LfColor){80, 80, 80, 255};
         props.padding = 12.0f;
         props.text_color = LF_WHITE;
         props.margin_left = 0.0f;
@@ -1501,7 +1496,7 @@ void renderPlaylistAddFromFolder() {
     // File manager container
     {
         LfUIElementProps divProps = lf_theme()->div_props;
-        divProps.color = RGBA_COLOR(255, 255, 255, 40);
+        divProps.color = (LfColor){255, 255, 255, 40};
         divProps.corner_radius = 10.0f;
         divProps.padding = 10.0f;
 
@@ -1524,7 +1519,7 @@ void renderPlaylistAddFromFolder() {
 
             bool hoveredEntry = lf_hovered(aabb.pos, aabb.size);
             if(hoveredEntry) {
-                lf_rect_render(aabb.pos, (vec2s){aabb.size.x, aabb.size.y + 5.0f}, RGB_COLOR(100, 100, 100), LF_NO_COLOR, 0.0f, 3.0f);
+                lf_rect_render(aabb.pos, (vec2s){aabb.size.x, aabb.size.y + 5.0f}, (LfColor){100, 100, 100, 255}, LF_NO_COLOR, 0.0f, 3.0f);
             }
 
             LfTexture icon = (LfTexture){
@@ -1579,7 +1574,7 @@ void renderFileOrFolderPopup() {
     // Beginning a new div
     const vec2s popupSize = (vec2s){400.0f, 100.0f};
     LfUIElementProps props = lf_theme()->div_props;
-    props.color = RGB_COLOR(25, 25, 25);
+    props.color = (LfColor){25, 25, 25, 255};
     props.padding = 0;
     props.corner_radius = 10;
     lf_push_style_props(props);
@@ -1587,16 +1582,14 @@ void renderFileOrFolderPopup() {
     lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize, false);
     // Close Button
     {
-        // Put the X Button in the top left of the div 
-
         // Styling
         LfUIElementProps props = lf_theme()->button_props;
         props.margin_left = 0;
         props.margin_right = 0;
         props.margin_top = 0;
         props.margin_bottom = 0;
-        props.text_color = RGB_COLOR(255, 255, 255);
-        props.color = RGBA_COLOR(0, 0, 0, 0);
+        props.text_color = (LfColor){255, 255, 255, 255};
+        props.color = LF_NO_COLOR;
         props.border_width = 0;
 
         lf_push_style_props(props);
@@ -1647,8 +1640,8 @@ void renderEditPlaylistPopup() {
     // Beginning a new div
     const vec2s popupSize = (vec2s){500.0f, 350.0f};
     LfUIElementProps div_props = lf_theme()->div_props;
-    div_props.color = RGB_COLOR(10, 10, 10);
-    div_props.border_color = RGB_COLOR(50, 50, 50);
+    div_props.color = (LfColor){10, 10, 10, 255};
+    div_props.border_color = (LfColor){50, 50, 50, 255};
     div_props.border_width = 3;
     div_props.padding = 5;
     div_props.corner_radius = 10;
@@ -1766,7 +1759,7 @@ void renderTrackDisplay() {
         containerOverflow = true;
     }
     // Container 
-    lf_rect_render(LF_PTR, containerSize, RGBA_COLOR(255, 255, 255, 50), LF_NO_COLOR, 0.0f, 5.0f);
+    lf_rect_render(LF_PTR, containerSize, (LfColor){255, 255, 255, 50}, LF_NO_COLOR, 0.0f, 5.0f);
 
     uint32_t playingFileIndex = state.playlists[state.currentPlaylist].playingFile;
     // Track Thumbnail 
@@ -1780,7 +1773,7 @@ void renderTrackDisplay() {
             changeTabTo(GuiTab::OnTrack);
         }
         lf_rect_render(LF_PTR, 
-                (vec2s){thumbnailSize, thumbnailSize}, RGB_COLOR(25, 25, 25), LF_NO_COLOR, 0.0f, 2.5f);
+                (vec2s){thumbnailSize, thumbnailSize}, (LfColor){25, 25, 25, 255}, LF_NO_COLOR, 0.0f, 2.5f);
 
         LfTexture trackThumbnail = state.currentSoundFile->thumbnail;
         float aspect = (float)trackThumbnail.width / (float)trackThumbnail.height;
@@ -1867,7 +1860,7 @@ void renderTrackProgress() {
         props.margin_left = 0;
         props.margin_right = 0;
         props.corner_radius = 1.5;
-        props.color = RGBA_COLOR(255, 255, 255, 30);
+        props.color = (LfColor){255, 255, 255, 30};
         props.text_color = LF_WHITE;
         props.border_width = 0;
         lf_push_style_props(props);
@@ -1964,7 +1957,7 @@ void renderTrackVolumeControl() {
     if(state.showVolumeSliderTrackDisplay) {
         LfUIElementProps props = lf_theme()->slider_props;
         props.corner_radius = 1.5;
-        props.color = RGBA_COLOR(255, 255, 255, 30);
+        props.color = (LfColor){255, 255, 255, 30};
         props.text_color = LF_WHITE;
         props.border_width = 0;
         props.margin_top = 40;
@@ -1981,7 +1974,7 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
 
     lf_set_ptr_y(state.winHeight - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2);
     LfUIElementProps props = lf_theme()->button_props;
-    props.color = (vec4s){0, 0, 0, 0};
+    props.color = (LfColor){0, 0, 0, 0};
     props.border_width = 0;
     lf_push_style_props(props);
 
@@ -2444,7 +2437,7 @@ std::wstring removeFileExtensionW(const std::wstring& filename) {
     }
 }
 
-void inputFieldStyled(LfInputField* input, vec4s bgColor) {
+void inputFieldStyled(LfInputField* input, LfColor bgColor) {
     LfUIElementProps props = lf_theme()->inputfield_props;
     props.padding = 15; 
     props.border_width = 1;
@@ -2511,28 +2504,40 @@ std::vector<SoundFile> reorderPlaylistFiles(const std::vector<SoundFile>& soundF
 
 void handleAsyncPlaylistLoading() {
     // Create OpenGL Textures for the thumbnails that were loaded
-    for (int i = 0; i < state.playlistFileThumbnailData.size();) {
+    for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
+        SoundFile& file = state.playlists[state.currentPlaylist].musicFiles[i];
+        LfTexture& thumbnail = file.thumbnail;
+        if(file.loaded) continue;
 
-        LfTexture& thumbnail = state.playlists[state.currentPlaylist].musicFiles[state.playlistFileThumbnailIndex].thumbnail;
         TextureData data = state.playlistFileThumbnailData[i];
 
         lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &thumbnail.id, data.width, data.height, data.channels, data.data);
 
         thumbnail.width = data.width;
         thumbnail.height = data.height;
-
-        state.playlistFileThumbnailData.erase(state.playlistFileThumbnailData.begin() + i);
-
-        state.playlistFileThumbnailIndex++;
+        file.loaded = true;
     }
     if(state.currentPlaylist != -1) {
         Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
-        // Once file loading finished, reorder the files to the correct order
+        // Once file loading finished, reorder the files to the correct order and deallocate all the data that was used 
+        // for async loading
         if(state.loadedPlaylistFilepaths.size() == currentPlaylist.musicFiles.size() && !currentPlaylist.ordered) {
             if(!playlistFileOrderCorrect(state.currentPlaylist, state.loadedPlaylistFilepaths)) {
                 const auto& reorderdFiles = reorderPlaylistFiles(currentPlaylist.musicFiles, state.loadedPlaylistFilepaths);
                 currentPlaylist.musicFiles = reorderdFiles;
+
                 state.loadedPlaylistFilepaths.clear();
+                state.loadedPlaylistFilepaths.shrink_to_fit();
+
+                for(auto& thumbnailData : state.playlistFileThumbnailData) {
+                    if(thumbnailData.data)
+                        free(thumbnailData.data);
+                }
+                state.playlistFileThumbnailData.clear();
+                state.playlistFileThumbnailData.shrink_to_fit();
+
+                state.playlistFileFutures.clear();
+                state.playlistFileFutures.shrink_to_fit();
             } 
             currentPlaylist.ordered = true; 
         }
@@ -2547,6 +2552,7 @@ std::string formatDurationToMins(int32_t duration) {
             << std::setw(2) << std::setfill('0') << seconds;
     return format.str();
 }
+
 int main(int argc, char* argv[]) {
     // Initialization 
     initWin(WIN_START_W, WIN_START_H); 
@@ -2555,7 +2561,6 @@ int main(int argc, char* argv[]) {
     if(!std::filesystem::exists(LYSSA_DIR)) { 
         std::filesystem::create_directory(LYSSA_DIR);
     }
-
     loadPlaylists();
 
     // Creating the popups
@@ -2563,7 +2568,8 @@ int main(int argc, char* argv[]) {
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
 
-    std::vector<std::wstring> filenames;
+    vec4s clearColor = lf_color_to_zto(LYSSA_BACKGROUND_COLOR);
+
     while(!glfwWindowShouldClose(state.win)) { 
         if(ASYNC_PLAYLIST_LOADING)
             handleAsyncPlaylistLoading();
@@ -2579,7 +2585,8 @@ int main(int argc, char* argv[]) {
 
         // OpenGL color clearing 
         glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(LYSSA_BACKGROUND_COLOR.r, LYSSA_BACKGROUND_COLOR.g, LYSSA_BACKGROUND_COLOR.b, LYSSA_BACKGROUND_COLOR.a);
+        glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+
         lf_begin();
         switch(state.currentTab) {
             case GuiTab::Dashboard:
