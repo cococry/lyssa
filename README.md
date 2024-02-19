@@ -81,3 +81,8 @@ make
 ```console
 make run 
 ```
+
+
+You can contribute to Lyssa by:
+  - [Fixing bugs or contributing to features](https://github.com/cococry/lyssa/issues)
+  - [Changing features or adding new functionality](https://github.com/cococry/lyssa/pulls)
