@@ -77,6 +77,7 @@ Build the application
 make
 ```
 
+## Contributing
 ### Running the Application
 ```console
 make run 
