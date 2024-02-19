@@ -77,13 +77,12 @@ Build the application
 make
 ```
 
-## Contributing
 ### Running the Application
 ```console
 make run 
 ```
 
-
+## Contributing
 You can contribute to Lyssa by:
   - [Fixing bugs or contributing to features](https://github.com/cococry/lyssa/issues)
   - [Changing features or adding new functionality](https://github.com/cococry/lyssa/pulls)
