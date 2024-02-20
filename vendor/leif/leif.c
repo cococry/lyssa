@@ -3186,3 +3186,19 @@ LfColor lf_color_from_hex(uint32_t hex) {
 LfColor lf_color_from_zto(vec4s zto) {
     return (LfColor){(uint8_t)(zto.r * 255.0f), (uint8_t)(zto.g * 255.0f), (uint8_t)(zto.b * 255.0f), (uint8_t)(zto.a * 255.0f)};
 }
+
+void lf_seperator() {
+    lf_next_line();
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+    state.pos_ptr.x += props.margin_left;
+    state.pos_ptr.y += props.margin_top;
+
+    const uint32_t seperator_height = 1;
+    lf_set_line_height(props.margin_top + seperator_height + props.margin_bottom);
+
+    lf_rect_render(state.pos_ptr, (vec2s){state.current_div.aabb.size.x - props.margin_left * 2.0f - state.current_div.aabb.pos.x, seperator_height}, 
+                   props.color, LF_NO_COLOR, 0, props.corner_radius);
+
+    state.pos_ptr.y -= props.margin_top;
+    lf_next_line();
+}
