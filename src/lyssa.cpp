@@ -267,14 +267,10 @@ static void                     skipSoundDown(uint32_t playlistIndex);
 
 static double                   getSoundDuration(const std::string& soundPath);
 static std::string              formatDurationToMins(int32_t duration);
-static LfTexture                getSoundThubmnail(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
-static TextureData              getSoundThubmnailData(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
 static void                     updateSoundProgress();
 
 static std::string              removeFileExtension(const std::string& filename);
 static std::wstring             removeFileExtensionW(const std::wstring& filename);
-
-static void                     inputFieldStyled(LfInputField* input, LfColor bgColor = LYSSA_BACKGROUND_COLOR);
 
 static void                     loadIcons();
 
@@ -285,6 +281,10 @@ static bool                     playlistFileOrderCorrect(uint32_t playlistIndex,
 static std::vector<SoundFile>   reorderPlaylistFiles(const std::vector<SoundFile>& soundFiles, const std::vector<std::string>& paths); 
 
 static void                     handleAsyncPlaylistLoading();
+
+static LfTexture                getSoundThubmnail(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
+static TextureData              getSoundThubmnailData(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
+static std::wstring              getSoundArtist(const std::string& soundPath);
 
 void PlaylistAddFromFolderTab::loadFolderContentsW(const std::wstring& folderpath) {
     for (const auto& entry : std::filesystem::directory_iterator(folderpath)) {
@@ -542,13 +542,12 @@ void renderDashboard() {
         {
             const uint32_t width = 150;
             const uint32_t height = -1;
-            const uint32_t marginRight = 40;
             LfUIElementProps props = primary_button_style();
             props.margin_right = 0;
             props.margin_left = 0;
             lf_push_style_props(props);
             lf_push_font(&state.h1Font);
-            lf_set_ptr_x(state.winWidth - width - marginRight * 2);
+            lf_set_ptr_x_absolute(state.winWidth - (width + props.padding * 2.0f) - DIV_START_X);
             lf_pop_font();
             if(lf_button_fixed("Add Playlist", width, height) == LF_CLICKED) { 
                 changeTabTo(GuiTab::CreatePlaylist);
@@ -578,6 +577,8 @@ void renderDashboard() {
             LfUIElementProps props = primary_button_style();
             props.margin_right = 0;
             props.margin_left = 0;
+            props.margin_top = 15;
+            props.corner_radius = 12;
             lf_push_style_props(props);
             if(lf_button_fixed("Create Playlist", width, 50) == LF_CLICKED)  {
                 changeTabTo(GuiTab::CreatePlaylist);
@@ -767,13 +768,19 @@ void renderCreatePlaylist() {
     {
         lf_next_line();
         state.createPlaylistTab.nameInput.input.width = state.winWidth / 2.0f;
-        inputFieldStyled(&state.createPlaylistTab.nameInput.input);
+        LfUIElementProps props = input_field_style();
+        lf_push_style_props(props);
+        lf_input_text(&state.createPlaylistTab.nameInput.input);
+        lf_pop_style_props();
         lf_next_line();
     }
     {
         lf_next_line();
         state.createPlaylistTab.descInput.input.width = state.winWidth / 2.0f;
-        inputFieldStyled(&state.createPlaylistTab.descInput.input);
+        LfUIElementProps props = input_field_style();
+        lf_push_style_props(props);
+        lf_input_text(&state.createPlaylistTab.descInput.input);
+        lf_pop_style_props();
         lf_next_line();
     }
 
@@ -863,9 +870,10 @@ void renderOnPlaylist() {
             LfUIElementProps props = primary_button_style();  
             props.margin_top = 5;
             props.margin_left = 0;
+            props.margin_right = 0;
 
             // Rendering the button in the top right
-            lf_set_ptr_x_absolute(state.winWidth - textWidth - (DIV_START_X * 2));
+            lf_set_ptr_x_absolute(state.winWidth - (textWidth + props.padding * 2.0f) - DIV_START_X);
 
             lf_push_style_props(props);
             float ptr_x = lf_get_ptr_x();
@@ -1146,7 +1154,7 @@ void renderOnTrack() {
     }
 
     float ptr_y = lf_get_ptr_y();
-    if((state.winWidth - 200 < thumbnailContainerSize.x || state.winWidth > WIN_START_W) && state.winHeight > WIN_START_H) {
+    if((state.winWidth - 100 < thumbnailContainerSize.x || state.winWidth > WIN_START_W) && state.winHeight > WIN_START_H) {
         // Center the elements
         lf_set_ptr_y_absolute((state.winHeight - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2 - 
                     (thumbnailContainerSize.y + lf_theme()->font.font_size * 6 + state.trackProgressSlider.height + iconSizeSm)) / 2.0f);
@@ -1157,7 +1165,7 @@ void renderOnTrack() {
         float ptrX = lf_get_ptr_x();
         float ptrY = lf_get_ptr_y();
         lf_rect_render(LF_PTR, 
-                thumbnailContainerSize, (LfColor){255, 255, 255, 30}, LF_NO_COLOR, 0.0f, 8.0f);
+                thumbnailContainerSize, lf_color_brightness(GRAY, 0.6), LF_NO_COLOR, 0.0f, 8.0f);
 
         float aspect = (float)tab.trackThumbnail.width / (float)tab.trackThumbnail.height;
 
@@ -1174,11 +1182,15 @@ void renderOnTrack() {
         std::filesystem::path fsPath(state.currentSoundFile->path);
         std::wstring filename = removeFileExtensionW(fsPath.filename().wstring());
         lf_set_text_wrap(false);
+        if(state.winWidth <= WIN_START_W / 3.0f)
+            lf_push_font(&state.h6Font);
         float titleWidth = lf_text_dimension_wide(filename.c_str()).x;
         float titlePosX = (state.winWidth - titleWidth) / 2.0f - DIV_START_X;
         lf_set_ptr_x(titlePosX);
         lf_text_wide(filename.c_str());
         lf_set_text_wrap(true);
+        if(state.winWidth <= WIN_START_W / 3.0f)
+            lf_pop_font();
         lf_next_line();
     }
     // Playlist Display
@@ -1213,10 +1225,33 @@ void renderOnTrack() {
         lf_set_ptr_y(lf_get_ptr_y() + 2.5);
     }
 
+    vec2s progressBarSize = {MAX(state.winWidth / 3.0f, 200), 10}; 
+    // Progress position in seconds
+    {
+        lf_push_font(&state.h6Font);
+        std::string durationMins = formatDurationToMins(state.currentSound.getPositionInSeconds());
+        lf_set_ptr_x_absolute((state.winWidth - progressBarSize.x) / 2.0f - lf_text_dimension(durationMins.c_str()).x - 15);
+        LfUIElementProps props = lf_theme()->text_props;
+        props.margin_top = 20 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
+        lf_push_style_props(props);
+        lf_text(durationMins.c_str());
+        lf_pop_style_props();
+        lf_pop_font();
+    }
+    // Total sound duration
+    {
+        lf_push_font(&state.h6Font);
+        lf_set_ptr_x_absolute((state.winWidth - progressBarSize.x) / 2.0f + state.trackProgressSlider.width + 5);
+        LfUIElementProps props = lf_theme()->text_props;
+        std::string durationMins = formatDurationToMins(state.currentSound.lengthInSeconds); 
+        props.margin_top = 20 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
+        lf_push_style_props(props);
+        lf_text(durationMins.c_str());
+        lf_pop_style_props();
+        lf_pop_font();
+    }
     // Progress Bar 
     {
-        vec2s progressBarSize = {MAX(state.winWidth / 3.0f, 200), 10}; 
-         
         lf_set_ptr_x((state.winWidth - progressBarSize.x) / 2.0f - DIV_START_X);
         
         LfUIElementProps props = lf_theme()->slider_props;
@@ -1313,7 +1348,10 @@ void renderPlaylistAddFromFile() {
     // Form Input 
     {
         lf_next_line();
-        inputFieldStyled(&state.playlistAddFromFileTab.pathInput.input);
+        LfUIElementProps props = input_field_style();
+        lf_push_style_props(props);
+        lf_input_text(&state.playlistAddFromFileTab.pathInput.input);
+        lf_pop_style_props();
         lf_next_line();
     }
     // Add Button 
@@ -1601,9 +1639,8 @@ void renderEditPlaylistPopup() {
     // Beginning a new div
     const vec2s popupSize = (vec2s){500.0f, 350.0f};
     LfUIElementProps div_props = lf_theme()->div_props;
-    div_props.color = (LfColor){10, 10, 10, 255};
-    div_props.border_color = (LfColor){50, 50, 50, 255};
-    div_props.border_width = 3;
+    div_props.color = lf_color_brightness(GRAY, 0.7); 
+    div_props.border_width = 0;
     div_props.padding = 5;
     div_props.corner_radius = 10;
     lf_push_style_props(div_props);
@@ -1647,7 +1684,11 @@ void renderEditPlaylistPopup() {
     lf_next_line();
     { 
         state.createPlaylistTab.nameInput.input.width = 457;
-        inputFieldStyled(&state.createPlaylistTab.nameInput.input, div_props.color);
+        LfUIElementProps props = input_field_style();
+        props.color = lf_color_brightness(GRAY, 0.4);
+        lf_push_style_props(props);
+        lf_input_text(&state.createPlaylistTab.nameInput.input);
+        lf_pop_style_props();
         lf_next_line();
     }
 
@@ -1664,16 +1705,17 @@ void renderEditPlaylistPopup() {
     lf_next_line();
     { 
         state.createPlaylistTab.descInput.input.width = 457;
-        inputFieldStyled(&state.createPlaylistTab.descInput.input, div_props.color);
+        LfUIElementProps props = input_field_style(); 
+        props.color = lf_color_brightness(GRAY, 0.4);
+        lf_push_style_props(props);
+        lf_input_text(&state.createPlaylistTab.descInput.input);
+        lf_pop_style_props();
         lf_next_line();
     }
     lf_next_line();
     {
-        LfUIElementProps props = lf_theme()->button_props;
-        props.corner_radius = 5;
-        props.border_width = 0; 
+        LfUIElementProps props = primary_button_style();
         props.margin_top = 15;
-        props.color = LYSSA_GREEN;
         lf_push_style_props(props);
         if(lf_button_fixed("Done", 150, -1) == LF_CLICKED) {
             renamePlaylist(std::string(state.createPlaylistTab.nameInput.input.buf), state.currentPlaylist);
@@ -1688,7 +1730,7 @@ void renderEditPlaylistPopup() {
     }
 
     if(lf_get_current_div().id != lf_get_selected_div().id && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-        state.popups[(int32_t)PopupID::FileOrFolderPopup].render = false;
+        state.popups[(int32_t)PopupID::EditPlaylistPopup].render = false;
     }
     lf_div_end();
     lf_pop_style_props();
@@ -1696,50 +1738,70 @@ void renderEditPlaylistPopup() {
 
 void renderTrackDisplay() {
     if(state.currentSoundFile == NULL) return;
+
     const float margin = DIV_START_X;
     const float marginThumbnail = 15;
     const vec2s thumbnailContainerSize = (vec2s){48, 48};
     const float padding = 10;
+
     std::filesystem::path filepath = state.currentSoundFile->path;
+
     std::wstring filename = removeFileExtensionW(filepath.filename().wstring());
+    std::wstring artist = getSoundArtist(filepath.string());
 
-    lf_push_font(&state.h6Font);
-    float filenameWidth = lf_text_dimension_wide(filename.c_str()).x;
-    float filenameHeight = lf_text_dimension_wide(filename.c_str()).y;
-    lf_pop_font();
+    const SoundFile& playlingFile = state.playlists[state.playingPlaylist].musicFiles[state.playlists[state.playingPlaylist].playingFile];
 
+    // Container 
+    float containerPosX = (float)(state.winWidth - state.trackProgressSlider.width) / 2.0f + state.trackProgressSlider.width + 
+        lf_text_dimension(formatDurationToMins(state.currentSound.lengthInSeconds).c_str()).x + margin;
     vec2s containerSize = (vec2s){
-        .x = thumbnailContainerSize.x + marginThumbnail + filenameWidth + padding * 2.0f,
+        .x = (state.winWidth - margin) - containerPosX,
         .y = thumbnailContainerSize.y + padding * 2.0f
     };
 
     vec2s containerPos = (vec2s){
-        (float)state.winWidth - containerSize.x - margin,
+        containerPosX,
         (float)state.winHeight - containerSize.y - margin
     };
-    lf_rect_render(containerPos, containerSize, lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, 3.0f); 
 
-    lf_rect_render((vec2s){containerPos.x + padding, containerPos.y + padding}, 
-            thumbnailContainerSize, lf_color_brightness(GRAY, 0.3), LF_NO_COLOR, 0.0f, 3.0f);
+    lf_rect_render(containerPos, containerSize, lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, 4.5f); 
 
-    const LfTexture& thumbnail = state.playlists[state.playingPlaylist].musicFiles[state.playlists[state.playingPlaylist].playingFile].thumbnail;
+    // Thumbnail
+    {
+        lf_rect_render((vec2s){containerPos.x + padding, containerPos.y + padding}, 
+                thumbnailContainerSize, lf_color_brightness(GRAY, 0.3), LF_NO_COLOR, 0.0f, 3.0f);
 
-    float aspect = (float)thumbnail.width / (float)thumbnail.height;
 
-    float thumbnailHeight = thumbnailContainerSize.y / aspect; 
+        float aspect = (float)playlingFile.thumbnail.width / (float)playlingFile.thumbnail.height;
 
-    lf_image_render((vec2s){containerPos.x + padding, containerPos.y + padding + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f}, 
-            LF_WHITE, (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);
+        float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
-    lf_text_render_wchar(
-            (vec2s){containerPos.x + padding + thumbnailContainerSize.x + marginThumbnail, 
-                    containerPos.y + padding + (thumbnailContainerSize.y - filenameHeight) / 2.0f},
-                    filename.c_str(), state.h6Font, -1, false, LF_WHITE);
+        lf_image_render((vec2s){containerPos.x + padding, containerPos.y + padding + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f}, 
+                LF_WHITE, (LfTexture){.id = playlingFile.thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);
+    }
+    // Name + Artist
+    {
+        float textLabelHeight = lf_text_dimension_wide(filename.c_str()).y + lf_text_dimension_wide(artist.c_str()).y + 5.0f;
+        lf_set_line_should_overflow(false);
+        lf_set_cull_end_x(containerPos.x + containerSize.x - padding);
+        lf_text_render_wchar(
+                (vec2s){containerPos.x + padding + thumbnailContainerSize.x + marginThumbnail, 
+                containerPos.y + padding + (thumbnailContainerSize.y -  textLabelHeight) / 2.0f},
+                filename.c_str(), state.h6Font, -1, false, LF_WHITE);
 
+        lf_text_render_wchar(
+                (vec2s){containerPos.x + padding + thumbnailContainerSize.x + marginThumbnail, 
+                containerPos.y + padding + (thumbnailContainerSize.y - textLabelHeight) / 2.0f + lf_text_dimension_wide(artist.c_str()).y + 5.0f},
+                artist.c_str(), state.h6Font, -1, false, lf_color_brightness(GRAY, 1.4));
+        lf_unset_cull_end_x();
+        lf_set_line_should_overflow(true);
+    }
 }
 void renderTrackProgress() {
     if(state.currentSoundFile == NULL) return;
+    // Progress position in seconds
     {
+        lf_push_font(&state.h6Font);
         std::string durationMins = formatDurationToMins(state.currentSound.getPositionInSeconds());
         lf_set_ptr_x_absolute((state.winWidth - state.trackProgressSlider.width) / 2.0f - lf_text_dimension(durationMins.c_str()).x - 15);
         LfUIElementProps props = lf_theme()->text_props;
@@ -1747,8 +1809,11 @@ void renderTrackProgress() {
         lf_push_style_props(props);
         lf_text(durationMins.c_str());
         lf_pop_style_props();
+        lf_pop_font();
     }
+    // Total sound duration
     {
+        lf_push_font(&state.h6Font);
         lf_set_ptr_x_absolute((state.winWidth - state.trackProgressSlider.width) / 2.0f + state.trackProgressSlider.width + 5);
         LfUIElementProps props = lf_theme()->text_props;
         std::string durationMins = formatDurationToMins(state.currentSound.lengthInSeconds); 
@@ -1756,10 +1821,11 @@ void renderTrackProgress() {
         lf_push_style_props(props);
         lf_text(durationMins.c_str());
         lf_pop_style_props();
+        lf_pop_font();
     }
     // Progress Bar 
     {
-        state.trackProgressSlider.width = 500;
+        state.trackProgressSlider.width = state.winWidth / 2.5f;
    
         lf_set_ptr_x_absolute((state.winWidth - state.trackProgressSlider.width) / 2.0f);
         
@@ -2131,15 +2197,14 @@ void loadPlaylists() {
     for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
         Playlist playlist{};
         playlist.path = folder.path().string();
-        playlist.name = getPlaylistName(folder);
-        playlist.desc = getPlaylistDesc(folder);
+        //playlist.name = getPlaylistName(folder);
+        //playlist.desc = getPlaylistDesc(folder);
         if(std::find(state.playlists.begin(), state.playlists.end(), playlist) == state.playlists.end()) {
             state.playlists.push_back(playlist);
         } else {
             state.playlists[playlistI] = playlist;
         }
         playlistI++;
-
     }
 }
 
@@ -2321,6 +2386,19 @@ TextureData getSoundThubmnailData(const std::string& soundPath, vec2s size_facto
 
     return retData;
 }
+std::wstring getSoundArtist(const std::string& soundPath) {
+    FileRef file(soundPath.c_str());
+
+    if (!file.isNull() && file.tag()) {
+        Tag *tag = file.tag();
+
+        std::wstring artist = tag->artist().toWString();
+        return artist;
+    } else {
+        return L"No artist";
+    }
+    return L"No artist";
+}
 void updateSoundProgress() {
     if(!state.currentSound.isInit) {
         return;
@@ -2359,12 +2437,6 @@ std::wstring removeFileExtensionW(const std::wstring& filename) {
     } else {
         return filename;
     }
-}
-
-void inputFieldStyled(LfInputField* input, LfColor bgColor) {
-    lf_push_style_props(input_field_style(bgColor));
-    lf_input_text(input);
-    lf_pop_style_props();
 }
 
 void loadIcons() {

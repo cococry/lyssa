@@ -53,7 +53,7 @@ inline LfUIElementProps call_to_action_button_style() {
     return props;
 }
 
-inline LfUIElementProps input_field_style(LfColor bgColor) {
+inline LfUIElementProps input_field_style() {
     LfUIElementProps props = lf_theme()->inputfield_props;
     props.padding = 15; 
     props.border_width = 0;
