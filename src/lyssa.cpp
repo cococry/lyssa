@@ -19,7 +19,10 @@
 #include <taglib/id3v2frame.h>
 #include <taglib/mpegheader.h>
 #include <taglib/attachedpictureframe.h>
+#include <taglib/textidentificationframe.h>
 #include <taglib/tfile.h>
+#include <taglib/tpropertymap.h>
+
 
 #include <miniaudio.h>
 
@@ -105,6 +108,8 @@ struct Playlist {
     bool operator==(const Playlist& other) const { 
         return path == other.path;
     }
+
+    float scroll = 0.0f, scrollVelocity = 0.0f;
 };
 
 struct InputField {
@@ -158,7 +163,7 @@ struct Popup {
 enum class PopupID {
     FileOrFolderPopup = 0,
     EditPlaylistPopup,
-    RemoveFileFromPlaylistPopup,
+    PlaylistFileDialoguePopup,
     PopupCount
 };
 
@@ -237,7 +242,7 @@ static void                     renderPlaylistAddFromFolder();
 
 static void                     renderFileOrFolderPopup();
 static void                     renderEditPlaylistPopup();
-static void                     renderRemoveFileFromPlaylistPopup();
+static void                     renderPlaylistFileDialoguePopup();
 
 
 static void                     renderTrackDisplay();
@@ -293,7 +298,10 @@ static void                     handleAsyncPlaylistLoading();
 
 static LfTexture                getSoundThubmnail(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
 static TextureData              getSoundThubmnailData(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
-static std::wstring              getSoundArtist(const std::string& soundPath);
+static std::wstring             getSoundArtist(const std::string& soundPath);
+static std::string              getSoundComment(const std::string& soundPath);  
+
+static std::string              getCommandOutput(const std::string& cmd);
 
 void PlaylistAddFromFolderTab::loadFolderContentsW(const std::wstring& folderpath) {
     for (const auto& entry : std::filesystem::directory_iterator(folderpath)) {
@@ -978,7 +986,9 @@ void renderOnPlaylist() {
         }
 
         // Begin a new div container for the files
-        lf_div_begin(LF_PTR, ((vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true);
+        lf_push_element_id(state.currentPlaylist);
+        lf_div_begin_ex(LF_PTR, ((vec2s){(float)state.winWidth - DIV_START_X * 2, (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true, &state.playlists[state.currentPlaylist].scroll, &state.playlists[state.currentPlaylist].scrollVelocity);
+        lf_pop_element_id();
 
         lf_next_line();
 
@@ -999,13 +1009,12 @@ void renderOnPlaylist() {
                 if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_RIGHT)) {
                     state.removeFilePopup.path = wStrToStr(file.path);
                     state.removeFilePopup.pos = (vec2s){(float)lf_get_mouse_x(), (float)lf_get_mouse_y()};
-                    state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup].render = true;
+                    state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = true;
                 }
                 if(currentPlaylist.playingFile == i) {
                     lf_rect_render(fileAABB.pos, fileAABB.size, lf_color_brightness(GRAY, 0.75),
                             LF_NO_COLOR, 0.0f, 5.0f);
                 } 
-
 
                 // Index 
                 {
@@ -1695,7 +1704,7 @@ void renderEditPlaylistPopup() {
     lf_pop_style_props();
 }
 
-void renderRemoveFileFromPlaylistPopup() {
+void renderPlaylistFileDialoguePopup() {
     RemoveFilePopup& popup = state.removeFilePopup;
     const vec2s popupSize =(vec2s){200, 200};
 
@@ -1708,11 +1717,12 @@ void renderRemoveFileFromPlaylistPopup() {
    
     static bool showPlaylistPopup = false;
 
-    const uint32_t options_count = 3;
+    const uint32_t options_count = 4;
     static const char* options[options_count] = {
-        "Add to playlist...", 
+        "Add to playlist", 
         "Remove", 
-        "Add to favourites"
+        "Add to favourites",
+        "Open URL..." 
     };
 
     int32_t clickedIndex = -1;
@@ -1736,22 +1746,44 @@ void renderRemoveFileFromPlaylistPopup() {
         lf_next_line();
     }
 
-    if(clickedIndex == 1 ) { // Remove butotn
-        if(state.currentSoundFile != nullptr) {
-            if(state.currentSoundFile->path == strToWstr(popup.path)) {
-                state.currentSound.stop();
-                state.currentSound.uninit();
-            }
+    switch(clickedIndex) { 
+        case 0: 
+        {
+            showPlaylistPopup = !showPlaylistPopup;
+            break;
         }
-        removeFileFromPlaylist(popup.path, state.currentPlaylist);
-        state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup].render = false;
-    }
-    if(clickedIndex == 0) { // Add to playlist button
-        showPlaylistPopup = true;
+        case 1: /* Remove */ 
+        {
+            if(state.currentSoundFile != nullptr) {
+                if(state.currentSoundFile->path == strToWstr(popup.path)) {
+                    state.currentSound.stop();
+                    state.currentSound.uninit();
+                }
+            }
+            removeFileFromPlaylist(popup.path, state.currentPlaylist);
+            state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = false;
+            break; 
+        }
+        case 2: /* Add to favourites */ 
+        {
+            break;
+        }
+        case 3: 
+        {
+            std::string url = getSoundComment(popup.path);
+            if(url != "") {
+                std::string cmd = "xdg-open " + url;
+                system(cmd.c_str());
+            }
+            break;
+        }
+        default:  
+            break;
     }
 
     if(lf_get_current_div().id != lf_get_selected_div().id && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-        state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup].render = false;
+        state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = false;
+        showPlaylistPopup = false;
     }
     lf_div_end();
 
@@ -1759,10 +1791,41 @@ void renderRemoveFileFromPlaylistPopup() {
         LfUIElementProps div_props = lf_theme()->div_props;
         div_props.color = lf_color_brightness(GRAY, 0.35);
         div_props.corner_radius = 4;
+        div_props.padding = 10;
         lf_push_style_props(div_props);
-        lf_div_begin(((vec2s){popup.pos.x + 200, popup.pos.y}), popupSize, true);
+        lf_div_begin(((vec2s){popup.pos.x + popupSize.x + div_props.padding, popup.pos.y}), popupSize, true);
         lf_pop_style_props();
-  
+        
+        lf_set_cull_end_x(popup.pos.x + popupSize.x * 2 + div_props.padding * 2);
+
+        uint32_t renderedItems = 0;
+        for(uint32_t i = 0; i < state.playlists.size(); i++) {
+            if(i == state.currentPlaylist) continue;
+            // Playlist 
+            props = lf_theme()->text_props;
+            props.hover_text_color = lf_color_brightness(GRAY, 2); 
+            lf_push_style_props(props);
+            if(lf_button(state.playlists[i].name.c_str()) == LF_CLICKED) {
+                addFileToPlaylist(popup.path, i);
+                state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = false;
+                showPlaylistPopup = false;
+            }
+            lf_pop_style_props();
+
+            // Seperator
+            props = lf_theme()->button_props;
+            props.color = lf_color_brightness(GRAY, 0.7);
+            lf_push_style_props(props);
+            lf_seperator();
+            lf_pop_style_props();
+
+            lf_next_line();
+            renderedItems++;
+        }
+        if(renderedItems == 0) {
+            lf_text("No other playlists");
+        }
+        lf_unset_cull_end_x();
         lf_div_end();
     }
 }
@@ -2052,6 +2115,13 @@ FileStatus deletePlaylist(uint32_t playlistIndex) {
     std::filesystem::remove_all(playlist.path);
     state.playlists.erase(std::find(state.playlists.begin(), state.playlists.end(), playlist));
 
+    if(state.currentPlaylist == playlistIndex) {
+        if(state.currentSoundFile != nullptr) {
+            state.currentSoundFile = nullptr;
+            state.currentSound.stop();
+            state.currentSound.uninit();
+        }
+    }
     return FileStatus::Success;
 }
 
@@ -2431,6 +2501,24 @@ std::wstring getSoundArtist(const std::string& soundPath) {
     }
     return L"No artist";
 }
+
+std::string getSoundComment(const std::string& soundPath) {
+    std::string cmd = "exiftool -s -s -s -UserDefinedText \"" + soundPath + "\" | awk '{print $2}'"; 
+    return getCommandOutput(cmd);
+}
+
+std::string getCommandOutput(const std::string& cmd) {
+    FILE* pipe = popen(cmd.c_str(), "r");
+    char buffer[128];
+    std::string result = "";
+    while (!feof(pipe)) {
+        if (fgets(buffer, 128, pipe) != NULL)
+            result += buffer;
+    }
+    pclose(pipe);
+    return result;
+}
+
 void updateSoundProgress() {
     if(!state.currentSound.isInit) {
         return;
@@ -2588,7 +2676,7 @@ int main(int argc, char* argv[]) {
     state.popups.reserve((int32_t)PopupID::PopupCount);
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
-    state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup] = (Popup){.renderCb = renderRemoveFileFromPlaylistPopup, .render = false};
+    state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup] = (Popup){.renderCb = renderPlaylistFileDialoguePopup, .render = false};
 
     vec4s clearColor = lf_color_to_zto(LYSSA_BACKGROUND_COLOR);
 
