@@ -145,6 +145,11 @@ struct PlaylistAddFromFolderTab {
 
 typedef void (*PopupRenderCallback)();
 
+struct RemoveFilePopup {
+    std::string path;
+    vec2s pos;
+};
+
 struct Popup {
     PopupRenderCallback renderCb;
     bool render;
@@ -153,6 +158,7 @@ struct Popup {
 enum class PopupID {
     FileOrFolderPopup = 0,
     EditPlaylistPopup,
+    RemoveFileFromPlaylistPopup,
     PopupCount
 };
 
@@ -191,9 +197,10 @@ struct GlobalState {
     CreatePlaylistState createPlaylistTab;
     PlaylistAddFromFileTab playlistAddFromFileTab;
     PlaylistAddFromFolderTab playlistAddFromFolderTab;
-    OnTrackTab onTrackTab; 
+    OnTrackTab onTrackTab;
 
-    int32_t playlistFileOptionsIndex = -1;
+    RemoveFilePopup removeFilePopup;
+
     int32_t currentPlaylist = -1, playingPlaylist = -1;
 
     float soundPosUpdateTimer = 1.0f;
@@ -204,6 +211,7 @@ struct GlobalState {
     bool showVolumeSliderTrackDisplay = false, showVolumeSliderOverride = false;
 
     float volumeBeforeMute = 100.0f;
+
 
     // Async loading
     std::vector<std::future<void>> playlistFileFutures;
@@ -229,6 +237,7 @@ static void                     renderPlaylistAddFromFolder();
 
 static void                     renderFileOrFolderPopup();
 static void                     renderEditPlaylistPopup();
+static void                     renderRemoveFileFromPlaylistPopup();
 
 
 static void                     renderTrackDisplay();
@@ -399,11 +408,7 @@ void initWin(uint32_t width, uint32_t height) {
 
     lf_init_glfw(width, height, state.win);   
     lf_set_text_wrap(true);
-    LfTheme theme = lf_get_theme();
-    theme.div_props.color = LF_NO_COLOR;
-    theme.scrollbar_props.corner_radius = 1.5;
-    lf_set_theme(theme);
-
+    lf_set_theme(ui_theme());;
 
     glfwSetFramebufferSizeCallback(state.win, winResizeCb);
     glViewport(0, 0, width, height);
@@ -933,11 +938,6 @@ void renderOnPlaylist() {
             lf_pop_font();
         }
     } else {
-        // Popup Variables
-        vec2s popupPos = (vec2s){-1, -1};
-        std::string popupFilePath = "";
-        int32_t popupIndex = -1;
-
         lf_next_line();
         {
             lf_push_font(&state.h3Font);
@@ -997,7 +997,9 @@ void renderOnPlaylist() {
 
                 bool hoveredTextDiv = lf_hovered(fileAABB.pos, fileAABB.size);
                 if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_RIGHT)) {
-                    state.playlistFileOptionsIndex = i;
+                    state.removeFilePopup.path = wStrToStr(file.path);
+                    state.removeFilePopup.pos = (vec2s){(float)lf_get_mouse_x(), (float)lf_get_mouse_y()};
+                    state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup].render = true;
                 }
                 if(currentPlaylist.playingFile == i) {
                     lf_rect_render(fileAABB.pos, fileAABB.size, lf_color_brightness(GRAY, 0.75),
@@ -1066,14 +1068,7 @@ void renderOnPlaylist() {
                     lf_unset_cull_end_x();
                 } 
 
-
-                if(state.playlistFileOptionsIndex == i) {
-                    popupPos = (vec2s){lf_get_ptr_x() + 20, lf_get_ptr_y() + 20};
-                    popupFilePath = wStrToStr(file.path);
-                    popupIndex = i;
-                }
-
-                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && state.playlistFileOptionsIndex != i && state.playlistFileOptionsIndex == -1 && !onPlayButton && currentPlaylist.ordered) {
+                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton && currentPlaylist.ordered) {
                     if(i != currentPlaylist.playingFile) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
@@ -1094,46 +1089,10 @@ void renderOnPlaylist() {
                     lf_text(durationText.c_str());
                     lf_pop_style_props();
                 }
-                lf_next_line();    
+                lf_next_line(); 
             }
         }
         lf_div_end();
-
-        if((lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && state.playlistFileOptionsIndex != -1) && !lf_hovered(popupPos, (vec2s){150, 50})) {
-            state.playlistFileOptionsIndex = -1;
-        }
-        if(popupPos.x != -1 && popupPos.y != 1)
-        {
-            LfUIElementProps props = lf_theme()->button_props;
-            props.color = (LfColor){20, 20, 20, 255};
-            props.corner_radius = 5;
-            props.border_width = 0;
-            lf_push_style_props(props);
-            lf_div_begin(popupPos, ((vec2s){150, 50}), false);
-            lf_pop_style_props();
-
-                {
-                    LfUIElementProps props = lf_theme()->button_props;
-                    props.corner_radius = 5;
-                    props.color = LYSSA_RED;
-                    props.border_width = 0;
-                    lf_push_style_props(props);
-                    if(lf_button("Remove") == LF_CLICKED) {
-                        FileStatus removeStatus = removeFileFromPlaylist(popupFilePath, state.currentPlaylist);
-                        if(removeStatus == FileStatus::Failed) {
-                            std::cout << "[Error]: Failed to remove file '" << popupFilePath << "' from playlist '" << currentPlaylist.name << "'.\n";
-                        }
-                        if(currentPlaylist.playingFile == popupIndex) {
-                            state.currentSound.stop();
-                            state.currentSound.uninit();
-                        }
-                        state.playlistFileOptionsIndex = -1;
-                    }
-                    lf_pop_style_props();
-                }
-                lf_div_end();
-
-            }
     }
 
 
@@ -1736,6 +1695,78 @@ void renderEditPlaylistPopup() {
     lf_pop_style_props();
 }
 
+void renderRemoveFileFromPlaylistPopup() {
+    RemoveFilePopup& popup = state.removeFilePopup;
+    const vec2s popupSize =(vec2s){200, 200};
+
+    LfUIElementProps props = lf_theme()->div_props;
+    props.color = lf_color_brightness(GRAY, 0.35);
+    props.corner_radius = 4;
+    lf_push_style_props(props);
+    lf_div_begin(popup.pos, popupSize, false);
+    lf_pop_style_props();
+   
+    static bool showPlaylistPopup = false;
+
+    const uint32_t options_count = 3;
+    static const char* options[options_count] = {
+        "Add to playlist...", 
+        "Remove", 
+        "Add to favourites"
+    };
+
+    int32_t clickedIndex = -1;
+    for(uint32_t i = 0; i < options_count; i++) {
+        // Option 
+        props = lf_theme()->text_props;
+        props.hover_text_color = lf_color_brightness(GRAY, 2); 
+        lf_push_style_props(props);
+        if(lf_button(options[i]) == LF_CLICKED) {
+            clickedIndex = i;
+        }
+        lf_pop_style_props();
+
+        // Seperator
+        props = lf_theme()->button_props;
+        props.color = lf_color_brightness(GRAY, 0.7);
+        lf_push_style_props(props);
+        lf_seperator();
+        lf_pop_style_props();
+
+        lf_next_line();
+    }
+
+    if(clickedIndex == 1 ) { // Remove butotn
+        if(state.currentSoundFile != nullptr) {
+            if(state.currentSoundFile->path == strToWstr(popup.path)) {
+                state.currentSound.stop();
+                state.currentSound.uninit();
+            }
+        }
+        removeFileFromPlaylist(popup.path, state.currentPlaylist);
+        state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup].render = false;
+    }
+    if(clickedIndex == 0) { // Add to playlist button
+        showPlaylistPopup = true;
+    }
+
+    if(lf_get_current_div().id != lf_get_selected_div().id && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+        state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup].render = false;
+    }
+    lf_div_end();
+
+    if(showPlaylistPopup) {
+        LfUIElementProps div_props = lf_theme()->div_props;
+        div_props.color = lf_color_brightness(GRAY, 0.35);
+        div_props.corner_radius = 4;
+        lf_push_style_props(div_props);
+        lf_div_begin(((vec2s){popup.pos.x + 200, popup.pos.y}), popupSize, true);
+        lf_pop_style_props();
+  
+        lf_div_end();
+    }
+}
+
 void renderTrackDisplay() {
     if(state.currentSoundFile == NULL) return;
 
@@ -2194,11 +2225,12 @@ std::vector<std::wstring> getPlaylistDisplayNamesW(const std::filesystem::direct
 
 void loadPlaylists() {
     uint32_t playlistI = 0;
+    state.currentSoundFile = nullptr; 
     for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
         Playlist playlist{};
         playlist.path = folder.path().string();
-        //playlist.name = getPlaylistName(folder);
-        //playlist.desc = getPlaylistDesc(folder);
+        playlist.name = getPlaylistName(folder);
+        playlist.desc = getPlaylistDesc(folder);
         if(std::find(state.playlists.begin(), state.playlists.end(), playlist) == state.playlists.end()) {
             state.playlists.push_back(playlist);
         } else {
@@ -2556,6 +2588,7 @@ int main(int argc, char* argv[]) {
     state.popups.reserve((int32_t)PopupID::PopupCount);
     state.popups[(int32_t)PopupID::FileOrFolderPopup] = (Popup){.renderCb = renderFileOrFolderPopup, .render = false};
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
+    state.popups[(int32_t)PopupID::RemoveFileFromPlaylistPopup] = (Popup){.renderCb = renderRemoveFileFromPlaylistPopup, .render = false};
 
     vec4s clearColor = lf_color_to_zto(LYSSA_BACKGROUND_COLOR);
 

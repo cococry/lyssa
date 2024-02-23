@@ -35,7 +35,11 @@ extern "C" {
 // Colors 
 #define LYSSA_BACKGROUND_COLOR NIGHT
 #define LYSSA_PLAYLIST_COLOR PURPLE
-// Styles
+
+// Scrolling 
+#define DIV_SMOOTH_SCROLL true 
+
+// Styles & Theming 
 inline LfUIElementProps primary_button_style() {
     LfUIElementProps props = lf_theme()->button_props;
     props.corner_radius = 6;
@@ -61,6 +65,14 @@ inline LfUIElementProps input_field_style() {
     props.corner_radius = 4;
     props.text_color = LF_WHITE;
     return props;
+}
+
+inline LfTheme ui_theme() {
+    LfTheme theme = lf_get_theme();
+    theme.div_props.color = LF_NO_COLOR;
+    theme.scrollbar_props.corner_radius = 1.5;
+    theme.div_smooth_scroll = DIV_SMOOTH_SCROLL;
+    return theme;
 }
 
 // Async loading

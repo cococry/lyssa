@@ -109,8 +109,8 @@ typedef enum {
 
 
 typedef struct {
-    LfColor color;
-    LfColor text_color;
+    LfColor color, hover_color;
+    LfColor text_color, hover_text_color;
     LfColor border_color;
     float padding;
     float margin_left;
@@ -132,6 +132,7 @@ typedef struct {
     bool div_smooth_scroll;
     float div_scroll_acceleration, div_scroll_max_veclocity;
     float div_scroll_amount_px;
+    float div_scroll_velocity_deceleration;
 
     float scrollbar_width;
 } LfTheme;
