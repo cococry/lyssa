@@ -81,7 +81,7 @@
 #define CURSOR_CALLBACK_t void*
 #endif
 #define MAX_RENDER_BATCH 10000
-#define MAX_TEX_COUNT_BATCH 4
+#define MAX_TEX_COUNT_BATCH 32
 #define MAX_KEY_CALLBACKS 4
 #define MAX_MOUSE_BTTUON_CALLBACKS 4
 #define MAX_SCROLL_CALLBACKS 4
@@ -433,7 +433,7 @@ void renderer_init() {
         "flat in vec2 v_scale;\n"
         "flat in vec2 v_pos_px;\n"
         "in float v_corner_radius;\n"
-        "uniform sampler2D u_textures[4];\n"
+        "uniform sampler2D u_textures[32];\n"
         "uniform vec2 u_screen_size;\n"
         "in vec2 v_min_coord;\n"
         "in vec2 v_max_coord;\n"
@@ -823,6 +823,7 @@ LfFont load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, u
     font.tex_height = tex_height;
     font.line_gap_add = line_gap_add;
     font.font_size = pixelsize;
+    font.num_glyphs = num_glyphs;
     stbtt_BakeFontBitmap(buf, 0, pixelsize, bitmap, tex_width, tex_height, 32, num_glyphs, (stbtt_bakedchar*)font.cdata);
 
     uint32_t bitmap_index = 0;
@@ -1873,6 +1874,9 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
 
     while(*str) { 
         bool skip = false;
+        if(*str >= font.num_glyphs) {
+            skip = true;
+        } 
         // If the current character is a new line or the wrap point has been reached, advance to the next line
         if(*str == '\n' || (x >= wrap_point && wrap_point != -1)) {
             y += font.font_size;
@@ -1997,9 +2001,10 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int
     float width = 0;
     
     uint32_t i = 0;
-    for(; str[i] != L'\0'; i++) { 
+    for(; str[i] != L'\0'; i++) {
+        if(str[i] >= font.num_glyphs) continue;
         if(stbtt_FindGlyphIndex((const stbtt_fontinfo*)font.font_info, str[i]-32) == 0 && 
-            str[i] != L' ' && str[i] != L'\n' && !iswdigit(str[i]) && !iswpunct(str[i]))  {
+            str[i] != L' ' && str[i] != L'\n' && str[i] != L'\t' && !iswdigit(str[i]) && !iswpunct(str[i]))  {
             continue;
         }
         // If the current character is a new line or the wrap point has been reached, advance to the next line

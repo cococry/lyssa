@@ -77,4 +77,4 @@ inline LfTheme ui_theme() {
 
 // Async loading
 #define ASYNC_PLAYLIST_LOADING true
-
+#define MIN_FILES_FOR_ASYNC 10

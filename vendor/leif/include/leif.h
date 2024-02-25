@@ -60,6 +60,8 @@ typedef struct {
     uint32_t tex_width, tex_height;
     uint32_t line_gap_add, font_size;
     LfTexture bitmap;
+
+    uint32_t num_glyphs;
 } LfFont;
 
 typedef enum {
