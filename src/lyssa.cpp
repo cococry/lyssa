@@ -1041,12 +1041,13 @@ void renderOnPlaylist() {
                     float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
                     lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + marginTopThumbnail}, thumbnailContainerSize, 
-                            GRAY, LF_NO_COLOR, 0.0f, 3.0f);
+                            PLAYLIST_FILE_THUMBNAIL_COLOR, LF_NO_COLOR, 0.0f, PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS);
 
-                        lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + 
-                                (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE,
-                                (LfTexture){.id = thumbnail.id, .width = 
-                                (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
+                    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + 
+                            (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE,
+                            (LfTexture){.id = thumbnail.id, .width = 
+                            (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
+
                     lf_set_ptr_x(lf_get_ptr_x() + thumbnailContainerSize.x);
                     lf_set_line_height(thumbnailContainerSize.y + marginBottomThumbnail);
 

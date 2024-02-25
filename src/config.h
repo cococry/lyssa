@@ -37,7 +37,12 @@ extern "C" {
 #define LYSSA_PLAYLIST_COLOR PURPLE
 
 // Scrolling 
-#define DIV_SMOOTH_SCROLL true 
+#define DIV_SMOOTH_SCROLL true
+
+// Playlist file thumbnails 
+#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 0 // Setting this to > 0 will worsen perfomance on low-end systems
+#define PLAYLIST_FILE_THUMBNAIL_COLOR GRAY
+
 
 // Styles & Theming 
 inline LfUIElementProps primary_button_style() {
