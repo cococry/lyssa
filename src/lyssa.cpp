@@ -685,6 +685,12 @@ void renderDashboard() {
                 lf_unset_image_color();
 
                 if(deleteButton == LF_CLICKED) {
+                    if(state.currentSoundFile != nullptr) {
+                        state.currentSound.stop();
+                        state.currentSound.uninit();
+                        state.currentSoundFile = nullptr;
+                        state.currentPlaylist = -1;
+                    }
                     deletePlaylist(playlistIndex);
                 }
 
@@ -782,7 +788,7 @@ void renderCreatePlaylist() {
         props.margin_top = 10;
         lf_push_style_props(props);
        if(lf_button_fixed("Create", 150, -1) == LF_CLICKED) {
-           state.createPlaylistTab.createFileStatus = createPlaylist(std::string(state.createPlaylistTab.nameInput.input.buf), std::string(state.createPlaylistTab.descInput.input.buf)); 
+           state.createPlaylistTab.createFileStatus = createPlaylist(std::string(state.createPlaylistTab.nameInput.buffer), std::string(state.createPlaylistTab.descInput.buffer)); 
            memset(state.createPlaylistTab.nameInput.input.buf, 0, INPUT_BUFFER_SIZE);
            memset(state.createPlaylistTab.nameInput.buffer, 0, INPUT_BUFFER_SIZE);
 
@@ -839,15 +845,20 @@ void renderOnPlaylist() {
 
     // Playlist Heading
     {
+        lf_push_font(&state.musicTitleFont);
+        vec2s titleSize = lf_text_dimension(currentPlaylist.name.c_str());
+        bool onTitleArea = lf_hovered(LF_PTR, (vec2s){titleSize.x + 180, titleSize.y});
         // Title 
         {
-            lf_push_font(&state.musicTitleFont);
             LfUIElementProps props = lf_theme()->text_props;
             props.text_color = LYSSA_PLAYLIST_COLOR;
             lf_push_style_props(props);
             lf_text(currentPlaylist.name.c_str());
             lf_pop_style_props();
-            lf_pop_font();
+        }
+        lf_pop_font();
+        if(onTitleArea)
+        {
         }
 
         // "Add More" button
@@ -873,6 +884,32 @@ void renderOnPlaylist() {
                 state.popups[(int32_t)PopupID::FileOrFolderPopup].render = !state.popups[(int32_t)PopupID::FileOrFolderPopup].render;
             }  
             lf_pop_style_props();
+        }
+        if(!currentPlaylist.ordered && state.playlistFileFutures.empty() && !currentPlaylist.musicFiles.empty() && !state.loadedPlaylistFilepaths.empty())
+        {
+            lf_next_line();
+            lf_push_font(&state.h5Font);
+            const char* text = "Order playlist";
+
+            float textWidth = lf_text_dimension(text).x;
+
+            LfUIElementProps props = primary_button_style();  
+            props.margin_top = 5;
+            props.margin_left = 0;
+            props.margin_right = 0;
+
+            // Rendering the button in the top right
+            lf_set_ptr_x_absolute(state.winWidth - (textWidth + props.padding * 2.0f) - DIV_START_X);
+
+            lf_push_style_props(props);
+            float ptr_x = lf_get_ptr_x();
+            float ptr_y = lf_get_ptr_y();
+            if(lf_button(text) == LF_CLICKED) {
+                currentPlaylist.musicFiles = reorderPlaylistFiles(currentPlaylist.musicFiles, state.loadedPlaylistFilepaths);
+                currentPlaylist.ordered = true;
+            }  
+            lf_pop_style_props();
+
         }
     }
     if(currentPlaylist.musicFiles.empty()) {
@@ -1019,12 +1056,14 @@ void renderOnPlaylist() {
                     props.margin_right = 4;
                     props.margin_left = -thumbnailContainerSize.x;
                     props.border_width = 0;
-                    props.color = currentPlaylist.ordered ? lf_color_brightness(LYSSA_PLAYLIST_COLOR, 0.8) : GRAY; 
+                    props.color = lf_color_brightness(LYSSA_PLAYLIST_COLOR, 0.8); 
                     props.corner_radius = 12;
                     lf_push_style_props(props);
+
                     LfClickableItemState playButton = lf_image_button(((LfTexture){.id = state.icons["play"].id, .width = 24, .height = 24}));
                     onPlayButton = playButton != LF_IDLE;
-                    if(playButton == LF_CLICKED && currentPlaylist.ordered) {
+
+                    if(playButton == LF_CLICKED) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                         state.currentSoundFile = &file;
                         if(state.onTrackTab.trackThumbnail.width != 0)
@@ -1053,13 +1092,16 @@ void renderOnPlaylist() {
 
                     std::filesystem::path fsPath(file.path);
                     std::wstring filename = removeFileExtensionW(fsPath.filename().wstring());
+
                     lf_set_cull_end_x(state.winWidth - DIV_START_X * 2.0f - 100);
+
                     lf_text_render_wchar((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - lf_text_dimension_wide(filename.c_str()).y) / 2.0f}, filename.c_str(), lf_theme()->font, -1, false, 
                             hoveredTextDiv ? lf_color_brightness(LF_WHITE, 0.7) : LF_WHITE);
+
                     lf_unset_cull_end_x();
                 } 
 
-                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton && currentPlaylist.ordered) {
+                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton) {
                     if(i != currentPlaylist.playingFile) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
@@ -1797,7 +1839,6 @@ void renderPlaylistFileDialoguePopup() {
                     loadPlaylistAsync(state.playlists[i]);
                 } else {
                     addFileToPlaylist(popup.path, i);
-                    state.playlists[i].ordered = true;
                 }
                 state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = false;
                 showPlaylistPopup = false;
@@ -2597,25 +2638,6 @@ std::vector<SoundFile> reorderPlaylistFiles(const std::vector<SoundFile>& soundF
     return reorderedVector;
 }
 
-std::vector<TextureData> reorderThumbnailData(const std::vector<TextureData>& thumbnailData, const std::vector<std::string>& paths) {
-    std::unordered_map<std::string, size_t> pathToIndex;
-
-    for (size_t i = 0; i < thumbnailData.size(); ++i) {
-        pathToIndex[thumbnailData[i].path] = i;
-    }
-
-    std::vector<TextureData> reorderedThubmnailData;
-
-    for (const auto& path : paths) {
-        auto it = pathToIndex.find(path);
-        if (it != pathToIndex.end()) {
-            reorderedThubmnailData.push_back(thumbnailData[it->second]);
-        }
-    }
-
-    return reorderedThubmnailData;
-}
-
 void handleAsyncPlaylistLoading() {
       // Create OpenGL Textures for the thumbnails that were loaded
     for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
@@ -2635,16 +2657,10 @@ void handleAsyncPlaylistLoading() {
         Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
         // Once file loading finished, reorder the files to the correct order and deallocate all the data that was used 
         // for async loading
-        if(state.loadedPlaylistFilepaths.size() == currentPlaylist.musicFiles.size() && !currentPlaylist.ordered) {
-            if(!playlistFileOrderCorrect(state.currentPlaylist, state.loadedPlaylistFilepaths)) {
-                
-                state.loadedPlaylistFilepaths.clear();
-                state.loadedPlaylistFilepaths.shrink_to_fit();
+        if(state.loadedPlaylistFilepaths.size() == currentPlaylist.musicFiles.size() && !state.playlistFileFutures.empty()) {
+            state.playlistFileFutures.clear();
+            state.playlistFileFutures.shrink_to_fit();
 
-                state.playlistFileFutures.clear();
-                state.playlistFileFutures.shrink_to_fit();
-            } 
-            currentPlaylist.ordered = true; 
         }
     }
 }
