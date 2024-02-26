@@ -303,13 +303,13 @@ static std::string              getCommandOutput(const std::string& cmd);
 
 void PlaylistAddFromFolderTab::loadFolderContentsW(const std::wstring& folderpath) {
     for (const auto& entry : std::filesystem::directory_iterator(folderpath)) {
-        folderContents.push_back(entry);
+        folderContents.emplace_back(entry);
     }
 }
 
 void PlaylistAddFromFolderTab::loadFolderContents(const std::string& folderpath) {
     for (const auto& entry : std::filesystem::directory_iterator(folderpath)) {
-        folderContents.push_back(entry);
+        folderContents.emplace_back(entry);
     }
 }
 void PlaylistAddFromFolderTab::loadDefaultFolder() {
@@ -885,7 +885,8 @@ void renderOnPlaylist() {
             }  
             lf_pop_style_props();
         }
-        if(!currentPlaylist.ordered && state.playlistFileFutures.empty() && !currentPlaylist.musicFiles.empty() && !state.loadedPlaylistFilepaths.empty())
+        if(!currentPlaylist.ordered && state.playlistFileFutures.empty() && !currentPlaylist.musicFiles.empty() && !state.loadedPlaylistFilepaths.empty() &&
+                !playlistFileOrderCorrect(state.currentPlaylist, state.loadedPlaylistFilepaths)) 
         {
             lf_next_line();
             lf_push_font(&state.h5Font);
@@ -907,6 +908,8 @@ void renderOnPlaylist() {
             if(lf_button(text) == LF_CLICKED) {
                 currentPlaylist.musicFiles = reorderPlaylistFiles(currentPlaylist.musicFiles, state.loadedPlaylistFilepaths);
                 currentPlaylist.ordered = true;
+                state.loadedPlaylistFilepaths.clear();
+                state.loadedPlaylistFilepaths.shrink_to_fit();
             }  
             lf_pop_style_props();
 
@@ -1460,7 +1463,7 @@ void renderPlaylistAddFromFolder() {
                 for(const auto& entry : tab.folderContents) {
                     if(!entry.is_directory() && !isFileInPlaylist(entry.path().string(), state.currentPlaylist) && 
                             isValidSoundFile(entry.path().string())) {
-                        filepaths.push_back(entry.path().string());
+                        filepaths.emplace_back(entry.path().string());
                     }
                 }
                 state.loadedPlaylistFilepaths = filepaths;
@@ -1470,7 +1473,7 @@ void renderPlaylistAddFromFolder() {
                         !isFileInPlaylist(entry.path().string(), state.currentPlaylist) && 
                         isValidSoundFile(entry.path().string())) {
                     if(ASYNC_PLAYLIST_LOADING)
-                        state.playlistFileFutures.push_back(std::async(std::launch::async, addFileToPlaylistAsync, 
+                        state.playlistFileFutures.emplace_back(std::async(std::launch::async, addFileToPlaylistAsync, 
                                 &state.playlists[state.currentPlaylist].musicFiles, entry.path().string(), state.currentPlaylist));
                     else 
                         addFileToPlaylist(entry.path().string(), state.currentPlaylist);
@@ -2190,7 +2193,7 @@ FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
     metadata << "\"" << path << "\" ";
     metadata.close();
 
-    playlist.musicFiles.push_back((SoundFile){
+    playlist.musicFiles.emplace_back((SoundFile){
             .path = strToWstr(path), 
             .duration = static_cast<int32_t>(getSoundDuration(path)),
             .thumbnail = getSoundThubmnail(path, (vec2s){0.075f, 0.075f})
@@ -2294,7 +2297,7 @@ std::vector<std::string> getPlaylistFilepaths(const std::filesystem::directory_e
             std::string path;
 
             while (iss >> std::quoted(path)) {
-                filepaths.push_back(path);
+                filepaths.emplace_back(path);
             }
         }
     }
@@ -2311,7 +2314,7 @@ std::vector<std::wstring> getPlaylistDisplayNamesW(const std::filesystem::direct
             std::wstring path;
 
             while (iss >> std::quoted(path)) {
-                displayNames.push_back(path);
+                displayNames.emplace_back(path);
             }
         }
     }
@@ -2328,7 +2331,7 @@ void loadPlaylists() {
         playlist.name = getPlaylistName(folder);
         playlist.desc = getPlaylistDesc(folder);
         if(std::find(state.playlists.begin(), state.playlists.end(), playlist) == state.playlists.end()) {
-            state.playlists.push_back(playlist);
+            state.playlists.emplace_back(playlist);
         } else {
             state.playlists[playlistI] = playlist;
         }
@@ -2339,11 +2342,20 @@ void loadPlaylists() {
 void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
     std::lock_guard<std::mutex> lock(state.mutex);
     SoundFile file{};
+    if(std::filesystem::exists(path)) {
     file.path = strToWstr(path);
     file.thumbnail = (LfTexture){0};
     file.duration = getSoundDuration(path);
-    files->push_back(file);
-    state.playlistFileThumbnailData.push_back(getSoundThubmnailData(path, (vec2s){60, 40}));
+    } else {
+        file.path = L"File cannot be loaded",
+        file.thumbnail = (LfTexture){0};
+        file.duration = 0; 
+    }
+    files->emplace_back(file);
+    if(std::filesystem::exists(path))
+        state.playlistFileThumbnailData.emplace_back(getSoundThubmnailData(path, (vec2s){60, 40}));
+    else 
+        state.playlistFileThumbnailData.emplace_back((TextureData){0});
 }
 
 void addFileToPlaylistAsync(std::vector<SoundFile>* files, std::string path, uint32_t playlistIndex) {
@@ -2366,8 +2378,8 @@ void addFileToPlaylistAsync(std::vector<SoundFile>* files, std::string path, uin
     file.path = strToWstr(path);
     file.thumbnail = (LfTexture){0};
     file.duration = getSoundDuration(path);
-    files->push_back(file);
-    state.playlistFileThumbnailData.push_back(getSoundThubmnailData(path, (vec2s){60, 40}));
+    files->emplace_back(file);
+    state.playlistFileThumbnailData.emplace_back(getSoundThubmnailData(path, (vec2s){60, 40}));
 }
 
 std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folderPath) {
@@ -2376,7 +2388,7 @@ std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folde
         if (std::filesystem::is_directory(entry.path()) && entry.path().filename().string()[0] != '.') {
             files = loadFilesFromFolder(entry.path());
         } else if (std::filesystem::is_regular_file(entry.path())) {
-            files.push_back(entry.path().wstring());
+            files.emplace_back(entry.path().wstring());
         }
     } 
     return files;
@@ -2629,7 +2641,7 @@ std::vector<SoundFile> reorderPlaylistFiles(const std::vector<SoundFile>& soundF
     for (const auto& path : paths) {
         for (const auto& file : soundFiles) {
             if (wStrToStr(file.path) == path) {
-                reorderedVector.push_back(file);
+                reorderedVector.emplace_back(file);
                 break;
             }
         }
@@ -2660,15 +2672,11 @@ void handleAsyncPlaylistLoading() {
         if(state.loadedPlaylistFilepaths.size() == currentPlaylist.musicFiles.size() && !state.playlistFileFutures.empty()) {
             state.playlistFileFutures.clear();
             state.playlistFileFutures.shrink_to_fit();
-
         }
     }
 }
 
 void loadPlaylistAsync(Playlist& playlist) {
-    state.loadedPlaylistFilepaths.clear();
-    state.loadedPlaylistFilepaths.shrink_to_fit();
-
     state.loadedPlaylistFilepaths = getPlaylistFilepaths(std::filesystem::directory_entry(playlist.path));
 
     state.playlistFileThumbnailData.clear();
@@ -2677,13 +2685,24 @@ void loadPlaylistAsync(Playlist& playlist) {
     for(auto& path : state.loadedPlaylistFilepaths) {
         if(!isFileInPlaylist(path, state.currentPlaylist)){ 
             if(ASYNC_PLAYLIST_LOADING) {
-                state.playlistFileFutures.push_back(std::async(std::launch::async, loadPlaylistFileAsync, &state.playlists[state.currentPlaylist].musicFiles, path));
-            } else { 
-                playlist.musicFiles.push_back((SoundFile){
+                state.playlistFileFutures.emplace_back(std::async(std::launch::async, loadPlaylistFileAsync, &state.playlists[state.currentPlaylist].musicFiles, path));
+            } else {
+                SoundFile file;
+                if(std::filesystem::exists(std::filesystem::path(path))) {
+                    file = (SoundFile){
                         .path = strToWstr(path), 
                         .duration = static_cast<int32_t>(getSoundDuration(path)),
                         .thumbnail = getSoundThubmnail(path, (vec2s){0.075f, 0.075f})
-                        });
+                        };
+
+                } else {
+                    file = (SoundFile){
+                        .path = L"File cannot be loaded", 
+                        .duration = 0, 
+                        .thumbnail = (LfTexture){0}
+                    };
+                }
+                playlist.musicFiles.emplace_back(file);
             }
         }
     }
