@@ -2750,9 +2750,20 @@ int main(int argc, char* argv[]) {
     state.popups[(int32_t)PopupID::EditPlaylistPopup] = (Popup){.renderCb = renderEditPlaylistPopup, .render = false};
     state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup] = (Popup){.renderCb = renderPlaylistFileDialoguePopup, .render = false};
 
-    vec4s clearColor = lf_color_to_zto(LYSSA_BACKGROUND_COLOR);
+    vec4s clearColor = (vec4s){0.2f, 0.3f, 0.8f, 1.0f};
+
+    char buf[512] = {0};
+    strcpy(buf, "Hello, World!");
+    LfInputField input = (LfInputField){
+        .cursor_index = (int32_t)(strlen(buf)),
+        .width = 600, 
+        .buf = buf, 
+    };
+
     while(!glfwWindowShouldClose(state.win)) { 
-        if(ASYNC_PLAYLIST_LOADING)
+        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+        /*if(ASYNC_PLAYLIST_LOADING)
             handleAsyncPlaylistLoading();
 
         // Updating the timestamp of the currently playing sound
@@ -2801,6 +2812,17 @@ int main(int argc, char* argv[]) {
         }
 
         lf_div_end();
+        lf_end();*/
+        
+        lf_begin();
+
+        LfUIElementProps props = lf_theme()->inputfield_props;
+        props.border_width = 0.0f; 
+        props.padding = 5;
+        lf_push_style_props(props);
+        lf_input_text(&input);
+        lf_pop_style_props();
+
         lf_end();
 
         glfwPollEvents();

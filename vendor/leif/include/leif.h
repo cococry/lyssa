@@ -290,7 +290,11 @@ void lf_next_line();
 
 vec2s lf_text_dimension(const char* str);
 
+vec2s lf_text_dimension_ex(const char* str, float wrap_point);
+
 vec2s lf_text_dimension_wide(const wchar_t* str);
+
+vec2s lf_text_dimension_wide_ex(const wchar_t* str, float wrap_point);
 
 float lf_get_text_end(const char* str, float start_x);
 
