@@ -974,7 +974,7 @@ LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props
 
 }
 LfTextProps text_render_simple(vec2s pos, const char* text, LfFont font, LfColor font_color, bool no_render) {
-    return lf_text_render(pos, text, font, -1, no_render, font_color);
+    return lf_text_render(pos, text, font, -1, (vec2s){-1, -1}, no_render, font_color);
 }
 LfTextProps text_render_simple_wide(vec2s pos, const wchar_t* text, LfFont font, LfColor font_color, bool no_render) {
     return lf_text_render_wchar(pos, text, font, -1, no_render, font_color);
@@ -1265,8 +1265,10 @@ void lf_image_render(vec2s pos, LfColor color, LfTexture tex, LfColor border_col
 void input_field(LfInputField* input, InputFieldType type, const char* file, int32_t line) {
     if(!input->buf) return;
 
-    if(lf_char_event().happened) {
-        input->buf[input->cursor_index++] = lf_char_event().charcode;
+    if(!input->_init) {
+        input->selection_start = -1;
+        input->selection_end = -1;
+        input->_init = true;
     }
 
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.inputfield_props;
@@ -1275,17 +1277,83 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     state.pos_ptr.x += props.margin_left; 
     state.pos_ptr.y += props.margin_top; 
 
-    vec2s textDim = lf_text_dimension(input->buf);
-
     float wrap_point = state.pos_ptr.x + input->width - props.padding * 2.0f;
+
+    if(input->selected) {
+        if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+            LfTextProps selected_props = lf_text_render((vec2s){
+                state.pos_ptr.x + props.padding, 
+                state.pos_ptr.y + props.padding
+            }, input->buf, font, wrap_point, (vec2s){
+                lf_get_mouse_x(), 
+                lf_get_mouse_y()}, true, LF_NO_COLOR);
+            input->cursor_index = selected_props.rendered_count;
+        }
+        if(lf_char_event().happened) { 
+            insert_i_str(input->buf, lf_char_event().charcode, input->cursor_index++);
+        }
+
+        if(lf_key_event().happened && lf_key_event().pressed) {
+            switch(lf_key_event().keycode) {
+                case GLFW_KEY_BACKSPACE: {
+                    if(input->cursor_index - 1 < 0) break; 
+                    remove_i_str(input->buf, input->cursor_index - 1);
+                    input->cursor_index--;
+                    break;
+                }
+                case GLFW_KEY_LEFT: {
+                    if(input->cursor_index - 1 < 0 ) break;
+                    if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
+                        if(input->selection_end == -1) {
+                            input->selection_end = input->cursor_index - 1;
+                        } 
+                        input->cursor_index--;
+                        input->selection_start = input->cursor_index;
+                    } else {
+                        if(input->selection_end == -1)
+                            input->cursor_index--;
+                        input->selection_end = -1;
+                        input->selection_start = -1;
+                    }
+                    break;
+                }
+                case GLFW_KEY_RIGHT: {
+                    if(input->cursor_index + 1 > strlen(input->buf)) break;
+                    if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
+                        if(input->selection_start == -1) {
+                            input->selection_start = input->cursor_index;
+                        }
+                        if(input->selection_start < input->selection_end) {
+                            input->cursor_index++;
+                            input->selection_start = input->cursor_index;
+                        } else {
+                            input->selection_end = input->cursor_index;
+                            input->cursor_index++;
+                        }
+                    } else {
+                        if(input->selection_end == -1)
+                            input->cursor_index++;
+                        input->selection_end = -1;
+                        input->selection_start = -1;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    char selection[strlen(input->buf)];
+    int selection_length = input->selection_end - input->selection_start + 1;
+    memcpy(selection, input->buf + input->selection_start, selection_length);
+    selection[selection_length] = '\0';
+
+    LfTextProps textprops =  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, input->buf, font, wrap_point, (vec2s){-1, -1}, true, props.text_color);
 
     next_line_on_overflow(
         (vec2s){input->width + props.padding * 2.0f + props.margin_right + props.margin_left, 
                     input->height + props.padding * 2.0f + props.margin_bottom + props.margin_top}, state.div_props.border_width);
 
-    if(!input->height) {
-        input->height = (input->start_height) ? input->start_height : (textDim.y ? textDim.y : font.font_size); 
-    }
+    input->height = (input->start_height) ? input->start_height : (textprops.height ? textprops.height : font.font_size); 
 
     LfAABB input_aabb = (LfAABB){
         .pos = state.pos_ptr, 
@@ -1302,25 +1370,46 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
 
     lf_rect_render(input_aabb.pos, input_aabb.size, props.color, props.border_color, props.border_width, props.corner_radius);
 
-    lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, input->buf, font, wrap_point, false, props.text_color);
+    lf_set_cull_end_y(state.pos_ptr.y + input->height + props.padding * 2.0f);
+    LfTextProps text_props = lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, input->buf, font, wrap_point, 
+                   (vec2s){-1, -1}, false, props.text_color);
+    lf_unset_cull_end_y();
 
     if(input->selected) {
         char selected_buf[strlen(input->buf)];
         strncpy(selected_buf, input->buf, input->cursor_index);
         selected_buf[input->cursor_index] = '\0';
 
-        LfTextProps selected_text_props =  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, selected_buf, font, wrap_point, true, props.text_color);
-
-        lf_rect_render((vec2s)
+        LfTextProps selected_props =  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, selected_buf, font, wrap_point, (vec2s){-1, -1}, true, props.text_color);
+               
+        vec2s cursor_pos = 
             {
-                (strlen(input->buf) > 0) ? selected_text_props.end_x : state.pos_ptr.x + props.padding, 
-                state.pos_ptr.y + props.padding + (selected_text_props.height - get_max_char_height_font(font)) 
-            }, 
-                (vec2s){1, input->height}, 
-                props.text_color, LF_NO_COLOR, 0.0f, 0.0f);
+                (strlen(input->buf) > 0) ? selected_props.end_x : state.pos_ptr.x + props.padding, 
+                state.pos_ptr.y + props.padding + (selected_props.height - get_max_char_height_font(font)) 
+            }; 
+
+        lf_rect_render(cursor_pos, (vec2s){1, get_max_char_height_font(font)}, props.text_color, 
+                       LF_NO_COLOR, 0.0f, 0.0f);
+
+        if(input->selection_start != -1) {
+            printf("Start %i, End %i\n", input->selection_start, input->selection_end);
+            char before_selection[strlen(input->buf)];
+            strncpy(before_selection, input->buf, input->selection_start);
+            before_selection[input->selection_start] = '\0';
+
+            LfTextProps selection_props = lf_text_render(
+                cursor_pos, selection, font, wrap_point, (vec2s){-1, -1}, true, LF_NO_COLOR
+            );
+
+            LfTextProps before_selection_props = lf_text_render(
+                cursor_pos, before_selection, font, wrap_point, (vec2s){-1, -1}, true, LF_NO_COLOR
+            );
+
+            lf_rect_render((vec2s){state.pos_ptr.x + props.padding + before_selection_props.width, 
+                state.pos_ptr.y + props.padding}, (vec2s){selection_props.width, text_props.height}, 
+                           (LfColor){255, 255, 255, 100}, LF_NO_COLOR, 0.0f, 0.0f);
+        }
     }
-
-
     state.pos_ptr.x += input->width + props.margin_right + props.padding * 2.0f;
     state.pos_ptr.y -= props.margin_top;
 }
@@ -1741,7 +1830,7 @@ int32_t menu_item_list_item_loc(void** items, uint32_t item_count, int32_t selec
     return clicked_item;
 }
 
-LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, bool no_render, 
+LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, vec2s stop_point, bool no_render, 
                         LfColor color) { 
     bool culled = item_should_cull((LfAABB){.pos = (vec2s){pos.x, pos.y + get_current_font().font_size}, .size = (vec2s){-1, -1}});
 
@@ -1801,6 +1890,10 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
             stbtt_aligned_quad q;
             stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, *str-32, &x, &y, &q, 1);
 
+            if(x >= stop_point.x && stop_point.x != -1 && y + get_max_char_height_font(font) >= stop_point.y && stop_point.y != -1) {
+                break;
+            }
+
             if(!culled && !no_render)  {
                 vec2s texcoords[4] = {
                     q.s0, q.t0, 
@@ -1855,6 +1948,7 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap
 
             }
             last_x = x;
+            ret.rendered_count++;
         }
         str++;
     }
@@ -2572,7 +2666,7 @@ vec2s lf_text_dimension(const char* str) {
 
 vec2s lf_text_dimension_ex(const char* str, float wrap_point) {
     LfFont font = get_current_font();
-    LfTextProps props = lf_text_render((vec2s){0.0f, 0.0f}, str, font, wrap_point, true, state.theme.text_props.text_color);
+    LfTextProps props = lf_text_render((vec2s){0.0f, 0.0f}, str, font, wrap_point, (vec2s){-1, -1}, true, state.theme.text_props.text_color);
 
     return (vec2s){(float)props.width, (float)props.height};
 }
@@ -2609,7 +2703,7 @@ void lf_text(const char* text) {
 
     // Advancing to the next line if the the text does not fit on the current div
     LfTextProps text_props = lf_text_render(state.pos_ptr, text, font, 
-                                        state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, true, text_color);
+                                        state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, (vec2s){-1, -1}, true, text_color);
     next_line_on_overflow(
         (vec2s){text_props.width + padding * 2.0f + margin_left + margin_right,
                     text_props.height + padding * 2.0f + margin_top + margin_bottom}, 
@@ -2622,7 +2716,7 @@ void lf_text(const char* text) {
     // Rendering a colored text box if a color is specified
     // Rendering the text
     lf_text_render((vec2s){state.pos_ptr.x + padding, state.pos_ptr.y + padding}, text, font, 
-                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, false, text_color);
+                state.text_wrap ? (state.current_div.aabb.size.x + state.current_div.aabb.pos.x) - margin_right - margin_left : -1, (vec2s){-1, -1}, false, text_color);
 
     // Advancing the position pointer by the width of the text
     state.pos_ptr.x += text_props.width + margin_right + padding;

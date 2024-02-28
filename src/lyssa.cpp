@@ -2825,6 +2825,7 @@ int main(int argc, char* argv[]) {
 
         lf_end();
 
+
         glfwPollEvents();
         glfwSwapBuffers(state.win);
 
