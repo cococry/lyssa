@@ -84,7 +84,8 @@ typedef struct {
 
     uint32_t max_chars;
 
-    int32_t selection_start, selection_end; 
+    int32_t selection_start, selection_end;
+    int32_t selection_dir;
 
     bool _init;
 

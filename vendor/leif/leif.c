@@ -1288,6 +1288,8 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                 lf_get_mouse_x(), 
                 lf_get_mouse_y()}, true, LF_NO_COLOR);
             input->cursor_index = selected_props.rendered_count;
+            input->selection_end = -1;
+            input->selection_start = -1;
         }
         if(lf_char_event().happened) { 
             insert_i_str(input->buf, lf_char_event().charcode, input->cursor_index++);
@@ -1306,9 +1308,19 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                     if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
                         if(input->selection_end == -1) {
                             input->selection_end = input->cursor_index - 1;
-                        } 
+                            input->selection_dir = -1;
+                        }
                         input->cursor_index--;
-                        input->selection_start = input->cursor_index;
+                        if(input->selection_dir == 1) {
+                            if(input->cursor_index  != input->selection_start) {
+                                input->selection_end = input->cursor_index - 1;
+                            } else { 
+                                input->selection_end = -1;
+                                input->selection_start = -1;
+                            }
+                        } else {
+                            input->selection_start = input->cursor_index;
+                        }
                     } else {
                         if(input->selection_end == -1)
                             input->cursor_index--;
@@ -1322,10 +1334,16 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                     if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
                         if(input->selection_start == -1) {
                             input->selection_start = input->cursor_index;
+                            input->selection_dir = 1;
                         }
-                        if(input->selection_start < input->selection_end) {
+                        if(input->selection_dir == -1) {
                             input->cursor_index++;
-                            input->selection_start = input->cursor_index;
+                            if(input->cursor_index - 1 != input->selection_end) {
+                                input->selection_start = input->cursor_index;
+                            } else {
+                                input->selection_end = -1;
+                                input->selection_start = -1;
+                            }
                         } else {
                             input->selection_end = input->cursor_index;
                             input->cursor_index++;
@@ -1371,8 +1389,6 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     lf_rect_render(input_aabb.pos, input_aabb.size, props.color, props.border_color, props.border_width, props.corner_radius);
 
     lf_set_cull_end_y(state.pos_ptr.y + input->height + props.padding * 2.0f);
-    LfTextProps text_props = lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, input->buf, font, wrap_point, 
-                   (vec2s){-1, -1}, false, props.text_color);
     lf_unset_cull_end_y();
 
     if(input->selected) {
@@ -1381,18 +1397,16 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
         selected_buf[input->cursor_index] = '\0';
 
         LfTextProps selected_props =  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, selected_buf, font, wrap_point, (vec2s){-1, -1}, true, props.text_color);
-               
+
         vec2s cursor_pos = 
             {
                 (strlen(input->buf) > 0) ? selected_props.end_x : state.pos_ptr.x + props.padding, 
                 state.pos_ptr.y + props.padding + (selected_props.height - get_max_char_height_font(font)) 
             }; 
-
-        lf_rect_render(cursor_pos, (vec2s){1, get_max_char_height_font(font)}, props.text_color, 
-                       LF_NO_COLOR, 0.0f, 0.0f);
-
-        if(input->selection_start != -1) {
-            printf("Start %i, End %i\n", input->selection_start, input->selection_end);
+        if(input->selection_start == -1) {
+            lf_rect_render(cursor_pos, (vec2s){1, get_max_char_height_font(font)}, props.text_color, 
+                           LF_NO_COLOR, 0.0f, 0.0f);
+        } else {
             char before_selection[strlen(input->buf)];
             strncpy(before_selection, input->buf, input->selection_start);
             before_selection[input->selection_start] = '\0';
@@ -1406,10 +1420,14 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
             );
 
             lf_rect_render((vec2s){state.pos_ptr.x + props.padding + before_selection_props.width, 
-                state.pos_ptr.y + props.padding}, (vec2s){selection_props.width, text_props.height}, 
-                           (LfColor){255, 255, 255, 100}, LF_NO_COLOR, 0.0f, 0.0f);
+                state.pos_ptr.y + props.padding}, (vec2s){selection_props.width, get_max_char_height_font(font)}, 
+                           (LfColor){31, 18, 204, 100}, LF_NO_COLOR, 0.0f, 0.0f);
         }
     }
+
+    lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, input->buf, font, wrap_point, 
+                   (vec2s){-1, -1}, false, props.text_color);
+
     state.pos_ptr.x += input->width + props.margin_right + props.padding * 2.0f;
     state.pos_ptr.y -= props.margin_top;
 }
