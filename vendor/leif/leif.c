@@ -1262,12 +1262,15 @@ void lf_image_render(vec2s pos, LfColor color, LfTexture tex, LfColor border_col
     state.render.index_count += 6;
 }
 
+static void input_field_unselect_all(LfInputField* input) {
+    input->selection_start = -1;
+    input->selection_end = -1;
+}
+
 void input_field(LfInputField* input, InputFieldType type, const char* file, int32_t line) {
     if(!input->buf) return;
 
     if(!input->_init) {
-        input->selection_start = -1;
-        input->selection_end = -1;
         input->_init = true;
     }
 
@@ -1280,7 +1283,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     float wrap_point = state.pos_ptr.x + input->width - props.padding * 2.0f;
 
     if(input->selected) {
-        if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+        if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && lf_get_mouse_x_delta() == 0 && lf_get_mouse_y_delta() == 0) {
             LfTextProps selected_props = lf_text_render((vec2s){
                 state.pos_ptr.x + props.padding, 
                 state.pos_ptr.y + props.padding
@@ -1288,10 +1291,12 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                 lf_get_mouse_x(), 
                 lf_get_mouse_y()}, true, LF_NO_COLOR);
             input->cursor_index = selected_props.rendered_count;
-            input->selection_end = -1;
-            input->selection_start = -1;
+            input_field_unselect_all(input);
+        } else if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && lf_get_mouse_x_delta() != 0 || lf_get_mouse_y_delta() != 0) {
+
         }
         if(lf_char_event().happened) { 
+            input_field_unselect_all(input);
             insert_i_str(input->buf, lf_char_event().charcode, input->cursor_index++);
         }
 
@@ -1301,6 +1306,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                     if(input->cursor_index - 1 < 0) break; 
                     remove_i_str(input->buf, input->cursor_index - 1);
                     input->cursor_index--;
+                    input_field_unselect_all(input);
                     break;
                 }
                 case GLFW_KEY_LEFT: {
@@ -1312,11 +1318,10 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                         }
                         input->cursor_index--;
                         if(input->selection_dir == 1) {
-                            if(input->cursor_index  != input->selection_start) {
+                            if(input->cursor_index != input->selection_start) {
                                 input->selection_end = input->cursor_index - 1;
                             } else { 
-                                input->selection_end = -1;
-                                input->selection_start = -1;
+                                input_field_unselect_all(input);
                             }
                         } else {
                             input->selection_start = input->cursor_index;
@@ -1324,8 +1329,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                     } else {
                         if(input->selection_end == -1)
                             input->cursor_index--;
-                        input->selection_end = -1;
-                        input->selection_start = -1;
+                        input_field_unselect_all(input);
                     }
                     break;
                 }
@@ -1341,8 +1345,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                             if(input->cursor_index - 1 != input->selection_end) {
                                 input->selection_start = input->cursor_index;
                             } else {
-                                input->selection_end = -1;
-                                input->selection_start = -1;
+                                input_field_unselect_all(input);
                             }
                         } else {
                             input->selection_end = input->cursor_index;
@@ -1351,8 +1354,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                     } else {
                         if(input->selection_end == -1)
                             input->cursor_index++;
-                        input->selection_end = -1;
-                        input->selection_start = -1;
+                        input_field_unselect_all(input);
                     }
                     break;
                 }
