@@ -1419,38 +1419,42 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                         insert_i_str(input->buf, ' ', input->cursor_index++);
                     }
                     break;
-                } 
+                }
+                case GLFW_KEY_A: {
+                    if(!lf_key_is_down(GLFW_KEY_LEFT_CONTROL)) break;
+                    bool selected_all = input->selection_start == 0 && input->selection_end == strlen(input->buf);
+                    if(selected_all) {
+                        input_field_unselect_all(input);
+                    } else {
+                        input->selection_start = 0;
+                        input->selection_end = strlen(input->buf);
+                    }
+                    break;
+                }
+                case GLFW_KEY_C: {
+                    if(!lf_key_is_down(GLFW_KEY_LEFT_CONTROL)) break;
+                    char selection[strlen(input->buf)];
+                    memset(selection, 0, strlen(input->buf));
+                    substr_str(input->buf, input->selection_start, input->selection_end, selection);
+
+                    clipboard_set_text(state.clipboard, selection);
+                    break;
+                }
+                case GLFW_KEY_V: {
+                    if(!lf_key_is_down(GLFW_KEY_LEFT_CONTROL)) break;
+                    const char* clipboard_content = clipboard_text(state.clipboard);
+
+                    insert_str_str(input->buf, clipboard_content, input->cursor_index);
+                    input->cursor_index += strlen(clipboard_content);
+
+                    input_field_unselect_all(input); 
+                    break;
+
+                }
             }
        }
     }
 
-
-    if(lf_key_is_down(GLFW_KEY_LEFT_CONTROL)) {
-        if(lf_key_went_down(GLFW_KEY_A)) {
-            bool selected_all = input->selection_start == 0 && input->selection_end == strlen(input->buf);
-            if(selected_all) {
-                input_field_unselect_all(input);
-            } else {
-                input->selection_start = 0;
-                input->selection_end = strlen(input->buf);
-            }
-        }
-        if(lf_key_went_down(GLFW_KEY_C)) {
-            char selection[strlen(input->buf)];
-            memset(selection, 0, strlen(input->buf));
-            substr_str(input->buf, input->selection_start, input->selection_end, selection);
-
-            clipboard_set_text(state.clipboard, selection);
-        }
-        if(lf_key_went_down(GLFW_KEY_V)) {
-            const char* clipboard_content = clipboard_text(state.clipboard);
-
-            insert_str_str(input->buf, clipboard_content, input->cursor_index);
-            input->cursor_index += strlen(clipboard_content);
-
-            input_field_unselect_all(input);
-        }
-    }
     LfTextProps textprops =  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, input->buf, 
                                             font, LF_NO_COLOR, 
                                             wrap_point, (vec2s){-1, -1}, true, false, -1, -1); 
