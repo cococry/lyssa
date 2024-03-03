@@ -84,8 +84,9 @@ typedef struct {
 
     uint32_t max_chars;
 
-    int32_t selection_start, selection_end;
-    int32_t selection_dir;
+    int32_t selection_start, selection_end, 
+            mouse_selection_start, mouse_selection_end;
+    int32_t selection_dir, mouse_dir;
 
     bool _init;
 
@@ -360,7 +361,8 @@ void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t
 #define lf_dropdown_menu_wide(items, placeholder, item_count, width, height, selected_index, opened) _lf_dropdown_menu_loc_wide(items, placeholder, item_count, width, height, selected_index, opened, __FILE__, __LINE__)
 void _lf_dropdown_menu_loc_wide(const wchar_t** items, const wchar_t* placeholder, uint32_t item_count, int32_t width, int32_t height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
 
-LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, int32_t wrap_point, vec2s stop_point, bool no_render, LfColor color);
+LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, LfColor color, 
+        int32_t wrap_point, vec2s stop_point, bool no_render, bool render_solid, int32_t start_index, int32_t end_index);
 
 LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, bool no_render, LfColor color);
 

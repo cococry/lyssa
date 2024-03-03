@@ -40,7 +40,7 @@ extern "C" {
 #define DIV_SMOOTH_SCROLL true
 
 // Playlist file thumbnails 
-#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 3.5 // Setting this to > 0 will worsen perfomance on low-end systems
+#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 0 // Setting this to > 0 will worsen perfomance on low-end systems
 #define PLAYLIST_FILE_THUMBNAIL_COLOR GRAY
 
 
@@ -52,6 +52,7 @@ inline LfUIElementProps primary_button_style() {
     props.color = BLUE_GRAY; 
     return props;
 }
+
 
 inline LfUIElementProps call_to_action_button_style() {
     LfUIElementProps props = lf_theme()->button_props;
@@ -81,5 +82,5 @@ inline LfTheme ui_theme() {
 }
 
 // Async loading
-#define ASYNC_PLAYLIST_LOADING true
+#define ASYNC_PLAYLIST_LOADING true 
 #define MIN_FILES_FOR_ASYNC 10
