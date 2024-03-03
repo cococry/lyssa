@@ -2779,7 +2779,17 @@ int main(int argc, char* argv[]) {
 
         lf_begin();
         lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth - DIV_START_X, (float)state.winHeight - DIV_START_Y}), false);
-        switch(state.currentTab) {
+
+    {
+        lf_next_line();
+        state.createPlaylistTab.nameInput.input.width = state.winWidth / 2.0f;
+        LfUIElementProps props = input_field_style();
+        lf_push_style_props(props);
+        lf_input_text(&state.createPlaylistTab.nameInput.input);
+        lf_pop_style_props();
+        lf_next_line();
+    }
+        /*switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
                 break;
@@ -2808,7 +2818,7 @@ int main(int argc, char* argv[]) {
                 popup.renderCb();
             } 
         }
-
+*/
         lf_div_end();
         lf_end();
         
