@@ -2,8 +2,8 @@
 
 ## Overview
 Lyssa is a native music player designed to be an aestethic addition for every desktop. 
-The player is as easy and [suckless](https://suckless.org/philosophy) as possible to use and work with. The application frontend 
-is made to be as modern and aestethic as possible. The goal of this project is to make listening to 
+The player is as easy and [suckless](https://suckless.org/philosophy) as possible to use and to work with. The application frontend 
+is made to be modern and aestethic. The goal of this project is to make listening to 
 music amazing, visually and audibly. 
 
 The Lyssa application is written in C++ 17. It uses the [Leif Library](https://github.com/cococry/leif), a GUI Library that i've
