@@ -574,7 +574,7 @@ void renderDashboard() {
             const char* text = "You don't have any playlists.";
             float textWidth = lf_text_dimension(text).x;
             lf_set_ptr_x((state.winWidth - textWidth) / 2.0f - DIV_START_X);
-            LfUIElementProps props = lf_theme()->text_props;
+            LfUIElementProps props = lf_get_theme().text_props;
             props.margin_top = 40;
             props.margin_left = 0;
             props.margin_right = 0;
@@ -585,7 +585,7 @@ void renderDashboard() {
         lf_next_line();
         {
             const uint32_t width = 200;
-            lf_set_ptr_x((state.winWidth - (width + (lf_theme()->button_props.padding * 2))) / 2.0f - DIV_START_X);
+            lf_set_ptr_x((state.winWidth - (width + (lf_get_theme().button_props.padding * 2))) / 2.0f - DIV_START_X);
             LfUIElementProps props = primary_button_style();
             props.margin_right = 0;
             props.margin_left = 0;
@@ -607,7 +607,7 @@ void renderDashboard() {
         for(auto& playlist : state.playlists) {
             bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
             // Div
-            LfUIElementProps props = lf_theme()->div_props;
+            LfUIElementProps props = lf_get_theme().div_props;
             const LfColor divColor = GRAY;
             props.color = overDiv ? lf_color_brightness(divColor, 0.6) : lf_color_brightness(divColor, 0.4);
             props.corner_radius = 5.0f;
@@ -625,7 +625,7 @@ void renderDashboard() {
 
             // Playlist Thumbnail
             {
-                LfUIElementProps props = lf_theme()->image_props;
+                LfUIElementProps props = lf_get_theme().image_props;
                 props.margin_left = 12.5f;
                 props.margin_top = 12.5f;
                 props.corner_radius = 5.0f;
@@ -638,7 +638,7 @@ void renderDashboard() {
             // Playlist Name
             lf_next_line();
             {
-                LfUIElementProps props = lf_theme()->text_props;
+                LfUIElementProps props = lf_get_theme().text_props;
                 props.margin_left = 12.5f; 
                 props.padding = 0;
                 props.border_width = 0;
@@ -650,7 +650,7 @@ void renderDashboard() {
             // Playlist Description
             lf_next_line();
             {
-                LfUIElementProps props = lf_theme()->text_props;
+                LfUIElementProps props = lf_get_theme().text_props;
                 props.margin_left = 12.5f; 
                 props.padding = 0;
                 props.border_width = 0;
@@ -666,7 +666,7 @@ void renderDashboard() {
             vec2s buttonSize = (vec2s){20, 20};
             if(overDiv)
             {
-                LfUIElementProps props = lf_theme()->button_props;
+                LfUIElementProps props = lf_get_theme().button_props;
                 props.color = LF_NO_COLOR;
                 props.border_color = LF_NO_COLOR;
                 props.border_width = 0;
@@ -753,7 +753,7 @@ void renderDashboard() {
 void renderCreatePlaylist() {
     // Heading
     {
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         props.text_color = LF_WHITE;
         props.margin_bottom = 15;
         lf_push_style_props(props);
@@ -807,7 +807,7 @@ void renderCreatePlaylist() {
             state.createPlaylistTab.createFileMessageTimer += state.deltaTime;
             lf_next_line();
             lf_push_font(&state.h4Font);
-            LfUIElementProps props = lf_theme()->button_props;
+            LfUIElementProps props = lf_get_theme().button_props;
             switch(state.createPlaylistTab.createFileStatus) {
                 case FileStatus::Failed:
                     props.text_color = LYSSA_RED;
@@ -851,7 +851,7 @@ void renderOnPlaylist() {
         bool onTitleArea = lf_hovered(LF_PTR, (vec2s){titleSize.x + 180, titleSize.y});
         // Title 
         {
-            LfUIElementProps props = lf_theme()->text_props;
+            LfUIElementProps props = lf_get_theme().text_props;
             props.text_color = LYSSA_PLAYLIST_COLOR;
             lf_push_style_props(props);
             lf_text(currentPlaylist.name.c_str());
@@ -932,7 +932,7 @@ void renderOnPlaylist() {
             // Centering the text
             lf_set_ptr_x((state.winWidth - textWidth) / 2.0f - DIV_START_X);
 
-            LfUIElementProps props = lf_theme()->text_props;
+            LfUIElementProps props = lf_get_theme().text_props;
             props.margin_top = 80;
             props.margin_left = 0;
             props.margin_right = 0;
@@ -946,7 +946,7 @@ void renderOnPlaylist() {
         {
             lf_push_font(&state.h6Font);
             const float buttonWidth = 175;
-            LfUIElementProps props = lf_theme()->button_props;
+            LfUIElementProps props = lf_get_theme().button_props;
             props.color = (LfColor){240, 240, 240, 255};
             props.text_color = LF_BLACK;
             props.corner_radius = 10; 
@@ -973,7 +973,7 @@ void renderOnPlaylist() {
         lf_next_line();
         {
             lf_push_font(&state.h3Font);
-            LfUIElementProps props = lf_theme()->text_props;
+            LfUIElementProps props = lf_get_theme().text_props;
             props.margin_bottom = 20;
             props.margin_top = 80;
             lf_push_style_props(props);
@@ -986,15 +986,15 @@ void renderOnPlaylist() {
 
         /* Heading */
         {
-            LfUIElementProps props = lf_theme()->text_props;
+            LfUIElementProps props = lf_get_theme().text_props;
             props.margin_bottom = 20;
             lf_push_style_props(props);
             lf_text("#");
 
-            lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension("#").x + lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
+            lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension("#").x + lf_get_theme().text_props.margin_right + lf_get_theme().text_props.margin_left));
             lf_text("Track");
 
-            lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
+            lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_get_theme().text_props.margin_left);
             lf_text("Duration");
             lf_pop_style_props();
 
@@ -1002,7 +1002,7 @@ void renderOnPlaylist() {
         }
         // Seperator
         {
-            LfUIElementProps props = lf_theme()->button_props;
+            LfUIElementProps props = lf_get_theme().button_props;
             props.color = lf_color_brightness(GRAY, 0.4);
             lf_push_style_props(props);
             lf_seperator();
@@ -1047,7 +1047,7 @@ void renderOnPlaylist() {
                     std::stringstream indexSS;
                     indexSS << i;
                     std::string indexStr = indexSS.str();
-                    LfUIElementProps props = lf_theme()->text_props;
+                    LfUIElementProps props = lf_get_theme().text_props;
                     props.margin_top = (thumbnailContainerSize.y - lf_text_dimension(indexStr.c_str()).y) / 2.0f;
                     lf_push_style_props(props);
                     lf_text(indexStr.c_str());
@@ -1055,13 +1055,13 @@ void renderOnPlaylist() {
 
                     // Pointer for Title heading
                     lf_set_ptr_x(lf_get_ptr_x() + state.winWidth / 4.0f - (lf_text_dimension(indexStr.c_str()).x +
-                                lf_theme()->text_props.margin_right + lf_theme()->text_props.margin_left));
+                                lf_get_theme().text_props.margin_right + lf_get_theme().text_props.margin_left));
                 }
 
                 // Play Button 
                 if(hoveredTextDiv)
                 {
-                    LfUIElementProps props = lf_theme()->button_props;
+                    LfUIElementProps props = lf_get_theme().button_props;
                     props.margin_right = 4;
                     props.margin_left = -thumbnailContainerSize.x;
                     props.border_width = 0;
@@ -1101,7 +1101,7 @@ void renderOnPlaylist() {
 
                     lf_set_cull_end_x(state.winWidth - DIV_START_X * 2.0f - 100);
 
-                    lf_text_render_wchar((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - lf_text_dimension_wide(filename.c_str()).y) / 2.0f}, filename.c_str(), lf_theme()->font, -1, false, 
+                    lf_text_render_wchar((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - lf_text_dimension_wide(filename.c_str()).y) / 2.0f}, filename.c_str(), lf_get_theme().font, -1, false, 
                             hoveredTextDiv ? lf_color_brightness(LF_WHITE, 0.7) : LF_WHITE);
 
                     lf_unset_cull_end_x();
@@ -1120,8 +1120,8 @@ void renderOnPlaylist() {
 
                 // Duration 
                 {
-                    lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_theme()->text_props.margin_left);
-                    LfUIElementProps props = lf_theme()->text_props;
+                    lf_set_ptr_x(state.winWidth - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_get_theme().text_props.margin_left);
+                    LfUIElementProps props = lf_get_theme().text_props;
                     std::string durationText = formatDurationToMins(file.duration);
                     props.margin_top = (thumbnailContainerSize.y - lf_text_dimension(durationText.c_str()).y) / 2.0f;
                     lf_push_style_props(props);
@@ -1155,7 +1155,7 @@ void renderOnTrack() {
     if((state.winWidth - 100 < thumbnailContainerSize.x || state.winWidth > WIN_START_W) && state.winHeight > WIN_START_H) {
         // Center the elements
         lf_set_ptr_y_absolute((state.winHeight - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2 - 
-                    (thumbnailContainerSize.y + lf_theme()->font.font_size * 6 + state.trackProgressSlider.height + iconSizeSm)) / 2.0f);
+                    (thumbnailContainerSize.y + lf_get_theme().font.font_size * 6 + state.trackProgressSlider.height + iconSizeSm)) / 2.0f);
     }
     {
         lf_set_ptr_x(((state.winWidth - thumbnailContainerSize.x) / 2.0f - DIV_START_X));
@@ -1196,10 +1196,10 @@ void renderOnTrack() {
         uint32_t imageSize = 32;
         lf_next_line();
         lf_set_ptr_x((state.winWidth - (lf_text_dimension(state.playlists[state.playingPlaylist].name.c_str()).x + 
-                    lf_theme()->image_props.margin_right * 2 + imageSize * 2)) / 2.0f);
+                    lf_get_theme().image_props.margin_right * 2 + imageSize * 2)) / 2.0f);
         lf_set_ptr_y(lf_get_ptr_y() - 2.5f);
         {
-            LfUIElementProps props = lf_theme()->button_props;
+            LfUIElementProps props = lf_get_theme().button_props;
             props.margin_left = 0;
             props.margin_top = -5;
             props.margin_bottom = 0;
@@ -1213,7 +1213,7 @@ void renderOnTrack() {
             lf_pop_style_props();
         }
         {
-            LfUIElementProps props = lf_theme()->text_props;
+            LfUIElementProps props = lf_get_theme().text_props;
             props.text_color = LYSSA_PLAYLIST_COLOR;
             props.margin_top = 2.5f;
             lf_push_style_props(props);
@@ -1229,7 +1229,7 @@ void renderOnTrack() {
         lf_push_font(&state.h6Font);
         std::string durationMins = formatDurationToMins(state.currentSound.getPositionInSeconds());
         lf_set_ptr_x_absolute((state.winWidth - progressBarSize.x) / 2.0f - lf_text_dimension(durationMins.c_str()).x - 15);
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         props.margin_top = 20 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
         lf_push_style_props(props);
         lf_text(durationMins.c_str());
@@ -1240,7 +1240,7 @@ void renderOnTrack() {
     {
         lf_push_font(&state.h6Font);
         lf_set_ptr_x_absolute((state.winWidth - progressBarSize.x) / 2.0f + state.trackProgressSlider.width + 5);
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         std::string durationMins = formatDurationToMins(state.currentSound.lengthInSeconds); 
         props.margin_top = 20 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
         lf_push_style_props(props);
@@ -1252,7 +1252,7 @@ void renderOnTrack() {
     {
         lf_set_ptr_x((state.winWidth - progressBarSize.x) / 2.0f - DIV_START_X);
         
-        LfUIElementProps props = lf_theme()->slider_props;
+        LfUIElementProps props = lf_get_theme().slider_props;
         props.margin_top = 20;
         props.corner_radius = 1.5;
         props.color = (LfColor){255, 255, 255, 30};
@@ -1280,7 +1280,7 @@ void renderOnTrack() {
     // Sound Controls
     {
 
-        LfUIElementProps props = lf_theme()->button_props;
+        LfUIElementProps props = lf_get_theme().button_props;
         props.margin_left = 15;
         props.margin_right = 15;
 
@@ -1371,7 +1371,7 @@ void renderPlaylistAddFromFile() {
             state.playlistAddFromFileTab.addFileMessageTimer += state.deltaTime;
             lf_next_line();
             lf_push_font(&state.h4Font);
-            LfUIElementProps props = lf_theme()->button_props;
+            LfUIElementProps props = lf_get_theme().button_props;
             switch(state.playlistAddFromFileTab.addFileStatus) {
                 case FileStatus::Failed:
                     props.text_color = LYSSA_RED;
@@ -1402,7 +1402,7 @@ void renderPlaylistAddFromFolder() {
 
     {
         lf_push_font(&state.h1Font);
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         props.margin_bottom = 15;
         lf_push_style_props(props);
         lf_text("Add files from folder");
@@ -1423,7 +1423,7 @@ void renderPlaylistAddFromFolder() {
 
 
         const LfColor barColor = lf_color_brightness(GRAY, 0.5);
-        LfUIElementProps props = lf_theme()->button_props;
+        LfUIElementProps props = lf_get_theme().button_props;
         props.border_width = 0.0f;
         props.corner_radius = 4.0f;
         props.color = barColor; 
@@ -1436,7 +1436,7 @@ void renderPlaylistAddFromFolder() {
         }
         lf_pop_style_props();
 
-        props = lf_theme()->text_props;
+        props = lf_get_theme().text_props;
         props.color = barColor;
         props.corner_radius = 4.0f;
         props.padding = 12.0f;
@@ -1490,7 +1490,7 @@ void renderPlaylistAddFromFolder() {
 
     // File manager container
     {
-        LfUIElementProps divProps = lf_theme()->div_props;
+        LfUIElementProps divProps = lf_get_theme().div_props;
         divProps.color = lf_color_brightness(GRAY, 0.4);
         divProps.corner_radius = 10.0f;
         divProps.padding = 10.0f;
@@ -1498,7 +1498,7 @@ void renderPlaylistAddFromFolder() {
         float divMarginButton = 15;
 
         lf_push_style_props(divProps);
-        lf_div_begin(((vec2s){lf_get_ptr_x() + DIV_START_X - lf_theme()->button_props.margin_left, lf_get_ptr_y() + DIV_START_Y}), (((vec2s){(float)state.winWidth - (DIV_START_X * 4),
+        lf_div_begin(((vec2s){lf_get_ptr_x() + DIV_START_X - lf_get_theme().button_props.margin_left, lf_get_ptr_y() + DIV_START_Y}), (((vec2s){(float)state.winWidth - (DIV_START_X * 4),
                         (float)state.winHeight - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM) - divMarginButton})), true);
 
         vec2s initialPtr = LF_PTR;
@@ -1524,7 +1524,7 @@ void renderPlaylistAddFromFolder() {
                 .width = (uint32_t)iconSize.x, 
                 .height = (uint32_t)iconSize.y
             };
-            LfUIElementProps props = lf_theme()->button_props;
+            LfUIElementProps props = lf_get_theme().button_props;
             props.margin_top = 0.0f;
             props.color = LF_NO_COLOR;
             props.padding = 2.5f;
@@ -1539,7 +1539,7 @@ void renderPlaylistAddFromFolder() {
             lf_pop_style_props();
             lf_unset_image_color();
 
-            props = lf_theme()->text_props;
+            props = lf_get_theme().text_props;
             props.margin_top = (iconSize.y - lf_text_dimension_wide(entry.path().filename().wstring().c_str()).y) / 2.0f;
             lf_push_style_props(props);
             lf_text_wide(entry.path().filename().wstring().c_str());
@@ -1568,7 +1568,7 @@ void renderPlaylistAddFromFolder() {
 void renderFileOrFolderPopup() {
     // Beginning a new div
     const vec2s popupSize = (vec2s){400.0f, 100.0f};
-    LfUIElementProps props = lf_theme()->div_props;
+    LfUIElementProps props = lf_get_theme().div_props;
     props.color = lf_color_brightness(GRAY, 0.45);
     props.padding = 0;
     props.corner_radius = 10;
@@ -1579,7 +1579,7 @@ void renderFileOrFolderPopup() {
     // Close Button
     {
         // Styling
-        LfUIElementProps props = lf_theme()->button_props;
+        LfUIElementProps props = lf_get_theme().button_props;
         props.margin_left = 0;
         props.margin_right = 0;
         props.margin_top = 0;
@@ -1635,7 +1635,7 @@ void renderFileOrFolderPopup() {
 void renderEditPlaylistPopup() {
     // Beginning a new div
     const vec2s popupSize = (vec2s){500.0f, 350.0f};
-    LfUIElementProps div_props = lf_theme()->div_props;
+    LfUIElementProps div_props = lf_get_theme().div_props;
     div_props.color = lf_color_brightness(GRAY, 0.7); 
     div_props.border_width = 0;
     div_props.padding = 5;
@@ -1648,7 +1648,7 @@ void renderEditPlaylistPopup() {
         // Put the X Button in the top left of the div 
 
         // Styling
-        LfUIElementProps props = lf_theme()->button_props;
+        LfUIElementProps props = lf_get_theme().button_props;
         props.margin_left = 0;
         props.margin_right = 0;
         props.margin_top = 0;
@@ -1671,7 +1671,7 @@ void renderEditPlaylistPopup() {
 
     lf_next_line();
     {
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         props.margin_left = 20;
         props.margin_bottom = 5;
         lf_push_style_props(props);
@@ -1691,7 +1691,7 @@ void renderEditPlaylistPopup() {
 
     lf_next_line();
     {
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         props.margin_left = 20;
         props.margin_bottom = 5;
         props.margin_top = 15;
@@ -1737,7 +1737,7 @@ void renderPlaylistFileDialoguePopup() {
     PlaylistFileDialoguePopup& popup = state.removeFilePopup;
     const vec2s popupSize =(vec2s){200, 200};
 
-    LfUIElementProps props = lf_theme()->div_props;
+    LfUIElementProps props = lf_get_theme().div_props;
     props.color = lf_color_brightness(GRAY, 0.35);
     props.corner_radius = 4;
     lf_push_style_props(props);
@@ -1758,7 +1758,7 @@ void renderPlaylistFileDialoguePopup() {
     int32_t clickedIndex = -1;
     for(uint32_t i = 0; i < options_count; i++) {
         // Option
-        props = lf_theme()->text_props;
+        props = lf_get_theme().text_props;
         props.hover_text_color = lf_color_brightness(GRAY, 2);
         lf_push_style_props(props);
         if(lf_button(options[i]) == LF_CLICKED) {
@@ -1767,7 +1767,7 @@ void renderPlaylistFileDialoguePopup() {
         lf_pop_style_props();
 
         // Seperator
-        props = lf_theme()->button_props;
+        props = lf_get_theme().button_props;
         props.color = lf_color_brightness(GRAY, 0.7);
         lf_push_style_props(props);
         lf_seperator();
@@ -1818,7 +1818,7 @@ void renderPlaylistFileDialoguePopup() {
     lf_div_end();
 
     if(showPlaylistPopup) {
-        LfUIElementProps div_props = lf_theme()->div_props;
+        LfUIElementProps div_props = lf_get_theme().div_props;
         div_props.color = lf_color_brightness(GRAY, 0.35);
         div_props.corner_radius = 4;
         div_props.padding = 10;
@@ -1834,7 +1834,7 @@ void renderPlaylistFileDialoguePopup() {
             Playlist& playlist = state.playlists[i];
             if(i == state.currentPlaylist) continue;
             // Playlist
-            props = lf_theme()->text_props;
+            props = lf_get_theme().text_props;
             props.hover_text_color = lf_color_brightness(GRAY, 2);
             lf_push_style_props(props);
             if(lf_button(playlist.name.c_str()) == LF_CLICKED) {
@@ -1857,7 +1857,7 @@ void renderPlaylistFileDialoguePopup() {
             lf_pop_style_props();
 
             // Seperator
-            props = lf_theme()->button_props;
+            props = lf_get_theme().button_props;
             props.color = lf_color_brightness(GRAY, 0.7);
             lf_push_style_props(props);
             lf_seperator();
@@ -1942,7 +1942,7 @@ void renderTrackProgress() {
         lf_push_font(&state.h6Font);
         std::string durationMins = formatDurationToMins(state.currentSound.getPositionInSeconds());
         lf_set_ptr_x_absolute((state.winWidth - state.trackProgressSlider.width) / 2.0f - lf_text_dimension(durationMins.c_str()).x - 15);
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         props.margin_top = 40 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
         lf_push_style_props(props);
         lf_text(durationMins.c_str());
@@ -1953,7 +1953,7 @@ void renderTrackProgress() {
     {
         lf_push_font(&state.h6Font);
         lf_set_ptr_x_absolute((state.winWidth - state.trackProgressSlider.width) / 2.0f + state.trackProgressSlider.width + 5);
-        LfUIElementProps props = lf_theme()->text_props;
+        LfUIElementProps props = lf_get_theme().text_props;
         std::string durationMins = formatDurationToMins(state.currentSound.lengthInSeconds); 
         props.margin_top = 40 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
         lf_push_style_props(props);
@@ -1967,7 +1967,7 @@ void renderTrackProgress() {
    
         lf_set_ptr_x_absolute((state.winWidth - state.trackProgressSlider.width) / 2.0f);
         
-        LfUIElementProps props = lf_theme()->slider_props;
+        LfUIElementProps props = lf_get_theme().slider_props;
         props.margin_top = 40;
         props.margin_left = 0;
         props.margin_right = 0;
@@ -1996,7 +1996,7 @@ void renderTrackProgress() {
         vec2s iconSizeSm = (vec2s){18, 18};
         float iconMargin = 20;
         float controlWidth = (iconSizeSm.x) * 2 + iconSize.x + (iconMargin * 2);
-        LfUIElementProps props = lf_theme()->button_props;
+        LfUIElementProps props = lf_get_theme().button_props;
         props.color = LF_NO_COLOR;
         props.border_width = 0; 
         props.corner_radius = 0; 
@@ -2049,7 +2049,7 @@ void renderTrackVolumeControl() {
     if(state.currentSoundFile == NULL) return;
     // Sound Control
     {
-        LfUIElementProps props = lf_theme()->button_props;
+        LfUIElementProps props = lf_get_theme().button_props;
         const vec2s iconSize = (vec2s){state.icons["sound"].width / 10.0f, state.icons["sound"].height / 10.0f};
 
         props.color = LF_NO_COLOR;
@@ -2083,7 +2083,7 @@ void renderTrackVolumeControl() {
         lf_pop_style_props();
     }
     if(state.showVolumeSliderTrackDisplay) {
-        LfUIElementProps props = lf_theme()->slider_props;
+        LfUIElementProps props = lf_get_theme().slider_props;
         props.corner_radius = 1.5;
         props.color = (LfColor){255, 255, 255, 30};
         props.text_color = LF_WHITE;
@@ -2101,7 +2101,7 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
     lf_next_line();
 
     lf_set_ptr_y(state.winHeight - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2);
-    LfUIElementProps props = lf_theme()->button_props;
+    LfUIElementProps props = lf_get_theme().button_props;
     props.color = (LfColor){0, 0, 0, 0};
     props.border_width = 0;
     lf_push_style_props(props);
