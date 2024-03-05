@@ -1,12 +1,15 @@
 #include "config.h"
 #include "leif.h"
 
+#include <chrono>
 #include <fstream>
 #include <functional>
 #include <future>
 #include <iostream>
 #include <filesystem>
+#include <iterator>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 #include <glad/glad.h>
@@ -25,6 +28,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 
 #ifdef _WIN32
@@ -69,10 +73,12 @@ struct Sound {
     ma_device device;
     ma_decoder decoder;
 
+    std::string path;
+
     bool isPlaying = false, isInit = false;
     double lengthInSeconds = 0;
 
-    uint32_t volume = 100;
+    uint32_t volume = VOLUME_INIT;
 
     void init(const std::string& filepath);
     void uninit();
@@ -166,7 +172,8 @@ enum class PopupID {
 
 struct TextureData {
     unsigned char* data;
-    int32_t width, height, channels;
+    uint32_t width, height; 
+    int32_t channels;
     std::string path;
 };
 
@@ -213,7 +220,7 @@ struct GlobalState {
     LfSlider volumeSlider;
     bool showVolumeSliderTrackDisplay = false, showVolumeSliderOverride = false;
 
-    float volumeBeforeMute = 100.0f;
+    float volumeBeforeMute = VOLUME_INIT;
 
 
     // Async loading
@@ -225,8 +232,8 @@ struct GlobalState {
 
 static GlobalState state;
 
-static void                     winResizeCb(GLFWwindow* window, int32_t width, int32_t height);
-static void                     initWin(uint32_t width, uint32_t height);
+static void                     winResizeCb(GLFWwindow* window, float width, float height);
+static void                     initWin(float width, float height);
 static void                     initUI();
 static void                     handleTabKeyStrokes();
 
@@ -326,11 +333,12 @@ static void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void*
     // Adjust volume
     float* outputBuffer = (float*)pOutput;
     for (ma_uint32 i = 0; i < frameCount * pDevice->playback.channels; ++i) {
-        outputBuffer[i] *= state.currentSound.volume / 100.0f;
+        outputBuffer[i] *= state.currentSound.volume / (float)VOLUME_MAX;
     }
 }
 
 void Sound::init(const std::string& filepath) {
+    path = filepath;
     if (ma_decoder_init_file(filepath.c_str(), NULL, &decoder) != MA_SUCCESS) {
         std::cerr << "[Error]: Failed to load Sound '" << filepath << "'.\n";
         return;
@@ -400,7 +408,7 @@ static void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
 
     state.trackProgressSlider._init = false;
 }
-void initWin(uint32_t width, uint32_t height) {
+void initWin(float width, float height) {
     state.winWidth = width;
     state.winHeight = height;
     if(!glfwInit()) {
@@ -470,7 +478,7 @@ void initUI() {
     state.volumeSlider = (LfSlider){
         .val = reinterpret_cast<int32_t*>(&state.currentSound.volume), 
         .min = 0, 
-        .max = 100,
+        .max = VOLUME_MAX,
         .width = 100,
         .height = 5,
     };
@@ -478,60 +486,77 @@ void initUI() {
 
 void handleTabKeyStrokes() {
     if(state.currentSound.isInit) {
-        if(lf_key_went_down(GLFW_KEY_SPACE)) {
-            if(state.currentSound.isPlaying)
-                state.currentSound.stop();
-            else 
-                state.currentSound.play();
-        }
-        if(lf_key_went_down(GLFW_KEY_N)) {
-            if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
-                skipSoundDown(state.currentPlaylist);
-            } else {
-                skipSoundUp(state.currentPlaylist);
+        if(lf_key_event().pressed && lf_key_event().happened) {
+            switch(lf_key_event().keycode) {
+                case GLFW_KEY_SPACE: 
+                    {
+                        if(state.currentSound.isPlaying)
+                            state.currentSound.stop();
+                        else 
+                            state.currentSound.play();
+                        break;
+                    }
+                case GLFW_KEY_N: 
+                    {
+                        if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
+                            skipSoundDown(state.currentPlaylist);
+                        } else {
+                            skipSoundUp(state.currentPlaylist);
+                        }
+                        break;
+                    }
+                case GLFW_KEY_LEFT: 
+                    {
+                        if(state.currentSound.getPositionInSeconds() - 5 >= 0) {
+                            state.currentSound.setPositionInSeconds(state.currentSound.getPositionInSeconds() - 5);
+                            state.currentSoundPos = state.currentSound.getPositionInSeconds();
+                            state.trackProgressSlider._init = false;
+                        }
+                        break;
+                    }
+                case GLFW_KEY_RIGHT: 
+                    {
+                        if(state.currentSound.getPositionInSeconds() + 5 <= state.currentSound.lengthInSeconds) {
+                            state.currentSound.setPositionInSeconds(state.currentSound.getPositionInSeconds() + 5);
+                            state.currentSoundPos = state.currentSound.getPositionInSeconds();
+                            state.trackProgressSlider._init = false;
+                        }
+                        break;
+                    }
+                case GLFW_KEY_DOWN: 
+                    {
+                        state.volumeSlider._init = false;
+                        state.showVolumeSliderTrackDisplay = true;
+                        state.showVolumeSliderOverride = true;
+                        if(*(int32_t*)state.volumeSlider.val - VOLUME_TOGGLE_STEP >= 0)
+                            *(int32_t*)state.volumeSlider.val -= VOLUME_TOGGLE_STEP; 
+                        else 
+                            *(int32_t*)state.volumeSlider.val = 0;
+                        break;
+                    }
+                case GLFW_KEY_UP: 
+                    {
+                        state.volumeSlider._init = false;
+                        state.showVolumeSliderTrackDisplay = true;
+                        state.showVolumeSliderOverride = true;
+                        if(*(int32_t*)state.volumeSlider.val + VOLUME_TOGGLE_STEP <= VOLUME_MAX)
+                            *(int32_t*)state.volumeSlider.val += VOLUME_TOGGLE_STEP; 
+                        else 
+                            *(int32_t*)state.volumeSlider.val = VOLUME_MAX;
+                        break;
+                    }
+                case GLFW_KEY_M: 
+                    {
+                        if(state.currentSound.volume != 0.0f) 
+                            state.volumeBeforeMute = state.currentSound.volume;
+                        
+                        state.currentSound.volume = (state.currentSound.volume != 0.0f) ? 0.0f : state.volumeBeforeMute;
+                        state.volumeSlider._init = false;
+                        state.showVolumeSliderTrackDisplay = true;
+                        state.showVolumeSliderOverride = true;
+                        break;
+                    }
             }
-        }
-        if(lf_key_went_down(GLFW_KEY_LEFT)) {
-            if(state.currentSound.getPositionInSeconds() - 5 >= 0) {
-                state.currentSound.setPositionInSeconds(state.currentSound.getPositionInSeconds() - 5);
-                state.currentSoundPos = state.currentSound.getPositionInSeconds();
-                state.trackProgressSlider._init = false;
-            }
-        }
-        else if(lf_key_went_down(GLFW_KEY_RIGHT)) {
-            if(state.currentSound.getPositionInSeconds() + 5 <= state.currentSound.lengthInSeconds) {
-                state.currentSound.setPositionInSeconds(state.currentSound.getPositionInSeconds() + 5);
-                state.currentSoundPos = state.currentSound.getPositionInSeconds();
-                state.trackProgressSlider._init = false;
-            }
-        }
-        if(lf_key_went_down(GLFW_KEY_DOWN)) {
-           state.volumeSlider._init = false;
-           state.showVolumeSliderTrackDisplay = true;
-           state.showVolumeSliderOverride = true;
-            if(*(int32_t*)state.volumeSlider.val - 5 >= 0)
-                *(int32_t*)state.volumeSlider.val -= 5; 
-            else 
-                *(int32_t*)state.volumeSlider.val = 0;
-        }
-        if(lf_key_went_down(GLFW_KEY_UP)) {
-           state.volumeSlider._init = false;
-           state.showVolumeSliderTrackDisplay = true;
-           state.showVolumeSliderOverride = true;
-            if(*(int32_t*)state.volumeSlider.val + 5 <= 100)
-                *(int32_t*)state.volumeSlider.val += 5; 
-            else 
-                *(int32_t*)state.volumeSlider.val = 100;
-
-        }
-        if(lf_key_went_down(GLFW_KEY_M)) {
-            if(state.currentSound.volume != 0.0f) {
-                state.volumeBeforeMute = state.currentSound.volume;
-            }
-            state.currentSound.volume = (state.currentSound.volume != 0.0f) ? 0.0f : state.volumeBeforeMute;
-           state.volumeSlider._init = false;
-           state.showVolumeSliderTrackDisplay = true;
-           state.showVolumeSliderOverride = true;
         }
     }
 }
@@ -552,8 +577,8 @@ void renderDashboard() {
 
     if(!state.playlists.empty()) {
         {
-            const uint32_t width = 150;
-            const uint32_t height = -1;
+            const float width = 150;
+            const float height = -1;
             LfUIElementProps props = primary_button_style();
             props.margin_right = 0;
             props.margin_left = 0;
@@ -584,7 +609,7 @@ void renderDashboard() {
         }
         lf_next_line();
         {
-            const uint32_t width = 200;
+            const float width = 200;
             lf_set_ptr_x((state.winWidth - (width + (lf_get_theme().button_props.padding * 2))) / 2.0f - DIV_START_X);
             LfUIElementProps props = primary_button_style();
             props.margin_right = 0;
@@ -631,8 +656,8 @@ void renderDashboard() {
                 props.corner_radius = 5.0f;
                 lf_push_style_props(props);
                 lf_image((LfTexture){.id = state.icons["music_note"].id, 
-                        .width = (uint32_t)width - (uint32_t)props.margin_left * 2, 
-                        .height = (uint32_t)width - (uint32_t)props.margin_top * 2});
+                        .width = (uint32_t)(width - props.margin_left * 2), 
+                        .height = (uint32_t)(width - props.margin_top * 2)});
                 lf_pop_style_props();
             }
             // Playlist Name
@@ -726,6 +751,10 @@ void renderDashboard() {
             if(lf_get_current_div().interact_state == LF_CLICKED && lf_get_current_div().id == lf_get_selected_div().id && !overButton) {
                 state.currentPlaylist = playlistIndex;
                 if(!playlist.loaded) {
+                    state.loadedPlaylistFilepaths.clear();
+                    state.loadedPlaylistFilepaths.shrink_to_fit();
+
+                    state.loadedPlaylistFilepaths = getPlaylistFilepaths(std::filesystem::directory_entry(playlist.path));
                     loadPlaylistAsync(playlist);
                     playlist.loaded = true;
                 }
@@ -1073,8 +1102,10 @@ void renderOnPlaylist() {
                     onPlayButton = playButton != LF_IDLE;
 
                     if(playButton == LF_CLICKED) {
-                        playlistPlayFileWithIndex(i, state.currentPlaylist);
-                        state.currentSoundFile = &file;
+                        if(state.playlistFileFutures.empty()) {
+                            playlistPlayFileWithIndex(i, state.currentPlaylist);
+                            state.currentSoundFile = &file;
+                        }
                     }
                     lf_pop_style_props();
                 }
@@ -1107,7 +1138,7 @@ void renderOnPlaylist() {
                     lf_unset_cull_end_x();
                 } 
 
-                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton) {
+                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton && state.playlistFileFutures.empty()) {
                     if(i != currentPlaylist.playingFile) {
                         playlistPlayFileWithIndex(i, state.currentPlaylist);
                     }
@@ -1193,7 +1224,7 @@ void renderOnTrack() {
     }
     // Playlist Display
     {
-        uint32_t imageSize = 32;
+        float imageSize = 32;
         lf_next_line();
         lf_set_ptr_x((state.winWidth - (lf_text_dimension(state.playlists[state.playingPlaylist].name.c_str()).x + 
                     lf_get_theme().image_props.margin_right * 2 + imageSize * 2)) / 2.0f);
@@ -1206,7 +1237,7 @@ void renderOnTrack() {
             props.padding = 0;
             props.corner_radius = 3;
             lf_push_style_props(props);
-            if(lf_image_button(((LfTexture){.id = state.icons["music_note"].id, .width = imageSize, .height = imageSize})) == LF_CLICKED) {
+            if(lf_image_button(((LfTexture){.id = state.icons["music_note"].id, .width = (uint32_t)imageSize, .height = (uint32_t)imageSize})) == LF_CLICKED) {
                 state.currentPlaylist = state.playingPlaylist;
                 changeTabTo(GuiTab::OnPlaylist);
             }
@@ -1304,7 +1335,7 @@ void renderOnTrack() {
             props.padding = 10;
             props.margin_top = 0;
             lf_push_style_props(props);
-            if(lf_image_button(((LfTexture){.id = state.currentSound.isPlaying ? state.icons["pause"].id : state.icons["play"].id, .width = (uint32_t)iconSizeSm, .height = (uint32_t)iconSizeSm})) == LF_CLICKED) {
+            if(lf_image_button(((LfTexture){.id = state.currentSound.isPlaying ? state.icons["pause"].id : state.icons["play"].id, .width =(uint32_t)iconSizeSm, .height =(uint32_t)iconSizeSm})) == LF_CLICKED) {
                 if(state.currentSound.isPlaying)
                     state.currentSound.stop();
                 else 
@@ -2031,7 +2062,7 @@ void renderTrackProgress() {
         lf_push_style_props(props);
         lf_set_image_color(lf_color_brightness(GRAY, 2));
         if(lf_image_button(((LfTexture){.id = state.icons["skip_up"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
-            skipSoundDown(state.playingPlaylist);
+            skipSoundUp(state.playingPlaylist);
         }
         lf_unset_image_color();
         lf_pop_style_props();
@@ -2409,6 +2440,7 @@ std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folde
 }
 
 void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
+    if(!state.playlistFileFutures.empty()) return;
     Playlist& playlist = state.playlists[playlistIndex];
     playlist.playingFile = i;
 
@@ -2531,9 +2563,9 @@ TextureData getSoundThubmnailData(const std::string& soundPath, vec2s size_facto
     ByteVector imageData = apicFrame->picture();
 
     if(size_factor.x == -1 || size_factor.y == -1) {
-        retData.data = lf_load_texture_data_from_memory(imageData.data(), (int)imageData.size(), &retData.width, &retData.height, &retData.channels, true); 
+        retData.data = lf_load_texture_data_from_memory(imageData.data(), (size_t)imageData.size(), (int32_t*)&retData.width, (int32_t*)&retData.height, &retData.channels, true); 
     } else  {
-        retData.data = lf_load_texture_data_from_memory_resized(imageData.data(), (int)imageData.size(), &retData.channels, true, size_factor.x, size_factor.y); 
+        retData.data = lf_load_texture_data_from_memory_resized(imageData.data(), (size_t)imageData.size(), &retData.channels, true, (uint32_t)size_factor.x, (uint32_t)size_factor.y); 
     }
     retData.width = size_factor.x;
     retData.height = size_factor.y;
@@ -2665,7 +2697,7 @@ std::vector<SoundFile> reorderPlaylistFiles(const std::vector<SoundFile>& soundF
 }
 
 void handleAsyncPlaylistLoading() {
-      // Create OpenGL Textures for the thumbnails that were loaded
+    // Create OpenGL Textures for the thumbnails that were loaded
     for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
         SoundFile& file = state.playlists[state.currentPlaylist].musicFiles[i];
         LfTexture& thumbnail = file.thumbnail;
@@ -2686,13 +2718,12 @@ void handleAsyncPlaylistLoading() {
         if(state.loadedPlaylistFilepaths.size() == currentPlaylist.musicFiles.size() && !state.playlistFileFutures.empty()) {
             state.playlistFileFutures.clear();
             state.playlistFileFutures.shrink_to_fit();
+          
         }
     }
 }
 
 void loadPlaylistAsync(Playlist& playlist) {
-    state.loadedPlaylistFilepaths = getPlaylistFilepaths(std::filesystem::directory_entry(playlist.path));
-
     state.playlistFileThumbnailData.clear();
     state.playlistFileThumbnailData.shrink_to_fit();
 
@@ -2780,16 +2811,7 @@ int main(int argc, char* argv[]) {
         lf_begin();
         lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.winWidth - DIV_START_X, (float)state.winHeight - DIV_START_Y}), false);
 
-    {
-        lf_next_line();
-        state.createPlaylistTab.nameInput.input.width = state.winWidth / 2.0f;
-        LfUIElementProps props = input_field_style();
-        lf_push_style_props(props);
-        lf_input_text(&state.createPlaylistTab.nameInput.input);
-        lf_pop_style_props();
-        lf_next_line();
-    }
-        /*switch(state.currentTab) {
+        switch(state.currentTab) {
             case GuiTab::Dashboard:
                 renderDashboard();
                 break;
@@ -2818,7 +2840,6 @@ int main(int argc, char* argv[]) {
                 popup.renderCb();
             } 
         }
-*/
         lf_div_end();
         lf_end();
         

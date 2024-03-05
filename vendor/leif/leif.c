@@ -213,7 +213,6 @@ static LfState state;
 static uint32_t                 shader_create(GLenum type, const char* src);
 static LfShader                 shader_prg_create(const char* vert_src, const char* frag_src);
 static void                     shader_set_mat(LfShader prg, const char* name, mat4 mat); 
-static LfTexture                tex_create(const char* filepath, bool flip, LfTextureFiltering filter);
 static void                     set_projection_matrix();
 static void                     renderer_init();
 static void                     renderer_flush();
@@ -245,8 +244,6 @@ static int32_t                  menu_item_list_item_loc(void** items, uint32_t i
 
 // --- Utility ---
 static int32_t                  get_max_char_height_font(LfFont font);
-static double                   get_char_width(LfFont font, char c);
-static float                    get_kerning(int32_t prev_character_codepoint, int current_character_codepoint);
 
 static void                     remove_i_str(char *str, int32_t index);
 static void                     remove_substr_str(char *str, int start_index, int end_index);
@@ -322,6 +319,29 @@ LfShader shader_prg_create(const char* vert_src, const char* frag_src) {
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
     return prg;
+}
+
+void shader_set_mat(LfShader prg, const char* name, mat4 mat) {
+    glUniformMatrix4fv(glGetUniformLocation(prg.id, name), 1, GL_FALSE, mat[0]);
+}
+
+void set_projection_matrix() { 
+    float left = 0.0f;
+    float right = state.dsp_w;
+    float bottom = state.dsp_h;
+    float top = 0.0f;
+    float near = 0.1f;
+    float far = 100.0f;
+
+    // Create the orthographic projection matrix
+    mat4 orthoMatrix = GLM_MAT4_IDENTITY_INIT;
+    orthoMatrix[0][0] = 2.0f / (right - left);
+    orthoMatrix[1][1] = 2.0f / (top - bottom);
+    orthoMatrix[2][2] = -1;
+    orthoMatrix[3][0] = -(right + left) / (right - left);
+    orthoMatrix[3][1] = -(top + bottom) / (top - bottom);
+
+    shader_set_mat(state.render.shader, "u_proj", orthoMatrix);
 }
 
 void renderer_init() {
@@ -530,10 +550,47 @@ void renderer_init() {
     set_projection_matrix();
     glUniform1iv(glGetUniformLocation(state.render.shader.id, "u_textures"), MAX_TEX_COUNT_BATCH, tex_slots);
 }
-void shader_set_mat(LfShader prg, const char* name, mat4 mat) {
-    glUniformMatrix4fv(glGetUniformLocation(prg.id, name), 1, GL_FALSE, mat[0]);
+
+void renderer_begin() {
+    state.render.vert_count = 0;
+    state.render.index_count = 0;
+    state.render.tex_index = 0;
+    state.render.tex_count = 0;
+    state.drawcalls = 0;
 }
 
+void renderer_flush() {
+    if(state.render.vert_count <= 0) return;
+
+    // Bind the vertex buffer & shader set the vertex data, bind the textures & draw
+    glUseProgram(state.render.shader.id);
+    glBindBuffer(GL_ARRAY_BUFFER, state.render.vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * state.render.vert_count, 
+                    state.render.verts);
+
+    for(uint32_t i = 0; i < state.render.tex_count; i++) {
+        glBindTextureUnit(i, state.render.textures[i].id);
+        state.drawcalls++;
+    }
+
+    vec2s renderSize = (vec2s){(float)state.dsp_w, (float)state.dsp_h};
+    glUniform2fv(glGetUniformLocation(state.render.shader.id, "u_screen_size"), 1, (float*)renderSize.raw);
+    glBindVertexArray(state.render.vao);
+    glDrawElements(GL_TRIANGLES, state.render.index_count, GL_UNSIGNED_INT, NULL);
+}
+
+LfTextProps text_render_simple(vec2s pos, const char* text, LfFont font, LfColor font_color, bool no_render) {
+    return lf_text_render(pos, text, font, font_color, -1, (vec2s){-1, -1}, no_render, false, -1, -1);
+}
+LfTextProps text_render_simple_wide(vec2s pos, const wchar_t* text, LfFont font, LfColor font_color, bool no_render) {
+    return lf_text_render_wchar(pos, text, font, -1, no_render, font_color);
+}
+
+bool area_hovered(vec2s pos, vec2s size) {
+    bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
+    return hovered;
+}
 
 LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width,  bool click_color, bool hover_color) {
     uint64_t id = DJB2_INIT;
@@ -601,139 +658,77 @@ LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props
     return LF_IDLE;
 
 }
-LfTextProps text_render_simple(vec2s pos, const char* text, LfFont font, LfColor font_color, bool no_render) {
-    return lf_text_render(pos, text, font, font_color, -1, (vec2s){-1, -1}, no_render, false, -1, -1);
+
+void next_line_on_overflow(vec2s size, float xoffset) {
+    if(!state.line_overflow) return;
+
+    // If the object does not fit in the area of the current div, advance to the next line
+    if(state.pos_ptr.x - state.current_div.aabb.pos.x + size.x > state.current_div.aabb.size.x) {
+        state.pos_ptr.y += state.current_line_height;
+        state.pos_ptr.x = state.current_div.aabb.pos.x + xoffset;
+        state.current_line_height = 0;
+    }
+    if(size.y > state.current_line_height) {
+        state.current_line_height = size.y;
+    }
 }
-LfTextProps text_render_simple_wide(vec2s pos, const wchar_t* text, LfFont font, LfColor font_color, bool no_render) {
-    return lf_text_render_wchar(pos, text, font, -1, no_render, font_color);
+
+bool item_should_cull(LfAABB item) {
+    bool intersect;
+    LfAABB window =  (LfAABB){.pos = (vec2s){0, 0}, .size = (vec2s){state.dsp_w, state.dsp_h}};
+    if(item.size.x == -1 || item.size.y == -1) 
+        intersect = lf_point_intersects_aabb(item.pos, window);
+    else 
+        intersect = lf_aabb_intersects_aabb(item, window);
+
+    return !intersect && state.current_div.id == state.scrollbar_div.id;
+
+    return false;
 }
 
-#ifdef LF_GLFW
-void glfw_key_callback(GLFWwindow* window, int32_t key, int scancode, int action, int mods) {
-    (void)window;
-    (void)mods;
-    (void)scancode;
-    // Changing the the keys array to resamble the state of the keyboard 
-    if(action != GLFW_RELEASE) {
-        if(!state.input.keyboard.keys[key]) 
-            state.input.keyboard.keys[key] = true;
-    }  else {
-        state.input.keyboard.keys[key] = false;
-    }
-    state.input.keyboard.keys_changed[key] = (action != GLFW_REPEAT);
+void draw_scrollbar_on(LfDiv div) {
+    lf_next_line();
+    if(state.current_div.id == div.id) {
+        state.scrollbar_div = div;
+        LfDiv* selected = &state.selected_div_tmp;
+        float scroll = *state.scroll_ptr;
+        LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.scrollbar_props;
 
-    // Calling user defined callbacks
-    for(uint32_t i = 0; i < state.input.key_cb_count; i++) {
-        state.input.key_cbs[i](window, key, scancode, action, mods);
-    }
+        state.selected_div_tmp.total_area.x = state.pos_ptr.x;
+        state.selected_div_tmp.total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
 
-    // Populating the key event
-    state.key_ev.happened = true;
-    state.key_ev.pressed = action != GLFW_RELEASE;
-    state.key_ev.keycode = key;
-}
-void glfw_mouse_button_callback(GLFWwindow* window, int32_t button, int action, int mods) {
-    (void)window;
-    (void)mods;
-    // Changing the buttons array to resamble the state of the mouse
-    if(action != GLFW_RELEASE)  {
-        if(!state.input.mouse.buttons_current[button])
-            state.input.mouse.buttons_current[button] = true;
-    } else {
-        state.input.mouse.buttons_current[button] = false;
-    }
-    // Calling user defined callbacks
-    for(uint32_t i = 0; i < state.input.mouse_button_cb_count; i++) {
-        state.input.mouse_button_cbs[i](window, button, action, mods);
-    }
-    // Populating the mouse button event
-    state.mb_ev.happened = true;
-    state.mb_ev.pressed = action != GLFW_RELEASE;
-    state.mb_ev.button_code = button;
-}
-void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    (void)window;
-    // Setting the scroll values
-    state.input.mouse.xscroll_delta = xoffset;
-    state.input.mouse.yscroll_delta = yoffset;
+        if(*state.scroll_ptr < -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y) && *state.scroll_velocity_ptr < 0 && state.theme.div_smooth_scroll) {
+            *state.scroll_velocity_ptr = 0;
+            *state.scroll_ptr = -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y);
+        }
 
-    // Calling user defined callbacks
-    for(uint32_t i = 0; i< state.input.scroll_cb_count; i++) {
-        state.input.scroll_cbs[i](window, xoffset, yoffset);
-    }
-    // Populating the scroll event
-    state.scr_ev.happened = true;
-    state.scr_ev.xoffset = xoffset;
-    state.scr_ev.yoffset = yoffset;
+        float total_area = selected->total_area.y - scroll;
+        float visible_area = selected->aabb.size.y + selected->aabb.pos.y;
+        if(total_area > visible_area) {
+            const float min_scrollbar_height = 10;
 
-   
-    // Scrolling the current div
-    LfDiv* selected_div = &state.selected_div;
-    if(!selected_div->scrollable) return;
-
-    if(yoffset == -1) {
-        if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
-            if(state.theme.div_smooth_scroll) {
-                *state.scroll_velocity_ptr -= state.theme.div_scroll_acceleration;
-                state.div_velocity_accelerating = true;
-            } else {
-                *state.scroll_ptr -= state.theme.div_scroll_amount_px;
-            }
+            float area_mapped = visible_area/total_area; 
+            float scroll_mapped = (-1 * scroll)/total_area;
+            float scrollbar_height = MAX((selected->aabb.size.y*area_mapped - props.margin_top * 2), min_scrollbar_height);
+           
+            lf_rect_render(
+                (vec2s){
+                    selected->aabb.pos.x + selected->aabb.size.x - state.theme.scrollbar_width - props.margin_right - state.div_props.padding  - state.div_props.border_width,
+                    MIN((selected->aabb.pos.y + selected->aabb.size.y*scroll_mapped + props.margin_top + state.div_props.padding + state.div_props.border_width + state.div_props.corner_radius), visible_area - scrollbar_height)}, 
+                (vec2s){
+                    state.theme.scrollbar_width, 
+                    scrollbar_height - state.div_props.border_width * 2 - state.div_props.corner_radius * 2}, 
+                props.color,
+                props.border_color, props.border_width, props.corner_radius);
         } 
-    } else if (yoffset == 1) {
-        if(*state.scroll_ptr) {
-            if(state.theme.div_smooth_scroll) {
-                *state.scroll_velocity_ptr += state.theme.div_scroll_acceleration;
-                state.div_velocity_accelerating = false;
-            } else {
-                *state.scroll_ptr += state.theme.div_scroll_amount_px;
-            }
-        }        
     }
-    if(state.theme.div_smooth_scroll)
-        *state.scroll_velocity_ptr = MIN(MAX(*state.scroll_velocity_ptr, -state.theme.div_scroll_max_veclocity), state.theme.div_scroll_max_veclocity);
 }
-void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
-    (void)window;
-    LfMouse* mouse = &state.input.mouse;
-    // Setting the position values 
-    mouse->xpos = xpos;
-    mouse->ypos = ypos;
-
-    if(mouse->first_mouse_press) {
-        mouse->xpos_last = xpos;
-        mouse->ypos_last = ypos;
-        mouse->first_mouse_press = false;
-    }
-    // Delta mouse positions 
-    mouse->xpos_delta = mouse->xpos - mouse->xpos_last;
-    mouse->ypos_delta = mouse->ypos - mouse->ypos_last;
-    mouse->xpos_last = xpos;
-    mouse->ypos_last = ypos;
-
-    // Calling User defined callbacks
-    for(uint32_t i = 0; i < state.input.cursor_pos_cb_count; i++) {
-        state.input.cursor_pos_cbs[i](window, xpos, ypos);
-    }
-
-    // Populating the cursor event
-    state.cp_ev.happened = true;
-    state.cp_ev.x = xpos;
-    state.cp_ev.y = ypos;
-}
-void glfw_char_callback(GLFWwindow* window, uint32_t charcode) {
-    (void)window;
-    state.ch_ev.charcode = charcode;
-    state.ch_ev.happened = true;
-}
-#endif
 
 void input_field_unselect_all(LfInputField* input) {
     input->selection_start = -1;
     input->selection_end = -1;
+    input->selection_dir = 0;
 }
-
-
 
 void input_field(LfInputField* input, InputFieldType type, const char* file, int32_t line) {
     if(!input->buf) return;
@@ -799,8 +794,11 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
             switch(lf_key_event().keycode) {
                 case GLFW_KEY_BACKSPACE: {
                     if(input->selection_start != -1) {
-                        //bool selected_all = input->selection_start == 0 && input->selection_end == strlen(input->buf);
-                        remove_substr_str(input->buf, input->selection_start - 1, input->selection_end);
+                        int start = input->selection_dir != 0 ?  input->selection_start : input->selection_start - 1;
+                        int end = input->selection_end;
+
+                        remove_substr_str(input->buf, start, end);
+
                         input->cursor_index = input->selection_start;
                         input_field_unselect_all(input);
                     }
@@ -903,7 +901,9 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                 }
                 case GLFW_KEY_V: {
                     if(!lf_key_is_down(GLFW_KEY_LEFT_CONTROL)) break;
-                    const char* clipboard_content = clipboard_text(state.clipboard);
+                    int32_t length;
+                    const char* clipboard_content = clipboard_text_ex(state.clipboard, &length, LCB_CLIPBOARD);
+                    if(length > 512) break;
 
                     insert_str_str(input->buf, clipboard_content, input->cursor_index);
                     input->cursor_index += strlen(clipboard_content);
@@ -911,6 +911,22 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                     input_field_unselect_all(input); 
                     break;
 
+                }
+                case GLFW_KEY_X: {
+                    char selection[strlen(input->buf)];
+                    memset(selection, 0, strlen(input->buf));
+                    substr_str(input->buf, input->selection_start, input->selection_end, selection);
+
+                    clipboard_set_text(state.clipboard, selection);
+
+                    int start = input->selection_dir != 0 ?  input->selection_start : input->selection_start - 1;
+                    remove_substr_str(input->buf, start, input->selection_end);
+                    input->cursor_index = input->selection_start;
+                    input_field_unselect_all(input);
+                    break;
+                }
+                default: {
+                    break;
                 }
             }
        }
@@ -979,118 +995,68 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     state.pos_ptr.y -= props.margin_top;
 }
 
+LfFont load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add) {
+    LfFont font = {0};
+    /* Opening the file, reading the content to a buffer and parsing the loaded data with stb_truetype */
+    FILE* file = fopen(filepath, "rb");
+    if (file == NULL) {
+        LF_ERROR("Failed to open font file '%s'\n", filepath);
+    }
 
-float get_kerning(int32_t prev_character_codepoint, int current_character_codepoint) {
-    LfFont font = get_current_font();
-    float scale = stbtt_ScaleForPixelHeight((stbtt_fontinfo*)font.font_info, font.font_size);
-    int32_t kern_advance = stbtt_GetCodepointKernAdvance((stbtt_fontinfo*)font.font_info, prev_character_codepoint, current_character_codepoint);
-    float kerning = kern_advance * scale;
-    return kerning;
-}
-static int32_t get_max_char_height_font(LfFont font) {
-    float fontScale = stbtt_ScaleForPixelHeight((stbtt_fontinfo*)font.font_info, font.font_size);
-    int32_t xmin, ymin, xmax, ymax;
-    int32_t codepoint = 'p';
-    stbtt_GetCodepointBitmapBox((stbtt_fontinfo*)font.font_info, codepoint, fontScale, fontScale, &xmin, &ymin, &xmax, &ymax);
-    return ymax - ymin;
-}
+    // Loading the content
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    uint8_t* buffer = (uint8_t*)malloc(fileSize);
+    fread(buffer, 1, fileSize, file);
+    fclose(file); 
+    font.font_info = malloc(sizeof(stbtt_fontinfo));
 
-void remove_i_str(char *str, int32_t index) {
-    int32_t len = strlen(str);
-    if (index >= 0 && index < len) {
-        for (int32_t i = index; i < len - 1; i++) {
-            str[i] = str[i + 1];
+    // Initializing the font with stb_truetype
+    stbtt_InitFont((stbtt_fontinfo*)font.font_info, buffer, stbtt_GetFontOffsetForIndex(buffer, 0));
+    
+
+    // Loading the font bitmap to memory by using stbtt_BakeFontBitmap
+    uint8_t buf[1<<20];
+    uint8_t* bitmap = (uint8_t*)malloc(tex_width * tex_height * sizeof(uint32_t));
+    uint8_t* bitmap_4bpp = (uint8_t*)malloc(tex_width * tex_height * 4 * sizeof(uint32_t));
+    fread(buf, 1, 1<<20, fopen(filepath, "rb"));
+    font.cdata = malloc(sizeof(stbtt_bakedchar) * num_glyphs);
+    font.tex_width = tex_width;
+    font.tex_height = tex_height;
+    font.line_gap_add = line_gap_add;
+    font.font_size = pixelsize;
+    font.num_glyphs = num_glyphs;
+    stbtt_BakeFontBitmap(buf, 0, pixelsize, bitmap, tex_width, tex_height, 32, num_glyphs, (stbtt_bakedchar*)font.cdata);
+
+    uint32_t bitmap_index = 0;
+    for(uint32_t i = 0; i < (uint32_t)(tex_width * tex_height * 4); i++) {
+        bitmap_4bpp[i] = bitmap[bitmap_index];
+        if((i + 1) % 4 == 0) {
+            bitmap_index++;
         }
-        str[len - 1] = '\0';
-    }
-}
-
-void remove_substr_str(char *str, int start_index, int end_index) {
-    int len = strlen(str);
-
-    memmove(str + start_index, str + end_index + 1, len - end_index);
-    str[len - (end_index - start_index) + 1] = '\0'; // Ensure string termination after modification
-}
-
-void insert_i_str(char *str, char ch, int32_t index) {
-    int len = strlen(str);
-
-    if (index < 0 || index > len) {
-        printf("Invalid string index for inserting.\n");
-        return;
     }
 
-    for (int i = len; i > index; i--) {
-        str[i] = str[i - 1];
-    }
+    // Creating an opengl texture (texture atlas) for the font
+    glGenTextures(1, &font.bitmap.id);
+    glBindTexture(GL_TEXTURE_2D, font.bitmap.id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap_4bpp);
+    glGenerateMipmap(GL_TEXTURE_2D);
 
-    str[index] = ch;
-    str[len + 1] = '\0'; // Ensure string termination after modification
+    // Deallocating the bitmap data 
+    free(bitmap);
+    free(bitmap_4bpp);
+    return font;
 }
 
-void insert_str_str(char* source, const char* insert, int32_t index) {
-    int source_len = strlen(source);
-    int insert_len = strlen(insert);
-
-    if (index < 0 || index > source_len) {
-        printf("Index out of bounds\n");
-        return;
-    }
-
-    memmove(source + index + insert_len, source + index, source_len - index + 1);
-
-    memcpy(source + index, insert, insert_len);
-}
-
-void substr_str(const char* str, int start_index, int end_index, char* substring) {
-    int substring_length = end_index - start_index + 1; 
-    strncpy(substring, str + start_index, substring_length);
-    substring[substring_length] = '\0';
-}
-
-
-
-bool lf_hovered(vec2s pos, vec2s size) {
-    bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
-        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && state.selected_div.id == state.current_div.id;
-    return hovered;
-}
-
-void next_line_on_overflow(vec2s size, float xoffset) {
-    if(!state.line_overflow) return;
-
-    // If the object does not fit in the area of the current div, advance to the next line
-    if(state.pos_ptr.x - state.current_div.aabb.pos.x + size.x > state.current_div.aabb.size.x) {
-        state.pos_ptr.y += state.current_line_height;
-        state.pos_ptr.x = state.current_div.aabb.pos.x + xoffset;
-        state.current_line_height = 0;
-    }
-    if(size.y > state.current_line_height) {
-        state.current_line_height = size.y;
-    }
-}
-
-bool area_hovered(vec2s pos, vec2s size) {
-    bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
-        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
-    return hovered;
-}
 LfFont get_current_font() {
     return state.font_stack ? *state.font_stack : state.theme.font;
 }
 
-bool item_should_cull(LfAABB item) {
-    bool intersect;
-    LfAABB window =  (LfAABB){.pos = (vec2s){0, 0}, .size = (vec2s){state.dsp_w, state.dsp_h}};
-    if(item.size.x == -1 || item.size.y == -1) 
-        intersect = lf_point_intersects_aabb(item.pos, window);
-    else 
-        intersect = lf_aabb_intersects_aabb(item, window);
-
-    return !intersect && state.current_div.id == state.scrollbar_div.id;
-
-    return false;
-}
 LfClickableItemState button_element_loc(void* text, const char* file, int32_t line, bool wide) {
     // Retrieving the property data of the button
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
@@ -1388,32 +1354,189 @@ int32_t menu_item_list_item_loc(void** items, uint32_t item_count, int32_t selec
     return clicked_item;
 }
 
-void renderer_begin() {
-    state.render.vert_count = 0;
-    state.render.index_count = 0;
-    state.render.tex_index = 0;
-    state.render.tex_count = 0;
-    state.drawcalls = 0;
+static int32_t get_max_char_height_font(LfFont font) {
+    float fontScale = stbtt_ScaleForPixelHeight((stbtt_fontinfo*)font.font_info, font.font_size);
+    int32_t xmin, ymin, xmax, ymax;
+    int32_t codepoint = 'p';
+    stbtt_GetCodepointBitmapBox((stbtt_fontinfo*)font.font_info, codepoint, fontScale, fontScale, &xmin, &ymin, &xmax, &ymax);
+    return ymax - ymin;
 }
-void renderer_flush() {
-    if(state.render.vert_count <= 0) return;
+void remove_i_str(char *str, int32_t index) {
+    int32_t len = strlen(str);
+    if (index >= 0 && index < len) {
+        for (int32_t i = index; i < len - 1; i++) {
+            str[i] = str[i + 1];
+        }
+        str[len - 1] = '\0';
+    }
+}
 
-    // Bind the vertex buffer & shader set the vertex data, bind the textures & draw
-    glUseProgram(state.render.shader.id);
-    glBindBuffer(GL_ARRAY_BUFFER, state.render.vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * state.render.vert_count, 
-                    state.render.verts);
+void remove_substr_str(char *str, int start_index, int end_index) {
+    int len = strlen(str);
 
-    for(uint32_t i = 0; i < state.render.tex_count; i++) {
-        glBindTextureUnit(i, state.render.textures[i].id);
-        state.drawcalls++;
+    memmove(str + start_index, str + end_index + 1, len - end_index);
+    str[len - (end_index - start_index) + 1] = '\0'; 
+}
+
+void insert_i_str(char *str, char ch, int32_t index) {
+    int len = strlen(str);
+
+    if (index < 0 || index > len) {
+        printf("Invalid string index for inserting.\n");
+        return;
     }
 
-    vec2s renderSize = (vec2s){(float)state.dsp_w, (float)state.dsp_h};
-    glUniform2fv(glGetUniformLocation(state.render.shader.id, "u_screen_size"), 1, (float*)renderSize.raw);
-    glBindVertexArray(state.render.vao);
-    glDrawElements(GL_TRIANGLES, state.render.index_count, GL_UNSIGNED_INT, NULL);
+    for (int i = len; i > index; i--) {
+        str[i] = str[i - 1];
+    }
+
+    str[index] = ch;
+    str[len + 1] = '\0'; 
 }
+
+void insert_str_str(char* source, const char* insert, int32_t index) {
+    int source_len = strlen(source);
+    int insert_len = strlen(insert);
+
+    if (index < 0 || index > source_len) {
+        printf("Index out of bounds\n");
+        return;
+    }
+
+    memmove(source + index + insert_len, source + index, source_len - index + 1);
+
+    memcpy(source + index, insert, insert_len);
+}
+
+void substr_str(const char* str, int start_index, int end_index, char* substring) {
+    int substring_length = end_index - start_index + 1; 
+    strncpy(substring, str + start_index, substring_length);
+    substring[substring_length] = '\0';
+}
+
+int map_vals(int value, int from_min, int from_max, int to_min, int to_max) {
+    return (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
+}
+
+#ifdef LF_GLFW
+void glfw_key_callback(GLFWwindow* window, int32_t key, int scancode, int action, int mods) {
+    (void)window;
+    (void)mods;
+    (void)scancode;
+    // Changing the the keys array to resamble the state of the keyboard 
+    if(action != GLFW_RELEASE) {
+        if(!state.input.keyboard.keys[key]) 
+            state.input.keyboard.keys[key] = true;
+    }  else {
+        state.input.keyboard.keys[key] = false;
+    }
+    state.input.keyboard.keys_changed[key] = (action != GLFW_REPEAT);
+
+    // Calling user defined callbacks
+    for(uint32_t i = 0; i < state.input.key_cb_count; i++) {
+        state.input.key_cbs[i](window, key, scancode, action, mods);
+    }
+
+    // Populating the key event
+    state.key_ev.happened = true;
+    state.key_ev.pressed = action != GLFW_RELEASE;
+    state.key_ev.keycode = key;
+}
+void glfw_mouse_button_callback(GLFWwindow* window, int32_t button, int action, int mods) {
+    (void)window;
+    (void)mods;
+    // Changing the buttons array to resamble the state of the mouse
+    if(action != GLFW_RELEASE)  {
+        if(!state.input.mouse.buttons_current[button])
+            state.input.mouse.buttons_current[button] = true;
+    } else {
+        state.input.mouse.buttons_current[button] = false;
+    }
+    // Calling user defined callbacks
+    for(uint32_t i = 0; i < state.input.mouse_button_cb_count; i++) {
+        state.input.mouse_button_cbs[i](window, button, action, mods);
+    }
+    // Populating the mouse button event
+    state.mb_ev.happened = true;
+    state.mb_ev.pressed = action != GLFW_RELEASE;
+    state.mb_ev.button_code = button;
+}
+void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    (void)window;
+    // Setting the scroll values
+    state.input.mouse.xscroll_delta = xoffset;
+    state.input.mouse.yscroll_delta = yoffset;
+
+    // Calling user defined callbacks
+    for(uint32_t i = 0; i< state.input.scroll_cb_count; i++) {
+        state.input.scroll_cbs[i](window, xoffset, yoffset);
+    }
+    // Populating the scroll event
+    state.scr_ev.happened = true;
+    state.scr_ev.xoffset = xoffset;
+    state.scr_ev.yoffset = yoffset;
+
+   
+    // Scrolling the current div
+    LfDiv* selected_div = &state.selected_div;
+    if(!selected_div->scrollable) return;
+
+    if(yoffset == -1) {
+        if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
+            if(state.theme.div_smooth_scroll) {
+                *state.scroll_velocity_ptr -= state.theme.div_scroll_acceleration;
+                state.div_velocity_accelerating = true;
+            } else {
+                *state.scroll_ptr -= state.theme.div_scroll_amount_px;
+            }
+        } 
+    } else if (yoffset == 1) {
+        if(*state.scroll_ptr) {
+            if(state.theme.div_smooth_scroll) {
+                *state.scroll_velocity_ptr += state.theme.div_scroll_acceleration;
+                state.div_velocity_accelerating = false;
+            } else {
+                *state.scroll_ptr += state.theme.div_scroll_amount_px;
+            }
+        }        
+    }
+    if(state.theme.div_smooth_scroll)
+        *state.scroll_velocity_ptr = MIN(MAX(*state.scroll_velocity_ptr, -state.theme.div_scroll_max_veclocity), state.theme.div_scroll_max_veclocity);
+}
+void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
+    (void)window;
+    LfMouse* mouse = &state.input.mouse;
+    // Setting the position values 
+    mouse->xpos = xpos;
+    mouse->ypos = ypos;
+
+    if(mouse->first_mouse_press) {
+        mouse->xpos_last = xpos;
+        mouse->ypos_last = ypos;
+        mouse->first_mouse_press = false;
+    }
+    // Delta mouse positions 
+    mouse->xpos_delta = mouse->xpos - mouse->xpos_last;
+    mouse->ypos_delta = mouse->ypos - mouse->ypos_last;
+    mouse->xpos_last = xpos;
+    mouse->ypos_last = ypos;
+
+    // Calling User defined callbacks
+    for(uint32_t i = 0; i < state.input.cursor_pos_cb_count; i++) {
+        state.input.cursor_pos_cbs[i](window, xpos, ypos);
+    }
+
+    // Populating the cursor event
+    state.cp_ev.happened = true;
+    state.cp_ev.x = xpos;
+    state.cp_ev.y = ypos;
+}
+void glfw_char_callback(GLFWwindow* window, uint32_t charcode) {
+    (void)window;
+    state.ch_ev.charcode = charcode;
+    state.ch_ev.happened = true;
+}
+#endif
 
 void update_input() {
     memcpy(state.input.mouse.buttons_last, state.input.mouse.buttons_current, sizeof(bool) * MAX_MOUSE_BUTTONS);
@@ -1440,9 +1563,9 @@ uint64_t djb2_hash(uint64_t hash, const void* buf, size_t size) {
     return hash;
 }
 
-// ------------------------------------
-// ------- Public API Functions -------
-// ------------------------------------
+// ===========================================================
+// ----------------Public API Functions ---------------------- 
+// ===========================================================
 void lf_init_glfw(uint32_t display_width, uint32_t display_height, void* glfw_window) {
 #ifndef LF_GLFW
     LF_ERROR("Trying to initialize Leif with GLFW without defining 'LF_GLFW'");
@@ -1645,8 +1768,8 @@ LfFont lf_load_font_ex(const char* filepath, uint32_t size, uint32_t bitmap_w, u
 LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering filter) {
     // Loading the texture into memory with stb_image
     LfTexture tex;
-    float width, height, channels;
-    stbi_uc* data = lf_load_texture_data(filepath, (int32_t*)&width, (int32_t*)&height, (int32_t*)&channels, flip);
+    int32_t width, height, channels;
+    stbi_uc* data = lf_load_texture_data(filepath, &width, &height, &channels, flip);
 
     if(!data) {
         LF_ERROR("Failed to load texture file at '%s'.", filepath);
@@ -1665,9 +1788,9 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
 
 LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
      LfTexture tex;
-    float width, height, channels;
+    int32_t width, height, channels;
     stbi_set_flip_vertically_on_load(!flip);
-    stbi_uc* data = stbi_load(filepath, (int32_t*)&width, (int32_t*)&height, (int32_t*)&channels, 0);
+    stbi_uc* data = stbi_load(filepath, &width,&height, &channels, 0);
 
     if(!data) {
         LF_ERROR("Failed to load texture file at '%s'.", filepath);
@@ -1715,8 +1838,8 @@ LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFilt
 LfTexture lf_load_texture_resized_factor(const char* filepath, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
     // Loading the texture into memory with stb_image
     LfTexture tex;
-    float width, height, channels;
-    stbi_uc* data = lf_load_texture_data_resized_factor(filepath, wfactor, hfactor, (int32_t*)&width, (int32_t*)&height, (int32_t*)&channels, flip);
+    int32_t width, height, channels;
+    stbi_uc* data = lf_load_texture_data_resized_factor(filepath, wfactor, hfactor, &width, &height, &channels, flip);
 
     if(!data) {
         LF_ERROR("Failed to load texture file at '%s'.", filepath);
@@ -1737,8 +1860,8 @@ LfTexture lf_load_texture_resized_factor(const char* filepath, bool flip, LfText
 
 LfTexture lf_load_texture_from_memory(const void* data, size_t size, bool flip, LfTextureFiltering filter) {
     LfTexture tex; 
-    float width, height, channels;
-    stbi_uc* image_data = lf_load_texture_data_from_memory((const stbi_uc*)data, size, (int32_t*)&width, (int32_t*)&height, (int32_t*)&channels, flip);
+    int32_t width, height, channels;
+    stbi_uc* image_data = lf_load_texture_data_from_memory((const stbi_uc*)data, size, &width, &height, &channels, flip);
 
     if(!image_data) {
         LF_ERROR("Failed to load texture from memory.");
@@ -1757,8 +1880,8 @@ LfTexture lf_load_texture_from_memory(const void* data, size_t size, bool flip, 
 
 LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
     LfTexture tex; 
-    float width, height, channels;
-    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, (int32_t*)&width, (int32_t*)&height, (int32_t*)&channels, 0);
+    int32_t width, height, channels;
+    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width,&height, &channels, 0);
 
     unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * channels);
 
@@ -1795,8 +1918,8 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, boo
 }
 LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
     LfTexture tex; 
-    float width, height, channels;
-    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, (int32_t*)&width, (int32_t*)&height, (int32_t*)&channels, 0);
+    int32_t width, height, channels;
+    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
 
     int32_t w = wfactor * width;
     int32_t h = hfactor * height;
@@ -1867,8 +1990,8 @@ unsigned char* lf_load_texture_data_from_memory(const void* data, size_t size, i
 }
 
 unsigned char* lf_load_texture_data_from_memory_resized(const void* data, size_t size, int32_t* channels, bool flip, uint32_t w, uint32_t h) {
-    float width, height;
-    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, (int32_t*)&width, (int32_t*)&height, channels, 0);
+    int32_t width, height;
+    stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, channels, 0);
     unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
     stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
     stbi_image_free(image_data);
@@ -2187,7 +2310,7 @@ LfClickableItemState _lf_image_button_fixed_loc(LfTexture img, float width, floa
         (vec2s){render_width + padding * 2.0f, 
                     render_height + padding * 2.0f}, 
         state.div_props.border_width);
-
+    
     // Advancing the position pointer by the margins
     state.pos_ptr.x += margin_left;
     state.pos_ptr.y += margin_top;
@@ -3109,6 +3232,12 @@ void lf_pop_style_props() {
     state.props_on_stack = false;
 }
 
+bool lf_hovered(vec2s pos, vec2s size) {
+    bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && state.selected_div.id == state.current_div.id;
+    return hovered;
+}
+
 LfCursorPosEvent lf_mouse_move_event() {
     return state.cp_ev;
 }
@@ -3229,122 +3358,6 @@ LfColor lf_color_from_zto(vec4s zto) {
     return (LfColor){(uint8_t)(zto.r * 255.0f), (uint8_t)(zto.g * 255.0f), (uint8_t)(zto.b * 255.0f), (uint8_t)(zto.a * 255.0f)};
 }
 
-
-LfFont load_font(const char* filepath, uint32_t pixelsize, uint32_t tex_width, uint32_t tex_height, uint32_t num_glyphs, uint32_t line_gap_add) {
-    LfFont font = {0};
-    /* Opening the file, reading the content to a buffer and parsing the loaded data with stb_truetype */
-    FILE* file = fopen(filepath, "rb");
-    if (file == NULL) {
-        LF_ERROR("Failed to open font file '%s'\n", filepath);
-    }
-
-    // Loading the content
-    fseek(file, 0, SEEK_END);
-    long fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    uint8_t* buffer = (uint8_t*)malloc(fileSize);
-    fread(buffer, 1, fileSize, file);
-    fclose(file); 
-    font.font_info = malloc(sizeof(stbtt_fontinfo));
-
-    // Initializing the font with stb_truetype
-    stbtt_InitFont((stbtt_fontinfo*)font.font_info, buffer, stbtt_GetFontOffsetForIndex(buffer, 0));
-    
-
-    // Loading the font bitmap to memory by using stbtt_BakeFontBitmap
-    uint8_t buf[1<<20];
-    uint8_t* bitmap = (uint8_t*)malloc(tex_width * tex_height * sizeof(uint32_t));
-    uint8_t* bitmap_4bpp = (uint8_t*)malloc(tex_width * tex_height * 4 * sizeof(uint32_t));
-    fread(buf, 1, 1<<20, fopen(filepath, "rb"));
-    font.cdata = malloc(sizeof(stbtt_bakedchar) * num_glyphs);
-    font.tex_width = tex_width;
-    font.tex_height = tex_height;
-    font.line_gap_add = line_gap_add;
-    font.font_size = pixelsize;
-    font.num_glyphs = num_glyphs;
-    stbtt_BakeFontBitmap(buf, 0, pixelsize, bitmap, tex_width, tex_height, 32, num_glyphs, (stbtt_bakedchar*)font.cdata);
-
-    uint32_t bitmap_index = 0;
-    for(uint32_t i = 0; i < (uint32_t)(tex_width * tex_height * 4); i++) {
-        bitmap_4bpp[i] = bitmap[bitmap_index];
-        if((i + 1) % 4 == 0) {
-            bitmap_index++;
-        }
-    }
-
-    // Creating an opengl texture (texture atlas) for the font
-    glGenTextures(1, &font.bitmap.id);
-    glBindTexture(GL_TEXTURE_2D, font.bitmap.id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap_4bpp);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    // Deallocating the bitmap data 
-    free(bitmap);
-    free(bitmap_4bpp);
-    return font;
-}
-void set_projection_matrix() { 
-    float left = 0.0f;
-    float right = state.dsp_w;
-    float bottom = state.dsp_h;
-    float top = 0.0f;
-    float near = 0.1f;
-    float far = 100.0f;
-
-    // Create the orthographic projection matrix
-    mat4 orthoMatrix = GLM_MAT4_IDENTITY_INIT;
-    orthoMatrix[0][0] = 2.0f / (right - left);
-    orthoMatrix[1][1] = 2.0f / (top - bottom);
-    orthoMatrix[2][2] = -1;
-    orthoMatrix[3][0] = -(right + left) / (right - left);
-    orthoMatrix[3][1] = -(top + bottom) / (top - bottom);
-
-    shader_set_mat(state.render.shader, "u_proj", orthoMatrix);
-}
-
-void draw_scrollbar_on(LfDiv div) {
-    lf_next_line();
-    if(state.current_div.id == div.id) {
-        state.scrollbar_div = div;
-        LfDiv* selected = &state.selected_div_tmp;
-        float scroll = *state.scroll_ptr;
-        LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.scrollbar_props;
-
-        state.selected_div_tmp.total_area.x = state.pos_ptr.x;
-        state.selected_div_tmp.total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
-
-        if(*state.scroll_ptr < -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y) && *state.scroll_velocity_ptr < 0 && state.theme.div_smooth_scroll) {
-            *state.scroll_velocity_ptr = 0;
-            *state.scroll_ptr = -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y);
-        }
-
-        float total_area = selected->total_area.y - scroll;
-        float visible_area = selected->aabb.size.y + selected->aabb.pos.y;
-        if(total_area > visible_area) {
-            const float min_scrollbar_height = 10;
-
-            float area_mapped = visible_area/total_area; 
-            float scroll_mapped = (-1 * scroll)/total_area;
-            float scrollbar_height = MAX((selected->aabb.size.y*area_mapped - props.margin_top * 2), min_scrollbar_height);
-           
-            lf_rect_render(
-                (vec2s){
-                    selected->aabb.pos.x + selected->aabb.size.x - state.theme.scrollbar_width - props.margin_right - state.div_props.padding  - state.div_props.border_width,
-                    MIN((selected->aabb.pos.y + selected->aabb.size.y*scroll_mapped + props.margin_top + state.div_props.padding + state.div_props.border_width + state.div_props.corner_radius), visible_area - scrollbar_height)}, 
-                (vec2s){
-                    state.theme.scrollbar_width, 
-                    scrollbar_height - state.div_props.border_width * 2 - state.div_props.corner_radius * 2}, 
-                props.color,
-                props.border_color, props.border_width, props.corner_radius);
-        } 
-    }
-}
-
-
 void lf_image(LfTexture tex) {
     // Retrieving the property data of the image
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.image_props;
@@ -3376,10 +3389,6 @@ void lf_rect(float width, float height, LfColor color, float corner_radius) {
     lf_rect_render(state.pos_ptr, (vec2s){(float)width, (float)height}, color, (LfColor){0.0f, 0.0f, 0.0f, 0.0f}, 0, corner_radius);
 
     state.pos_ptr.x += width;
-}
-
-int map_vals(int value, int from_min, int from_max, int to_min, int to_max) {
-    return (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
 }
 
 void lf_seperator() {

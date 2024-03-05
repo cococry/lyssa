@@ -43,10 +43,15 @@ extern "C" {
 #define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 0 // Setting this to > 0 will worsen perfomance on low-end systems
 #define PLAYLIST_FILE_THUMBNAIL_COLOR GRAY
 
+// Volume
+#define VOLUME_TOGGLE_STEP 5
+#define VOLUME_MAX 100 
+#define VOLUME_INIT 75.0f
+
 
 // Styles & Theming 
 inline LfUIElementProps primary_button_style() {
-    LfUIElementProps props = lf_theme()->button_props;
+    LfUIElementProps props = lf_get_theme().button_props;
     props.corner_radius = 6;
     props.border_width = 0;
     props.color = BLUE_GRAY; 
@@ -55,7 +60,7 @@ inline LfUIElementProps primary_button_style() {
 
 
 inline LfUIElementProps call_to_action_button_style() {
-    LfUIElementProps props = lf_theme()->button_props;
+    LfUIElementProps props = lf_get_theme().button_props;
     props.color = PERSIAN_GREEN;
     props.text_color = LF_BLACK;
     props.corner_radius = 6;
@@ -64,7 +69,7 @@ inline LfUIElementProps call_to_action_button_style() {
 }
 
 inline LfUIElementProps input_field_style() {
-    LfUIElementProps props = lf_theme()->inputfield_props;
+    LfUIElementProps props = lf_get_theme().inputfield_props;
     props.padding = 15; 
     props.border_width = 0;
     props.color = GRAY; 

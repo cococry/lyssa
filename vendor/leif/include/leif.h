@@ -48,7 +48,7 @@ typedef struct {
 
 typedef struct {
     uint32_t id;
-    float width, height;
+    uint32_t width, height;
 } LfTexture;
 typedef struct {
     void* cdata;
