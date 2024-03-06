@@ -785,7 +785,8 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
         } else if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)){
             input->mouse_dir = 0;
         } 
-        if(lf_char_event().happened && lf_char_event().charcode >= 0 && lf_char_event().charcode <= 127) { 
+        if(lf_char_event().happened && lf_char_event().charcode >= 0 && lf_char_event().charcode <= 127 &&
+            strlen(input->buf) + 1 <= input->buf_size) { 
             input_field_unselect_all(input);
             insert_i_str(input->buf, lf_char_event().charcode, input->cursor_index++);
         }
@@ -903,7 +904,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
                     if(!lf_key_is_down(GLFW_KEY_LEFT_CONTROL)) break;
                     int32_t length;
                     const char* clipboard_content = clipboard_text_ex(state.clipboard, &length, LCB_CLIPBOARD);
-                    if(length > 512) break;
+                    if(length > input->buf_size || strlen(input->buf) + length > input->buf_size) break;
 
                     insert_str_str(input->buf, clipboard_content, input->cursor_index);
                     input->cursor_index += strlen(clipboard_content);
@@ -957,8 +958,9 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
         }, input->buf, font, LF_NO_COLOR, 
         wrap_point, (vec2s){lf_get_mouse_x(), lf_get_mouse_y()}, true, false, -1, -1);
         input->cursor_index = selected_props.rendered_count;
-    } else if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && input->selected && inputfield == LF_IDLE && input->selection_start == -1) {
+    } else if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && input->selected && inputfield == LF_IDLE) {
         input->selected = false;
+        input_field_unselect_all(input);
     }
 
     lf_set_cull_end_y(state.pos_ptr.y + input->height + props.padding * 2.0f);
@@ -2461,19 +2463,17 @@ LfClickableItemState _lf_progress_bar_val_loc(float width, float height, int32_t
     return handle;
 
 }
-LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file, int32_t line) {
+LfClickableItemState _lf_progress_bar_int_loc(float val, float min, float max, float width, float height, const char* file, int32_t line) {
     // Getting property data
     LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.slider_props;
     float margin_left = props.margin_left, margin_right = props.margin_right,
-    margin_top = props.margin_top, margin_bottom =props.margin_bottom; 
-    // constants
-    const float handle_size = 20; // px 
-    const float height = (slider->height != 0) ? slider->height : handle_size / 2.0f; // px
-
+    margin_top = props.margin_top, margin_bottom = props.margin_bottom; 
     LfColor color = props.color;
+    // constants
+
 
     next_line_on_overflow( 
-        (vec2s){slider->width + margin_right + margin_left, 
+        (vec2s){width + margin_right + margin_left, 
                 height + margin_bottom + margin_top }, 
         state.div_props.border_width);
 
@@ -2481,16 +2481,15 @@ LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file
     state.pos_ptr.y += margin_top;
 
     // Render the slider 
-    LfClickableItemState bar = button(file, line, state.pos_ptr, (vec2s){(float)slider->width, (float)height},props, color, props.border_width, false, false);
+    LfClickableItemState bar = button(file, line, state.pos_ptr, (vec2s){(float)width, (float)height},props, color, props.border_width, false, false);
     
-    slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
-                                  0, slider->width);
+    float pos_x = map_vals(val, min, max, 0, width);
 
     lf_push_element_id(1);
-    LfClickableItemState handle = button(file, line, state.pos_ptr, (vec2s){(float)slider->handle_pos, (float)height}, props, props.text_color, 0, false, false);
+    LfClickableItemState handle = button(file, line, state.pos_ptr, (vec2s){(float)pos_x, (float)height}, props, props.text_color, 0, false, false);
     lf_pop_element_id();
 
-    state.pos_ptr.x += slider->width + margin_right;
+    state.pos_ptr.x += width + margin_right;
     state.pos_ptr.y -= margin_top;
     return bar;
 }
@@ -2745,6 +2744,14 @@ float lf_get_ptr_x() {
 
 float lf_get_ptr_y() {
     return state.pos_ptr.y;
+}
+
+uint32_t lf_get_display_width() {
+    return state.dsp_w;
+}
+
+uint32_t lf_get_display_height() {
+    return state.dsp_h;
 }
 
 void lf_push_font(LfFont* font) {

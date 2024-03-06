@@ -4,6 +4,7 @@ LIBS=-lleif -lclipboard -Lvendor/leif/lib -lglfw -ltag -lm -Lvendor/miniaudio/li
 CFLAGS=-O3 -ffast-math -DGLFW_INCLUDE_NONE 
 
 LEIF_LIB_DIR := ./vendor/leif/lib/
+LYSSA_DIR := ~/.lyssa/
 
 .PHONY: check-leif leif build 
 
@@ -37,4 +38,9 @@ run:
 rebuild:
 	$(MAKE) clean
 	$(MAKE) leif
-	$(MAKE) build 
+	$(MAKE) build
+
+install:
+	@mkdir -p $(LYSSA_DIR)
+	cp -r ./scripts/ ~/.lyssa/
+	

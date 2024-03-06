@@ -43,7 +43,7 @@
 #define LF_PTR (vec2s){lf_get_ptr_x(), lf_get_ptr_y()}
 
 #define MAX_PLAYLIST_NAME_LENGTH 16
-#define MAX_PLAYLIST_DESC_LENGTH 20 
+#define MAX_PLAYLIST_DESC_LENGTH 512 
 
 #define INPUT_BUFFER_SIZE 512
 
@@ -55,6 +55,7 @@ using namespace TagLib;
 enum class GuiTab {
     Dashboard = 0, 
     CreatePlaylist,
+    DownloadPlaylist,
     OnPlaylist,
     OnTrack,
     PlaylistAddFromFile,
@@ -228,6 +229,10 @@ struct GlobalState {
     std::vector<std::string> loadedPlaylistFilepaths;
     std::vector<TextureData> playlistFileThumbnailData;
     std::mutex mutex;
+
+    bool playlistDownloadRunning = false;
+    std::string downloadingPlaylistName;
+    uint32_t downloadPlaylistFileCount;
 };
 
 static GlobalState state;
@@ -239,6 +244,7 @@ static void                     handleTabKeyStrokes();
 
 static void                     renderDashboard();
 static void                     renderCreatePlaylist();
+static void                     renderDownloadPlaylist();
 static void                     renderOnPlaylist();
 static void                     renderOnTrack();
 static void                     renderPlaylistAddFromFile();
@@ -450,20 +456,21 @@ void initUI() {
     state.createPlaylistTab.nameInput.input = (LfInputField){
         .width = 600, 
         .buf = state.createPlaylistTab.nameInput.buffer, 
+        .buf_size = INPUT_BUFFER_SIZE,  
         .placeholder = (char*)"Name",
-        .max_chars = MAX_PLAYLIST_NAME_LENGTH
     };
 
     state.createPlaylistTab.descInput.input = (LfInputField){
         .width = 600, 
         .buf = state.createPlaylistTab.descInput.buffer, 
+        .buf_size = INPUT_BUFFER_SIZE,  
         .placeholder = (char*)"Description",
-        .max_chars = MAX_PLAYLIST_DESC_LENGTH 
     };
 
     state.playlistAddFromFileTab.pathInput.input = (LfInputField){
         .width = 600, 
         .buf = state.playlistAddFromFileTab.pathInput.buffer, 
+        .buf_size = INPUT_BUFFER_SIZE,  
         .placeholder = (char*)"Path",
     };
 
@@ -577,16 +584,22 @@ void renderDashboard() {
 
     if(!state.playlists.empty()) {
         {
-            const float width = 150;
+            const float width = 170;
             const float height = -1;
             LfUIElementProps props = primary_button_style();
             props.margin_right = 0;
             props.margin_left = 0;
             lf_push_style_props(props);
             lf_push_font(&state.h1Font);
-            lf_set_ptr_x_absolute(state.winWidth - (width + props.padding * 2.0f) - DIV_START_X);
+            lf_set_ptr_x_absolute(state.winWidth - ((width + props.padding * 2.0f) * 2.0f) - DIV_START_X * 2);
             lf_pop_font();
-            if(lf_button_fixed("Add Playlist", width, height) == LF_CLICKED) { 
+
+            if(lf_button_fixed("Download Playlist", width, height) == LF_CLICKED) { 
+                changeTabTo(GuiTab::DownloadPlaylist);
+            }
+            props.margin_left = 10;
+            lf_push_style_props(props);
+            if(lf_button_fixed("Add Playlist", width, height) == LF_CLICKED) {
                 changeTabTo(GuiTab::CreatePlaylist);
             }
             lf_pop_style_props();
@@ -862,6 +875,93 @@ void renderCreatePlaylist() {
 
     backButtonTo(GuiTab::Dashboard, [&](){
             state.createPlaylistTab.createFileMessageTimer = state.createPlaylistTab.createFileMessageShowTime;
+            loadPlaylists();
+            });
+    renderTrackMenu();
+}
+
+void renderDownloadPlaylist() {
+    // Heading
+    {
+        LfUIElementProps props = lf_get_theme().text_props;
+        props.text_color = LF_WHITE;
+        props.margin_bottom = 15;
+        lf_push_style_props(props);
+        lf_push_font(&state.h1Font);
+        lf_text("Download Playlist");
+        lf_pop_style_props();
+        lf_pop_font();
+    }
+
+    {
+        lf_next_line();
+        lf_push_font(&state.h6Font);
+        LfUIElementProps props = lf_get_theme().text_props;
+        props.margin_top = 0;
+        props.color = GRAY;
+        lf_push_style_props(props);
+        lf_text("Download a playlist from YouTube");
+        lf_pop_style_props();
+        lf_pop_font();
+    }
+
+    lf_next_line();
+    static char url[INPUT_BUFFER_SIZE] ={0};
+
+    {
+        LfUIElementProps props = input_field_style();
+        props.margin_top = 15;
+        lf_push_style_props(props);
+        lf_input_text_inl_ex(url, INPUT_BUFFER_SIZE, 600, "URL...");
+        lf_pop_style_props();
+    }
+
+    lf_next_line();
+
+    {
+        lf_push_style_props(call_to_action_button_style());
+        if(lf_button_fixed("Download", 150, -1) == LF_CLICKED) {
+            std::string cmd = LYSSA_DIR + "/scripts/download-yt.sh " + url + " " + LYSSA_DIR + "/downloaded_playlists"; 
+            std::string execCmd = cmd + " &";
+            system(execCmd.c_str());
+            state.playlistDownloadRunning = true;
+            state.downloadingPlaylistName = getCommandOutput(std::string("yt-dlp " + std::string(url) + " --flat-playlist --dump-single-json --no-warnings | jq -r .title &"));
+            state.downloadPlaylistFileCount = std::stoi(getCommandOutput(std::string("yt-dlp --flat-playlist " + std::string(url) + " --no-warnings --compat-options no-youtube-unavailable-videos | wc -l"))); 
+            memset(url, 0, INPUT_BUFFER_SIZE);
+        }
+        lf_pop_style_props();
+    }
+    
+    if(state.playlistDownloadRunning) {
+        lf_next_line();
+    
+        LfUIElementProps props = call_to_action_button_style();
+        props.color = LYSSA_RED;
+        lf_push_style_props(props);
+        if(lf_button_fixed("Stop Download", 150, -1) == LF_CLICKED) {
+            state.playlistDownloadRunning = false;
+            system("pkill yt-dlp &");
+        }
+        lf_pop_style_props();
+
+        int fileCount = -1;
+        for (const auto& entry : std::filesystem::directory_iterator(LYSSA_DIR + 
+                    "/downloaded_playlists/" + state.downloadingPlaylistName)) {
+            if (std::filesystem::is_regular_file(entry.path()) && entry.path().extension() == ".mp3") {
+                fileCount++;
+            }
+        }
+        lf_next_line();
+        props = lf_get_theme().slider_props;
+        props.border_width = 0;
+        props.color = GRAY;
+        props.text_color = LYSSA_BLUE;
+        props.corner_radius = 1.5f;
+        lf_push_style_props(props);
+        lf_progress_bar_int(fileCount, 0, (float)state.downloadPlaylistFileCount, 400, 10);
+        lf_pop_style_props();
+    }
+    backButtonTo(GuiTab::Dashboard, [&](){
             loadPlaylists();
             });
     renderTrackMenu();
@@ -2151,7 +2251,7 @@ void changeTabTo(GuiTab tab) {
 }
 
 FileStatus createPlaylist(const std::string& name, const std::string& desc) {
-    std::string folderPath = LYSSA_DIR + "/" + name;
+    std::string folderPath = LYSSA_DIR + "/playlists/" + name;
     if(!std::filesystem::exists(folderPath)) {
         if(!std::filesystem::create_directory(folderPath) )
             return FileStatus::Failed;
@@ -2367,7 +2467,7 @@ std::vector<std::wstring> getPlaylistDisplayNamesW(const std::filesystem::direct
 void loadPlaylists() {
     uint32_t playlistI = 0;
     state.currentSoundFile = nullptr; 
-    for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR)) {
+    for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR + "/playlists/")) {
         Playlist playlist{};
         playlist.path = folder.path().string();
         playlist.name = getPlaylistName(folder);
@@ -2783,12 +2883,6 @@ int main(int argc, char* argv[]) {
 
     vec4s clearColor = lf_color_to_zto(LYSSA_BACKGROUND_COLOR); 
 
-    char buf[512] = {0};
-    LfInputField input = (LfInputField){
-        .width = 400, 
-        .buf = buf, 
-    };
-
     while(!glfwWindowShouldClose(state.win)) { 
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
@@ -2818,6 +2912,9 @@ int main(int argc, char* argv[]) {
             case GuiTab::CreatePlaylist:
                 renderCreatePlaylist();
                 break;
+            case GuiTab::DownloadPlaylist: 
+                renderDownloadPlaylist();
+                break;
             case GuiTab::OnPlaylist:
                 renderOnPlaylist();
                 break;
@@ -2846,6 +2943,9 @@ int main(int argc, char* argv[]) {
         glfwPollEvents();
         glfwSwapBuffers(state.win);
 
+    }
+    if(state.playlistDownloadRunning) {
+        system("pkill yt-dlp &");
     }
     return 0;
 } 

@@ -74,7 +74,7 @@ typedef struct {
 typedef struct {
     int32_t cursor_index, width, height, start_height;
     char* buf;
-    void* val;
+    uint32_t buf_size;
     char* placeholder;
     bool selected;
 
@@ -85,6 +85,7 @@ typedef struct {
     int32_t selection_dir, mouse_dir;
 
     bool _init;
+
 
     void (*char_callback)(char);
     
@@ -281,8 +282,8 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
 #define lf_progress_bar_val(width, height, min, max, val) _lf_progress_bar_val_loc(width, height, min, max, val, __FILE__, __LINE__)
 LfClickableItemState _lf_progress_bar_val_loc(float width, float height, int32_t min, int32_t max, int32_t val, const char* file, int32_t line);
 
-#define lf_progress_bar_int(slider) _lf_progress_bar_int_loc(slider , __FILE__, __LINE__)
-LfClickableItemState _lf_progress_bar_int_loc(LfSlider* slider, const char* file, int32_t line);
+#define lf_progress_bar_int(val, min, max, width, height) _lf_progress_bar_int_loc(val, min, max, width, height, __FILE__, __LINE__)
+LfClickableItemState _lf_progress_bar_int_loc(float val, float min, float max, float width, float height, const char* file, int32_t line);
 
 #define lf_progress_stripe_int(slider) _lf_progresss_stripe_int_loc(slider , __FILE__, __LINE__)
 LfClickableItemState _lf_progress_stripe_int_loc(LfSlider* slider, const char* file, int32_t line);
@@ -305,6 +306,17 @@ void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t
 #define lf_dropdown_menu_wide(items, placeholder, item_count, width, height, selected_index, opened) _lf_dropdown_menu_loc_wide(items, placeholder, item_count, width, height, selected_index, opened, __FILE__, __LINE__)
 void _lf_dropdown_menu_loc_wide(const wchar_t** items, const wchar_t* placeholder, uint32_t item_count, float width, float height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
 
+#define lf_input_text_inl_ex(buffer, buffer_size, input_width, placeholder_str)         \
+    static LfInputField input = {                                                       \
+        .cursor_index = 0,                                                              \
+        .width = input_width,                                                           \
+        .buf = buffer,                                                                  \
+        .buf_size = buffer_size,                                                        \
+        .placeholder = (char*)placeholder_str,                                          \
+        .selected = false                                                               \
+    };                                                                                  \
+    _lf_input_text_loc(&input, __FILE__, __LINE__);                                     \
+
 #define lf_input_text(input) _lf_input_text_loc(input, __FILE__, __LINE__)
 void _lf_input_text_loc(LfInputField* input, const char* file, int32_t line);
 
@@ -316,6 +328,7 @@ void _lf_input_float_loc(LfInputField* input, const char* file, int32_t line);
 
 #define lf_begin() _lf_begin_loc(__FILE__, __LINE__)
 void _lf_begin_loc(const char* file, int32_t line);
+
 
 void lf_end();
 
@@ -354,6 +367,10 @@ void lf_set_ptr_y_absolute(float y);
 float lf_get_ptr_x();
 
 float lf_get_ptr_y();
+
+uint32_t lf_get_display_width();
+
+uint32_t lf_get_display_height();
 
 void lf_push_font(LfFont* font);
 
