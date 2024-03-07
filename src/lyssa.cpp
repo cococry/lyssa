@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <iterator>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -230,7 +231,7 @@ struct GlobalState {
     std::vector<TextureData> playlistFileThumbnailData;
     std::mutex mutex;
 
-    bool playlistDownloadRunning = false;
+    bool playlistDownloadRunning = false, playlistDownloadFinished = false;
     std::string downloadingPlaylistName;
     uint32_t downloadPlaylistFileCount;
 };
@@ -314,6 +315,7 @@ static std::wstring             getSoundArtist(const std::string& soundPath);
 static std::string              getSoundComment(const std::string& soundPath);
 
 static std::string              getCommandOutput(const std::string& cmd);
+static uint32_t                 getLineCountFile(const std::string& filename);
 
 void PlaylistAddFromFolderTab::loadFolderContentsW(const std::wstring& folderpath) {
     for (const auto& entry : std::filesystem::directory_iterator(folderpath)) {
@@ -830,7 +832,7 @@ void renderCreatePlaylist() {
         LfUIElementProps props = call_to_action_button_style();
         props.margin_top = 10;
         lf_push_style_props(props);
-       if(lf_button_fixed("Create", 150, -1) == LF_CLICKED) {
+        if(lf_button_fixed("Create", 150, -1) == LF_CLICKED) {
            state.createPlaylistTab.createFileStatus = createPlaylist(std::string(state.createPlaylistTab.nameInput.buffer), std::string(state.createPlaylistTab.descInput.buffer)); 
            memset(state.createPlaylistTab.nameInput.input.buf, 0, INPUT_BUFFER_SIZE);
            memset(state.createPlaylistTab.nameInput.buffer, 0, INPUT_BUFFER_SIZE);
@@ -881,85 +883,211 @@ void renderCreatePlaylist() {
 }
 
 void renderDownloadPlaylist() {
-    // Heading
-    {
-        LfUIElementProps props = lf_get_theme().text_props;
-        props.text_color = LF_WHITE;
-        props.margin_bottom = 15;
-        lf_push_style_props(props);
-        lf_push_font(&state.h1Font);
-        lf_text("Download Playlist");
-        lf_pop_style_props();
-        lf_pop_font();
-    }
+    std::string downloadedPlaylistDir = LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName; 
+    uint32_t downloadedFileCount = getLineCountFile(downloadedPlaylistDir + "/archive.txt");
 
-    {
-        lf_next_line();
-        lf_push_font(&state.h6Font);
-        LfUIElementProps props = lf_get_theme().text_props;
-        props.margin_top = 0;
-        props.color = GRAY;
-        lf_push_style_props(props);
-        lf_text("Download a playlist from YouTube");
-        lf_pop_style_props();
-        lf_pop_font();
-    }
+    if(state.playlistDownloadFinished) {
+        // Heading
+        {
+            LfUIElementProps props = lf_get_theme().text_props;
+            props.text_color = LF_WHITE;
+            lf_push_style_props(props);
+            lf_push_font(&state.h1Font);
 
-    lf_next_line();
-    static char url[INPUT_BUFFER_SIZE] ={0};
-
-    {
-        LfUIElementProps props = input_field_style();
-        props.margin_top = 15;
-        lf_push_style_props(props);
-        lf_input_text_inl_ex(url, INPUT_BUFFER_SIZE, 600, "URL...");
-        lf_pop_style_props();
-    }
-
-    lf_next_line();
-
-    {
-        lf_push_style_props(call_to_action_button_style());
-        if(lf_button_fixed("Download", 150, -1) == LF_CLICKED) {
-            std::string cmd = LYSSA_DIR + "/scripts/download-yt.sh " + url + " " + LYSSA_DIR + "/downloaded_playlists"; 
-            std::string execCmd = cmd + " &";
-            system(execCmd.c_str());
-            state.playlistDownloadRunning = true;
-            state.downloadingPlaylistName = getCommandOutput(std::string("yt-dlp " + std::string(url) + " --flat-playlist --dump-single-json --no-warnings | jq -r .title &"));
-            state.downloadPlaylistFileCount = std::stoi(getCommandOutput(std::string("yt-dlp --flat-playlist " + std::string(url) + " --no-warnings --compat-options no-youtube-unavailable-videos | wc -l"))); 
-            memset(url, 0, INPUT_BUFFER_SIZE);
+            std::string text = "Finished Downloading Playlist";
+            lf_set_ptr_x_absolute((state.winWidth - lf_text_dimension(text.c_str()).x) / 2.0f);
+            lf_text(text.c_str());
+            lf_pop_style_props();
+            lf_pop_font();
         }
-        lf_pop_style_props();
-    }
-    
-    if(state.playlistDownloadRunning) {
-        lf_next_line();
-    
-        LfUIElementProps props = call_to_action_button_style();
-        props.color = LYSSA_RED;
-        lf_push_style_props(props);
-        if(lf_button_fixed("Stop Download", 150, -1) == LF_CLICKED) {
-            state.playlistDownloadRunning = false;
-            system("pkill yt-dlp &");
-        }
-        lf_pop_style_props();
 
-        int fileCount = -1;
-        for (const auto& entry : std::filesystem::directory_iterator(LYSSA_DIR + 
-                    "/downloaded_playlists/" + state.downloadingPlaylistName)) {
-            if (std::filesystem::is_regular_file(entry.path()) && entry.path().extension() == ".mp3") {
-                fileCount++;
+        {
+            lf_next_line();
+            lf_push_font(&state.h6Font);
+            LfUIElementProps props = lf_get_theme().text_props;
+            props.margin_top = 15;
+            props.color = GRAY;
+            lf_push_style_props(props);
+            std::string text = "Downloading of playlist \"" + state.downloadingPlaylistName + "\" with " + std::to_string(state.downloadPlaylistFileCount) + " files finished.";
+            lf_set_ptr_x_absolute((state.winWidth - lf_text_dimension(text.c_str()).x) / 2.0f);
+            lf_text(text.c_str());
+            lf_pop_style_props();
+            lf_pop_font();
+        }
+
+        {
+            lf_next_line();
+            LfUIElementProps props = call_to_action_button_style();
+            props.margin_left = 0;
+            props.margin_top = 15;
+            props.margin_right = 0; 
+
+            lf_push_style_props(props);
+            lf_set_ptr_x_absolute((state.winWidth - (180 + props.padding * 2.0f)) / 2.0f);
+            if(lf_button_fixed("Open Playlist", 180, -1) == LF_CLICKED) {
+                state.playlistDownloadRunning = false;
+                state.playlistDownloadFinished = false;
             }
         }
+        backButtonTo(GuiTab::Dashboard, [&](){
+                state.playlistDownloadRunning = false;
+                state.playlistDownloadFinished = false;
+                loadPlaylists();
+                });
+        renderTrackMenu();
+        return;
+    }
+    if(!state.playlistDownloadRunning) {
+        // Heading
+        {
+            LfUIElementProps props = lf_get_theme().text_props;
+            props.text_color = LF_WHITE;
+            props.margin_bottom = 15;
+            lf_push_style_props(props);
+            lf_push_font(&state.h1Font);
+            lf_text("Download Playlist");
+            lf_pop_style_props();
+            lf_pop_font();
+        }
+
+        {
+            lf_next_line();
+            lf_push_font(&state.h6Font);
+            LfUIElementProps props = lf_get_theme().text_props;
+            props.margin_top = 0;
+            props.color = GRAY;
+            lf_push_style_props(props);
+            lf_text("Download a playlist from YouTube");
+            lf_pop_style_props();
+            lf_pop_font();
+        }
+
         lf_next_line();
-        props = lf_get_theme().slider_props;
-        props.border_width = 0;
-        props.color = GRAY;
-        props.text_color = LYSSA_BLUE;
-        props.corner_radius = 1.5f;
-        lf_push_style_props(props);
-        lf_progress_bar_int(fileCount, 0, (float)state.downloadPlaylistFileCount, 400, 10);
-        lf_pop_style_props();
+        static char url[INPUT_BUFFER_SIZE] ={0};
+
+        {
+            LfUIElementProps props = input_field_style();
+            props.margin_top = 15;
+            lf_push_style_props(props);
+            lf_input_text_inl_ex(url, INPUT_BUFFER_SIZE, 600, "URL...");
+            lf_pop_style_props();
+        }
+
+        lf_next_line();
+
+        {
+            lf_push_style_props(call_to_action_button_style());
+            if(lf_button_fixed("Download", 150, -1) == LF_CLICKED) {
+                std::string cmd = LYSSA_DIR + "/scripts/download-yt.sh " + url + " " + LYSSA_DIR + "/downloaded_playlists"; 
+                std::string execCmd = cmd + " &";
+                system(execCmd.c_str());
+                state.playlistDownloadRunning = true;
+                state.downloadingPlaylistName = getCommandOutput(std::string("yt-dlp " + std::string(url) + " --flat-playlist --dump-single-json --no-warnings | jq -r .title &"));
+                state.downloadPlaylistFileCount = std::stoi(getCommandOutput(std::string("yt-dlp --flat-playlist " + std::string(url) + " --no-warnings --compat-options no-youtube-unavailable-videos | wc -l"))); 
+                memset(url, 0, INPUT_BUFFER_SIZE);
+            }
+            lf_pop_style_props();
+        }
+    } else  {
+        state.playlistDownloadFinished = (downloadedFileCount == state.downloadPlaylistFileCount) || getCommandOutput("pgrep yt-dlp") == ""; 
+        if(state.playlistDownloadFinished) {
+            
+            FileStatus createStatus = createPlaylist(state.downloadingPlaylistName, "Playlist from YouTube");
+
+            if(createStatus != FileStatus::AlreadyExists) {
+                std::string playlistDir = LYSSA_DIR + "/playlists/" + state.downloadingPlaylistName; 
+                std::ofstream metadata(playlistDir + "/.metadata", std::ios::app);
+
+                metadata.seekp(0, std::ios::end);
+
+                for (const auto& entry : std::filesystem::directory_iterator(downloadedPlaylistDir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".mp3") {
+                        metadata << "\"" << entry.path().string() << "\" ";
+                    }
+                }
+                metadata.close();
+            }
+        }
+        {
+            std::string title = std::string(std::string("Downloading \"") + state.downloadingPlaylistName + "\"...");
+            LfUIElementProps props = lf_get_theme().text_props;
+            props.text_color = LF_WHITE;
+            props.margin_bottom = 15;
+            lf_push_style_props(props);
+            lf_push_font(&state.h1Font);
+            lf_set_ptr_x_absolute((state.winWidth - lf_text_dimension(title.c_str()).x) / 2.0f);
+            lf_text(title.c_str());
+            lf_pop_style_props();
+            lf_pop_font();
+            lf_next_line();
+        }
+
+        lf_next_line();
+
+        {
+            const vec2s progressBarSize = (vec2s){400, 6};
+
+            LfUIElementProps props = lf_get_theme().slider_props;
+            props.border_width = 0;
+            props.color = GRAY;
+            props.text_color = BLUE_GRAY;  
+            props.corner_radius = 1.5f;
+            props.margin_top = 15;
+            props.margin_left = 0;
+            props.margin_right = 0;
+
+            {
+                vec2s textDim = lf_text_dimension(std::to_string(downloadedFileCount).c_str());
+                lf_set_ptr_x_absolute((state.winWidth - progressBarSize.x - textDim.x) / 2.0f);
+
+                LfUIElementProps props = lf_get_theme().text_props;
+                props.color = lf_color_brightness(GRAY, 1.5);
+                props.margin_top = 15 - (textDim.y - progressBarSize.y) / 2.0f;
+
+                lf_push_style_props(props);
+                lf_push_font(&state.h6Font);
+                lf_text(std::to_string(downloadedFileCount).c_str());
+                lf_pop_font();
+            }
+
+            lf_push_style_props(props);
+            lf_progress_bar_int(downloadedFileCount, 0, (float)state.downloadPlaylistFileCount, progressBarSize.x, progressBarSize.y);
+            lf_pop_style_props();
+
+            {
+                std::string totalFileCount = std::to_string(state.downloadPlaylistFileCount);
+                static float totalFileCountHeight = lf_text_dimension(totalFileCount.c_str()).y;
+
+                LfUIElementProps props = lf_get_theme().text_props;
+                props.color = lf_color_brightness(GRAY, 1.5);
+                props.margin_top = 15 - (totalFileCountHeight - progressBarSize.y) / 2.0f;
+
+                lf_push_style_props(props);
+                lf_push_font(&state.h6Font);
+                lf_text(totalFileCount.c_str());
+                lf_pop_font();
+            }
+        }
+
+        lf_next_line();
+
+        {
+            const float buttonSize = 180.0f;
+            LfUIElementProps props = call_to_action_button_style();
+            props.color = LYSSA_RED;
+            props.margin_left = 0;
+            props.margin_right = 0;
+            props.corner_radius = 8;
+            props.margin_top = 15;
+            props.text_color = LF_WHITE;
+            lf_push_style_props(props);
+            lf_set_ptr_x_absolute((state.winWidth - (buttonSize + props.padding * 2.0f)) / 2.0f);
+            if(lf_button_fixed("Cancle Download", buttonSize, -1) == LF_CLICKED) {
+                state.playlistDownloadRunning = false;
+                system("pkill yt-dlp &");
+            }
+            lf_pop_style_props();
+        }
     }
     backButtonTo(GuiTab::Dashboard, [&](){
             loadPlaylists();
@@ -1919,6 +2047,7 @@ void renderPlaylistFileDialoguePopup() {
                 if(state.currentSoundFile->path == strToWstr(popup.path)) {
                     state.currentSound.stop();
                     state.currentSound.uninit();
+                    state.currentSoundFile = nullptr;
                 }
             }
             removeFileFromPlaylist(popup.path, state.currentPlaylist);
@@ -2269,7 +2398,6 @@ FileStatus createPlaylist(const std::string& name, const std::string& desc) {
     }
     metadata.close();
 
-    bool notLoaded;
     Playlist playlist;
     playlist.path = folderPath;
     playlist.name = name;
@@ -2350,7 +2478,6 @@ FileStatus removeFileFromPlaylist(const std::string& path, uint32_t playlistInde
     for(auto& file : playlist.musicFiles) {
         if(file.path == strToWstr(path)) {
             playlist.musicFiles.erase(std::find(playlist.musicFiles.begin(), playlist.musicFiles.end(), file));
-            state.loadedPlaylistFilepaths.erase(std::find(state.loadedPlaylistFilepaths.begin(), state.loadedPlaylistFilepaths.end(), file.pathStr));
             break;
         }
     }
@@ -2707,6 +2834,22 @@ std::string getCommandOutput(const std::string& cmd) {
     return result;
 }
 
+uint32_t getLineCountFile(const std::string& filename) {
+    std::ifstream file(filename);
+    std::string line;
+    uint32_t lineCount = 0;
+
+    if (file.is_open()) {
+        while (std::getline(file, line)) {
+            lineCount++;
+        }
+        file.close();
+    } else {
+        return 0;
+    }
+
+    return lineCount;
+}
 void updateSoundProgress() {
     if(!state.currentSound.isInit) {
         return;

@@ -30,7 +30,7 @@ extern "C" {
 
 #define LYSSA_GREEN (LfColor){13, 181, 108, 255}
 #define LYSSA_BLUE  (LfColor){83, 150, 237, 255}
-#define LYSSA_RED  (LfColor){150, 12, 14, 255}
+#define LYSSA_RED  (LfColor){163, 36, 50, 255}
 
 // Colors 
 #define LYSSA_BACKGROUND_COLOR NIGHT
