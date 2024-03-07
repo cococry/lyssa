@@ -15,7 +15,7 @@ ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https:
 
 # Dependencies 
 
-#### Dependency List
+#### Build Dependecies
 
 | Dependency         |  Reason of Usage    |
 | ----------------|-------------|
@@ -23,6 +23,12 @@ ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https:
 | [taglib](https://github.com/taglib/taglib)| Reading metadata of ID3 tags |
 | [miniaudio](https://github.com/mackron/miniaudio) | Audio output of the player | 
 | [GLFW](https://github.com/glfw/glfw) | Handling windowing, input etc. | 
+
+#### Runtime Dependencies
+
+| Dependency         |  Reason of Usage    |
+| ----------------|-------------|
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Downloading playlists |
 
 
 As lyssa uses the leif library which also depends on a few things there are some more leif dependecies:
@@ -65,12 +71,12 @@ Install dependencies:
 
 #### Arch (paru): 
 ```console
-sudo paru -S make gcc glfw cglm taglib
+sudo paru -S make gcc glfw cglm taglib yt-dlp
 ```
 
 #### Debian
 ```console
-sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev
+sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev yt-dlp
 ```
 Build the application
 ```console
