@@ -58,6 +58,14 @@ inline LfUIElementProps primary_button_style() {
     return props;
 }
 
+inline LfUIElementProps secondary_button_style() {
+    LfUIElementProps props = lf_get_theme().button_props;
+    props.corner_radius = 9;
+    props.border_width = 0;
+    props.color = lf_color_brightness(GRAY, 1.8f); 
+    return props;
+}
+
 
 inline LfUIElementProps call_to_action_button_style() {
     LfUIElementProps props = lf_get_theme().button_props;

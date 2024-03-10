@@ -109,7 +109,7 @@ struct Playlist {
     std::string name, path, desc;
     int32_t playingFile = -1;
 
-    bool ordered = !ASYNC_PLAYLIST_LOADING, loaded = false;
+    bool ordered = !ASYNC_PLAYLIST_LOADING, loaded = false, downloaded;
 
     bool operator==(const Playlist& other) const { 
         return path == other.path;
@@ -265,7 +265,7 @@ static void                     renderTrackMenu();
 static void                     backButtonTo(GuiTab tab, const std::function<void()>& clickCb = nullptr);
 static void                     changeTabTo(GuiTab tab);
 
-static FileStatus               createPlaylist(const std::string& name, const std::string& desc);
+static FileStatus               createPlaylist(const std::string& name, const std::string& desc, bool downloaded);
 static FileStatus               renamePlaylist(const std::string& name, uint32_t playlistIndex);
 static FileStatus               deletePlaylist(uint32_t playlistIndex);
 static FileStatus               changePlaylistDesc(const std::string& desc, uint32_t playlistIndex);
@@ -281,6 +281,7 @@ static bool                     isValidSoundFile(const std::string& path);
 
 static std::string              getPlaylistName(const std::filesystem::directory_entry& folder);
 static std::string              getPlaylistDesc(const std::filesystem::directory_entry& folder);
+static bool                     getPlaylistIsDownloaded(const std::filesystem::directory_entry& folder);
 static std::vector<std::string> getPlaylistFilepaths(const std::filesystem::directory_entry& folder);
 static std::vector<std::wstring> getPlaylistDisplayNamesW(const std::filesystem::directory_entry& folder);
 
@@ -763,7 +764,9 @@ void renderDashboard() {
                 lf_pop_style_props();
                 lf_set_ptr_y(ptr_y - lf_get_current_div().aabb.size.y);
             }
-            if(lf_get_current_div().interact_state == LF_CLICKED && lf_get_current_div().id == lf_get_selected_div().id && !overButton) {
+            if(lf_get_current_div().interact_state == LF_CLICKED && lf_get_current_div().id == lf_get_selected_div().id 
+                    && !overButton
+                    && state.playlistFileFutures.empty()) {
                 state.currentPlaylist = playlistIndex;
                 if(!playlist.loaded) {
                     state.loadedPlaylistFilepaths.clear();
@@ -833,7 +836,7 @@ void renderCreatePlaylist() {
         props.margin_top = 10;
         lf_push_style_props(props);
         if(lf_button_fixed("Create", 150, -1) == LF_CLICKED) {
-           state.createPlaylistTab.createFileStatus = createPlaylist(std::string(state.createPlaylistTab.nameInput.buffer), std::string(state.createPlaylistTab.descInput.buffer)); 
+           state.createPlaylistTab.createFileStatus = createPlaylist(std::string(state.createPlaylistTab.nameInput.buffer), std::string(state.createPlaylistTab.descInput.buffer), false); 
            memset(state.createPlaylistTab.nameInput.input.buf, 0, INPUT_BUFFER_SIZE);
            memset(state.createPlaylistTab.nameInput.buffer, 0, INPUT_BUFFER_SIZE);
 
@@ -978,7 +981,7 @@ void renderDownloadPlaylist() {
         {
             lf_push_style_props(call_to_action_button_style());
             if(lf_button_fixed("Download", 150, -1) == LF_CLICKED) {
-                std::string cmd = LYSSA_DIR + "/scripts/download-yt.sh " + url + " " + LYSSA_DIR + "/downloaded_playlists"; 
+                std::string cmd = LYSSA_DIR + "/scripts/download-yt.sh " + url + " " + LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName; 
                 std::string execCmd = cmd + " &";
                 system(execCmd.c_str());
                 state.playlistDownloadRunning = true;
@@ -992,7 +995,7 @@ void renderDownloadPlaylist() {
         state.playlistDownloadFinished = (downloadedFileCount == state.downloadPlaylistFileCount) || getCommandOutput("pgrep yt-dlp") == ""; 
         if(state.playlistDownloadFinished) {
             
-            FileStatus createStatus = createPlaylist(state.downloadingPlaylistName, "Playlist from YouTube");
+            FileStatus createStatus = createPlaylist(state.downloadingPlaylistName, "Playlist from YouTube", true);
 
             if(createStatus != FileStatus::AlreadyExists) {
                 std::string playlistDir = LYSSA_DIR + "/playlists/" + state.downloadingPlaylistName; 
@@ -1101,11 +1104,13 @@ void renderOnPlaylist() {
 
     auto& currentPlaylist = state.playlists[state.currentPlaylist];
 
+    static bool showPlaylistSettings = false;
+
     // Playlist Heading
     {
         lf_push_font(&state.musicTitleFont);
         vec2s titleSize = lf_text_dimension(currentPlaylist.name.c_str());
-        bool onTitleArea = lf_hovered(LF_PTR, (vec2s){titleSize.x + 180, titleSize.y});
+        bool onTitleArea = lf_hovered(LF_PTR, (vec2s){(float)state.winWidth, titleSize.y});
         // Title 
         {
             LfUIElementProps props = lf_get_theme().text_props;
@@ -1115,8 +1120,23 @@ void renderOnPlaylist() {
             lf_pop_style_props();
         }
         lf_pop_font();
-        if(onTitleArea)
+        if(onTitleArea && currentPlaylist.downloaded)
         {
+            LfUIElementProps props = lf_get_theme().button_props;
+            props.color = LF_NO_COLOR;
+            props.border_width = 0;
+            props.margin_left = 10;
+            props.margin_right = 0;
+            props.padding = 0;
+            props.margin_top = 5; 
+            lf_push_style_props(props);
+            lf_set_image_color(LF_WHITE);
+
+            if(lf_image_button(((LfTexture){.id = state.icons["more"].id, .width = 50, .height = 50})) == LF_CLICKED) {
+               showPlaylistSettings = !showPlaylistSettings; 
+            } 
+            lf_unset_image_color();
+            lf_pop_style_props();
         }
 
         // "Add More" button
@@ -1143,6 +1163,20 @@ void renderOnPlaylist() {
             }  
             lf_pop_style_props();
         }
+        if(showPlaylistSettings) {
+            lf_next_line();
+            LfUIElementProps props = secondary_button_style();
+            props.margin_top = 15;
+            lf_push_style_props(props);
+
+            if(lf_button("Update Downloads") == LF_CLICKED) {
+                
+            }
+            if(lf_button("Sync Downloads") == LF_CLICKED) {
+
+            }
+        }
+
         if(!currentPlaylist.ordered && state.playlistFileFutures.empty() && !currentPlaylist.musicFiles.empty() && !state.loadedPlaylistFilepaths.empty()) 
         {
             lf_next_line();
@@ -1393,7 +1427,9 @@ void renderOnPlaylist() {
     }
 
 
-    backButtonTo(GuiTab::Dashboard);
+    backButtonTo(GuiTab::Dashboard, [&](){
+            showPlaylistSettings = false;
+            });
     renderTrackMenu();
 }
 void renderOnTrack() {
@@ -2091,27 +2127,24 @@ void renderPlaylistFileDialoguePopup() {
         uint32_t renderedItems = 0;
         for(uint32_t i = 0; i < state.playlists.size(); i++) {
             Playlist& playlist = state.playlists[i];
-            if(i == state.currentPlaylist) continue;
+            std::vector<std::string> playlistFiles = getPlaylistFilepaths(std::filesystem::directory_entry(playlist.path));
+
+            if(i == state.currentPlaylist || std::find(playlistFiles.begin(), playlistFiles.end(), popup.path) != playlistFiles.end()) continue;
             // Playlist
             props = lf_get_theme().text_props;
             props.hover_text_color = lf_color_brightness(GRAY, 2);
             lf_push_style_props(props);
             if(lf_button(playlist.name.c_str()) == LF_CLICKED) {
                 if(playlist.loaded) {
-                    if(!isFileInPlaylist(popup.path, i)) {
-                        addFileToPlaylist(popup.path, i);
-                        playlist.loaded = false;
-                    }
+                    addFileToPlaylist(popup.path, i);
+                    playlist.loaded = false;
                 } else {
-                    std::vector<std::string> playlistFiles = getPlaylistFilepaths(std::filesystem::directory_entry(playlist.path));
-                    if(std::find(playlistFiles.begin(), playlistFiles.end(), popup.path) == playlistFiles.end()) {
-                        std::ofstream metadata(playlist.path + "/.metadata", std::ios::app);
-                        metadata.seekp(0, std::ios::end);
+                    std::ofstream metadata(playlist.path + "/.metadata", std::ios::app);
+                    metadata.seekp(0, std::ios::end);
 
-                        metadata << "\"" << popup.path << "\" ";
-                        metadata.close();
-                        playlist.loaded = false;
-                    }
+                    metadata << "\"" << popup.path << "\" ";
+                    metadata.close();
+                    playlist.loaded = false;
                 }
                 state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = false;
                 showPlaylistPopup = false;
@@ -2381,7 +2414,7 @@ void changeTabTo(GuiTab tab) {
     state.currentTab = tab;
 }
 
-FileStatus createPlaylist(const std::string& name, const std::string& desc) {
+FileStatus createPlaylist(const std::string& name, const std::string& desc, bool downloaded) {
     std::string folderPath = LYSSA_DIR + "/playlists/" + name;
     if(!std::filesystem::exists(folderPath)) {
         if(!std::filesystem::create_directory(folderPath) )
@@ -2394,6 +2427,7 @@ FileStatus createPlaylist(const std::string& name, const std::string& desc) {
     if(metadata.is_open()) {
         metadata << "name: " << name << "\n";
         metadata << "desc: " << desc << "\n";
+        metadata << "downloaded: " << (downloaded ? "true" : "false") << "\n";
         metadata << "files: ";
     } else {
         return FileStatus::Failed;
@@ -2548,6 +2582,29 @@ std::string getPlaylistDesc(const std::filesystem::directory_entry& folder) {
     return desc;
 }
 
+bool getPlaylistIsDownloaded(const std::filesystem::directory_entry& folder) {
+    std::ifstream metadata(folder.path().string() + "/.metadata");
+
+    if(!metadata.is_open()) {
+        std::cerr << "[Error] Failed to open the metadata of playlist on path '" << folder.path().string() << "'\n";
+        return false;
+    }
+
+    std::string downloadedStr;
+    std::string line;
+    while(std::getline(metadata, line)) {
+        std::istringstream iss(line);
+        std::string key;
+        iss >> key;
+
+        if(key == "downloaded:") {
+            std::getline(iss, downloadedStr);
+            downloadedStr.erase(0, downloadedStr.find_first_not_of(" \t"));
+            downloadedStr.erase(downloadedStr.find_last_not_of(" \t") + 1);
+        }
+    }
+    return (downloadedStr == "true");
+}
 std::vector<std::string> getPlaylistFilepaths(const std::filesystem::directory_entry& folder) {
     std::ifstream metadata(folder.path().string() + "/.metadata");
     std::vector<std::string> filepaths{};
@@ -2601,6 +2658,7 @@ void loadPlaylists() {
         playlist.path = folder.path().string();
         playlist.name = getPlaylistName(folder);
         playlist.desc = getPlaylistDesc(folder);
+        playlist.downloaded = getPlaylistIsDownloaded(folder);
 
         if(std::find(state.playlists.begin(), state.playlists.end(), playlist) == state.playlists.end()) {
             state.playlists.emplace_back(playlist);
