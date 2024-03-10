@@ -45,7 +45,7 @@ extern "C" {
 
 // Volume
 #define VOLUME_TOGGLE_STEP 5
-#define VOLUME_MAX 100 
+#define VOLUME_MAX 100.0f 
 #define VOLUME_INIT 75.0f
 
 

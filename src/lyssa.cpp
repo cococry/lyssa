@@ -969,7 +969,7 @@ void renderDownloadPlaylist() {
             LfUIElementProps props = input_field_style();
             props.margin_top = 15;
             lf_push_style_props(props);
-            lf_input_text_inl_ex(url, INPUT_BUFFER_SIZE, 600, "URL...");
+            lf_input_text_inl_ex(url, INPUT_BUFFER_SIZE, 600, "URL");
             lf_pop_style_props();
         }
 
@@ -1143,8 +1143,7 @@ void renderOnPlaylist() {
             }  
             lf_pop_style_props();
         }
-        if(!currentPlaylist.ordered && state.playlistFileFutures.empty() && !currentPlaylist.musicFiles.empty() && !state.loadedPlaylistFilepaths.empty() &&
-                !playlistFileOrderCorrect(state.currentPlaylist, state.loadedPlaylistFilepaths)) 
+        if(!currentPlaylist.ordered && state.playlistFileFutures.empty() && !currentPlaylist.musicFiles.empty() && !state.loadedPlaylistFilepaths.empty()) 
         {
             lf_next_line();
             lf_push_font(&state.h5Font);
@@ -2104,12 +2103,15 @@ void renderPlaylistFileDialoguePopup() {
                         playlist.loaded = false;
                     }
                 } else {
-                    std::ofstream metadata(playlist.path + "/.metadata", std::ios::app);
-                    metadata.seekp(0, std::ios::end);
+                    std::vector<std::string> playlistFiles = getPlaylistFilepaths(std::filesystem::directory_entry(playlist.path));
+                    if(std::find(playlistFiles.begin(), playlistFiles.end(), popup.path) == playlistFiles.end()) {
+                        std::ofstream metadata(playlist.path + "/.metadata", std::ios::app);
+                        metadata.seekp(0, std::ios::end);
 
-                    metadata << "\"" << popup.path << "\" ";
-                    metadata.close();
-                    playlist.loaded = false;
+                        metadata << "\"" << popup.path << "\" ";
+                        metadata.close();
+                        playlist.loaded = false;
+                    }
                 }
                 state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = false;
                 showPlaylistPopup = false;
@@ -2464,6 +2466,7 @@ FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
 
     playlist.musicFiles.emplace_back((SoundFile){
             .path = strToWstr(path), 
+            .pathStr = path, 
             .duration = static_cast<int32_t>(getSoundDuration(path)),
             .thumbnail = getSoundThubmnail(path, (vec2s){0.075f, 0.075f})
             });
@@ -2593,18 +2596,15 @@ std::vector<std::wstring> getPlaylistDisplayNamesW(const std::filesystem::direct
 
 void loadPlaylists() {
     uint32_t playlistI = 0;
-    state.currentSoundFile = nullptr; 
     for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR + "/playlists/")) {
         Playlist playlist{};
         playlist.path = folder.path().string();
         playlist.name = getPlaylistName(folder);
         playlist.desc = getPlaylistDesc(folder);
+
         if(std::find(state.playlists.begin(), state.playlists.end(), playlist) == state.playlists.end()) {
             state.playlists.emplace_back(playlist);
-        } else {
-            state.playlists[playlistI] = playlist;
         }
-        playlistI++;
     }
 }
 
@@ -2961,7 +2961,7 @@ void handleAsyncPlaylistLoading() {
         if(state.loadedPlaylistFilepaths.size() == currentPlaylist.musicFiles.size() && !state.playlistFileFutures.empty()) {
             state.playlistFileFutures.clear();
             state.playlistFileFutures.shrink_to_fit();
-          
+            currentPlaylist.ordered = playlistFileOrderCorrect(state.currentPlaylist, state.loadedPlaylistFilepaths);
         }
     }
 }
