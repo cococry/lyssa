@@ -3248,7 +3248,7 @@ uint32_t getLineCountFile(const std::string& filename) {
     return lineCount;
 }
 uint32_t getPlaylistFileCountURL(const std::string& url) {
-    std::string cmd = "yt-dlp --flat-playlist -j --no-warnings \"" + url + "\"" + " | grep -o '\"title\": \"[^\"]*' | wc -l";
+    std::string cmd = "yt-dlp --compat-options no-youtube-unavailable-videos --flat-playlist -j --no-warnings \"" + url + "\"" + " | grep -o '\"title\": \"[^\"]*' | wc -l";
     return (uint32_t)std::stoi(getCommandOutput(cmd));
 }
 
