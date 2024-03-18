@@ -307,6 +307,7 @@ void _lf_dropdown_menu_loc(const char** items, const char* placeholder, uint32_t
 void _lf_dropdown_menu_loc_wide(const wchar_t** items, const wchar_t* placeholder, uint32_t item_count, float width, float height, int32_t* selected_index, bool* opened, const char* file, int32_t line);
 
 #define lf_input_text_inl_ex(buffer, buffer_size, input_width, placeholder_str)         \
+    {                                                                                   \
     static LfInputField input = {                                                       \
         .cursor_index = 0,                                                              \
         .width = input_width,                                                           \
@@ -316,6 +317,10 @@ void _lf_dropdown_menu_loc_wide(const wchar_t** items, const wchar_t* placeholde
         .selected = false                                                               \
     };                                                                                  \
     _lf_input_text_loc(&input, __FILE__, __LINE__);                                     \
+    }                                                                                   \
+
+#define lf_input_text_inl(buffer, buffer_size) lf_input_text_inl_ex(buffer, buffer_size, (int32_t)(lf_get_current_div().aabb.size.x / 2), "")
+
 
 #define lf_input_text(input) _lf_input_text_loc(input, __FILE__, __LINE__)
 void _lf_input_text_loc(LfInputField* input, const char* file, int32_t line);
@@ -326,9 +331,10 @@ void _lf_input_int_loc(LfInputField* input, const char* file, int32_t line);
 #define lf_input_float(input) _lf_input_float_loc(input, __FILE__, __LINE__)
 void _lf_input_float_loc(LfInputField* input, const char* file, int32_t line);
 
+bool lf_input_grabbed();
+
 #define lf_begin() _lf_begin_loc(__FILE__, __LINE__)
 void _lf_begin_loc(const char* file, int32_t line);
-
 
 void lf_end();
 

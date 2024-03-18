@@ -3414,7 +3414,33 @@ std::string formatDurationToMins(int32_t duration) {
     return format.str();
 }
 
-int main(int argc, char* argv[]) {
+int main() {
+    // Initialization 
+    initWin(WIN_START_W, WIN_START_H); 
+    initUI();
+
+    char buf[512] = {0};
+    char buf2[512] = {0};
+    while(!glfwWindowShouldClose(state.win)) { 
+        glClear(GL_COLOR_BUFFER_BIT);
+        lf_begin();
+
+        if(lf_key_went_down(GLFW_KEY_M) && !lf_input_grabbed()) {
+            std::cout << "muted.\n";
+        }
+        lf_input_text_inl(buf, 512);
+        lf_next_line();
+        lf_input_text_inl(buf2, 512);
+
+        lf_end();
+
+        glfwPollEvents();
+        glfwSwapBuffers(state.win);
+
+    }
+
+}
+int main2(int argc, char* argv[]) {
     // Initialization 
     initWin(WIN_START_W, WIN_START_H); 
     initUI();

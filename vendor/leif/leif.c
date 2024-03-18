@@ -182,7 +182,7 @@ typedef struct {
 
     LfTexture tex_arrow_down, tex_tick;
 
-    bool text_wrap, line_overflow, div_hoverable;
+    bool text_wrap, line_overflow, div_hoverable, input_grabbed;
 
     uint64_t active_element_id;
 
@@ -950,17 +950,20 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
 
     LfClickableItemState inputfield = button(file, line, input_aabb.pos, input_aabb.size, props, props.color, props.border_width, false, false);
 
-    if(inputfield == LF_CLICKED) {
+
+    if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && input->selected && inputfield == LF_IDLE) {
+        input->selected = false;
+        state.input_grabbed = false;
+        input_field_unselect_all(input);
+    } else if(inputfield == LF_CLICKED) {
         input->selected = true;
+        state.input_grabbed = true;
         LfTextProps selected_props = lf_text_render((vec2s){
             state.pos_ptr.x + props.padding, 
             state.pos_ptr.y + props.padding
         }, input->buf, font, LF_NO_COLOR, 
         wrap_point, (vec2s){lf_get_mouse_x(), lf_get_mouse_y()}, true, false, -1, -1);
         input->cursor_index = selected_props.rendered_count;
-    } else if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && input->selected && inputfield == LF_IDLE) {
-        input->selected = false;
-        input_field_unselect_all(input);
     }
 
     lf_set_cull_end_y(state.pos_ptr.y + input->height + props.padding * 2.0f);
@@ -2567,6 +2570,10 @@ void _lf_input_float_loc(LfInputField* input, const char* file, int32_t line) {
     input_field(input, INPUT_FLOAT, file, line);
 }
 
+bool lf_input_grabbed() {
+    return state.input_grabbed;
+}
+
 void _lf_begin_loc(const char* file, int32_t line) {
     state.pos_ptr = (vec2s){0, 0};
     renderer_begin();
@@ -2844,7 +2851,7 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, LfColor colo
 
         if(!culled && !no_render) {
             if(render_solid) {
-                lf_rect_render((vec2s){x, y}, (vec2s){last_x - x, font.font_size}, color, LF_NO_COLOR, 0.0f, 0.0f);
+                lf_rect_render((vec2s){x, y}, (vec2s){last_x - x, get_max_char_height_font(font)}, color, LF_NO_COLOR, 0.0f, 0.0f);
             } else {
                 vec2s texcoords[4] = {
                     q.s0, q.t0, 
