@@ -189,7 +189,7 @@ typedef struct {
     float* scroll_velocity_ptr;
     float* scroll_ptr;
 
-    LfDiv selected_div, selected_div_tmp, scrollbar_div;
+    LfDiv selected_div, selected_div_tmp, scrollbar_div, grabbed_div;
 
     uint32_t drawcalls;
 
@@ -228,7 +228,7 @@ static LfClickableItemState     button(const char* file, int32_t line, vec2s pos
 static LfClickableItemState     div_container(vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color);
 static void                     next_line_on_overflow(vec2s size, float xoffset);
 static bool                     item_should_cull(LfAABB item);
-static void                     draw_scrollbar_on(LfDiv div);
+static void                     draw_scrollbar_on(LfDiv* div);
 
 static void                     input_field_unselect_all(LfInputField* input);
 static void                     input_field(LfInputField* input, InputFieldType type, const char* file, int32_t line);
@@ -686,20 +686,20 @@ bool item_should_cull(LfAABB item) {
     return false;
 }
 
-void draw_scrollbar_on(LfDiv div) {
+void draw_scrollbar_on(LfDiv* div) {
     lf_next_line();
-    if(state.current_div.id == div.id) {
-        state.scrollbar_div = div;
-        LfDiv* selected = &state.selected_div_tmp;
+    if(state.current_div.id == div->id) {
+        state.scrollbar_div = *div;
+        LfDiv* selected = div;
         float scroll = *state.scroll_ptr;
         LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.scrollbar_props;
 
-        state.selected_div_tmp.total_area.x = state.pos_ptr.x;
-        state.selected_div_tmp.total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
+        selected->total_area.x = state.pos_ptr.x;
+        selected->total_area.y = state.pos_ptr.y + state.div_props.corner_radius;
 
-        if(*state.scroll_ptr < -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y) && *state.scroll_velocity_ptr < 0 && state.theme.div_smooth_scroll) {
+        if(*state.scroll_ptr < -((div->total_area.y - *state.scroll_ptr) - div->aabb.pos.y - div->aabb.size.y) && *state.scroll_velocity_ptr < 0 && state.theme.div_smooth_scroll) {
             *state.scroll_velocity_ptr = 0;
-            *state.scroll_ptr = -((div.total_area.y - *state.scroll_ptr) - div.aabb.pos.y - div.aabb.size.y);
+            *state.scroll_ptr = -((div->total_area.y - *state.scroll_ptr) - div->aabb.pos.y - div->aabb.size.y);
         }
 
         float total_area = selected->total_area.y - scroll;
@@ -1485,6 +1485,7 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     // Scrolling the current div
     LfDiv* selected_div = &state.selected_div;
     if(!selected_div->scrollable) return;
+    if((state.grabbed_div.id != -1 && selected_div->id != state.grabbed_div.id)) return;
 
     if(yoffset == -1) {
         if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
@@ -1601,6 +1602,9 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, void* glfw_wi
     state.text_wrap = false;
     state.line_overflow = true;
     state.theme = lf_default_theme();
+
+    memset(&state.grabbed_div, 0, sizeof(LfDiv));
+    state.grabbed_div.id = -1;
    
     state.clipboard = clipboard_new(NULL);
 
@@ -1616,9 +1620,6 @@ void lf_init_glfw(uint32_t display_width, uint32_t display_height, void* glfw_wi
 
     state.tex_arrow_down = lf_load_texture_asset("arrow-down", "png");
     state.tex_tick = lf_load_texture_asset("tick", "png");
-    
-    setlocale(LC_CTYPE, "en_US.UTF-8");
-
 #endif
 }
 
@@ -2212,15 +2213,14 @@ LfDiv _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, f
 
     state.pos_ptr = pos; 
     state.current_div = div;
-    if(hovered_div) {
-        state.selected_div_tmp = div;
-    }
-    if(hovered_div) {
-    }
 
     div.interact_state = div_container((vec2s){pos.x - props.padding, pos.y - props.padding}, 
                                        (vec2s){size.x + props.padding * 2.0f, size.y + props.padding * 2.0f}, 
                                        props, props.color, props.border_width, false, state.div_hoverable);
+
+    if(hovered_div) {
+        state.selected_div_tmp = div;
+    }
 
     // Culling & Scrolling
     if(div.scrollable) {
@@ -2241,8 +2241,9 @@ LfDiv _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, f
 }
 
 void lf_div_end() {
-    if(state.current_div.scrollable)
-        draw_scrollbar_on(state.selected_div_tmp);
+    if(state.current_div.scrollable) {
+        draw_scrollbar_on(&state.selected_div_tmp);
+    }
 
     state.pos_ptr = state.prev_pos_ptr;
     state.font_stack = state.prev_font_stack;
@@ -2574,6 +2575,23 @@ bool lf_input_grabbed() {
     return state.input_grabbed;
 }
 
+void lf_div_grab(LfDiv div) {
+    state.grabbed_div = div;
+}
+
+void lf_div_ungrab() {
+    memset(&state.grabbed_div, 0, sizeof(LfDiv));
+    state.grabbed_div.id = -1;
+}
+
+bool lf_div_grabbed() {
+    return state.grabbed_div.id != -1;
+}
+
+LfDiv lf_get_grabbed_div() {
+    return state.grabbed_div;
+}
+
 void _lf_begin_loc(const char* file, int32_t line) {
     state.pos_ptr = (vec2s){0, 0};
     renderer_begin();
@@ -2581,9 +2599,7 @@ void _lf_begin_loc(const char* file, int32_t line) {
     props.color = (LfColor){0, 0, 0, 0};
     lf_push_style_props(props);
     
-    static float scroll_velocity = 0;
-    static float scroll = 0;
-    _lf_div_begin_loc(((vec2s){0, 0}), ((vec2s){(float)state.dsp_w, (float)state.dsp_h}), false, &scroll, &scroll_velocity, file, line);
+    lf_div_begin(((vec2s){0, 0}), ((vec2s){(float)state.dsp_w, (float)state.dsp_h}), true);
     lf_pop_style_props();
 }
 void lf_end() {
@@ -2729,6 +2745,14 @@ LfDiv lf_get_current_div() {
 
 LfDiv lf_get_selected_div() {
     return state.selected_div;
+}
+
+LfDiv* lf_get_current_div_ptr() {
+    return &state.current_div;
+}
+
+LfDiv* lf_get_selected_div_ptr() {
+    return &state.selected_div;
 }
 
 void lf_set_ptr_x(float x) {
@@ -3248,7 +3272,8 @@ void lf_pop_style_props() {
 
 bool lf_hovered(vec2s pos, vec2s size) {
     bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
-        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && state.selected_div.id == state.current_div.id;
+        lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && 
+        ((state.selected_div.id == state.current_div.id && state.grabbed_div.id == -1) || (state.grabbed_div.id == state.current_div.id && state.grabbed_div.id != -1));
     return hovered;
 }
 

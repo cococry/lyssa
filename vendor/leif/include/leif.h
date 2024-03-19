@@ -142,7 +142,7 @@ typedef struct {
 } LfTheme;
 
 typedef struct {
-    uint64_t id;
+    int64_t id;
     LfAABB aabb;
     LfClickableItemState interact_state;
 
@@ -321,7 +321,6 @@ void _lf_dropdown_menu_loc_wide(const wchar_t** items, const wchar_t* placeholde
 
 #define lf_input_text_inl(buffer, buffer_size) lf_input_text_inl_ex(buffer, buffer_size, (int32_t)(lf_get_current_div().aabb.size.x / 2), "")
 
-
 #define lf_input_text(input) _lf_input_text_loc(input, __FILE__, __LINE__)
 void _lf_input_text_loc(LfInputField* input, const char* file, int32_t line);
 
@@ -332,6 +331,14 @@ void _lf_input_int_loc(LfInputField* input, const char* file, int32_t line);
 void _lf_input_float_loc(LfInputField* input, const char* file, int32_t line);
 
 bool lf_input_grabbed();
+
+void lf_div_grab(LfDiv div);
+
+void lf_div_ungrab();
+
+bool lf_div_grabbed();
+
+LfDiv lf_get_grabbed_div();
 
 #define lf_begin() _lf_begin_loc(__FILE__, __LINE__)
 void _lf_begin_loc(const char* file, int32_t line);
@@ -361,6 +368,10 @@ void lf_set_text_wrap(bool wrap);
 LfDiv lf_get_current_div();
 
 LfDiv lf_get_selected_div();
+
+LfDiv* lf_get_current_div_ptr();
+
+LfDiv* lf_get_selected_div_ptr();
 
 void lf_set_ptr_x(float x);
 

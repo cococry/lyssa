@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <iterator>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -2180,6 +2181,9 @@ void renderAorBPopup(AorBPopup& popup) {
     lf_push_style_props(props);
     // Centering the div/popup
     lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize, false); 
+    if(!lf_div_grabbed()) {
+        lf_div_grab(lf_get_current_div());
+    }
 
     // Close Button
     {
@@ -2196,6 +2200,7 @@ void renderAorBPopup(AorBPopup& popup) {
         lf_push_style_props(props);
         if(lf_button("X") == LF_CLICKED) {
             state.aOrBPopup.render = false;
+            lf_div_ungrab();
         }
         lf_pop_style_props();
         lf_next_line();
@@ -2227,9 +2232,6 @@ void renderAorBPopup(AorBPopup& popup) {
         }
         lf_pop_style_props();
     }
-    if(lf_get_current_div().id != lf_get_selected_div().id && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-        popup.render = false;
-    }
     lf_div_end();
     lf_pop_style_props();
 }
@@ -2244,6 +2246,9 @@ void renderEditPlaylistPopup() {
     lf_push_style_props(div_props);
     // Centering the div/popup
     lf_div_begin(((vec2s){(state.winWidth - popupSize.x) / 2.0f, (state.winHeight - popupSize.y) / 2.0f}), popupSize, false);
+    if(!lf_div_grabbed()) {
+        lf_div_grab(lf_get_current_div());
+    }
     // Close Button
     {
         // Put the X Button in the top left of the div 
@@ -2261,6 +2266,8 @@ void renderEditPlaylistPopup() {
         lf_push_style_props(props);
         if(lf_button("X") == LF_CLICKED) {
             state.popups[(int32_t)PopupID::EditPlaylistPopup].render = false;
+            lf_div_ungrab();
+
             memset(state.createPlaylistTab.nameInput.input.buf, 0, INPUT_BUFFER_SIZE);
             memset(state.createPlaylistTab.descInput.input.buf, 0, INPUT_BUFFER_SIZE);
 
@@ -2327,9 +2334,6 @@ void renderEditPlaylistPopup() {
         }
     }
 
-    if(lf_get_current_div().id != lf_get_selected_div().id && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-        state.popups[(int32_t)PopupID::EditPlaylistPopup].render = false;
-    }
     lf_div_end();
     lf_pop_style_props();
 }
@@ -2343,6 +2347,9 @@ void renderPlaylistFileDialoguePopup() {
     props.corner_radius = 4;
     lf_push_style_props(props);
     lf_div_begin(popup.pos, popupSize, false);
+    if(!lf_div_grabbed()) {
+        lf_div_grab(lf_get_current_div());
+    }
     lf_pop_style_props();
 
     static bool showPlaylistPopup = false;
@@ -2413,9 +2420,10 @@ void renderPlaylistFileDialoguePopup() {
             break;
     }
 
-    if(lf_get_current_div().id != lf_get_selected_div().id && !onPlaylistPopup && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+    if(lf_get_current_div().id != lf_get_selected_div().id && !onPlaylistPopup && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
         state.popups[(int32_t)PopupID::PlaylistFileDialoguePopup].render = false;
         showPlaylistPopup = false;
+        lf_div_ungrab();
     }
     lf_div_end();
 
@@ -3414,33 +3422,7 @@ std::string formatDurationToMins(int32_t duration) {
     return format.str();
 }
 
-int main() {
-    // Initialization 
-    initWin(WIN_START_W, WIN_START_H); 
-    initUI();
-
-    char buf[512] = {0};
-    char buf2[512] = {0};
-    while(!glfwWindowShouldClose(state.win)) { 
-        glClear(GL_COLOR_BUFFER_BIT);
-        lf_begin();
-
-        if(lf_key_went_down(GLFW_KEY_M) && !lf_input_grabbed()) {
-            std::cout << "muted.\n";
-        }
-        lf_input_text_inl(buf, 512);
-        lf_next_line();
-        lf_input_text_inl(buf2, 512);
-
-        lf_end();
-
-        glfwPollEvents();
-        glfwSwapBuffers(state.win);
-
-    }
-
-}
-int main2(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
     // Initialization 
     initWin(WIN_START_W, WIN_START_H); 
     initUI();
@@ -3466,7 +3448,8 @@ int main2(int argc, char* argv[]) {
             handleAsyncPlaylistLoading();
 
         // Updating the timestamp of the currently playing sound
-        updateSoundProgress();
+        if(!lf_input_grabbed())
+            updateSoundProgress();
         handleTabKeyStrokes();
 
         // Delta-Time calculation
