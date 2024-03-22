@@ -568,8 +568,8 @@ void renderDashboard() {
         }
     } else {
         // Constants
-        const float width = 180;
-        float height = 260;
+        const float width = MAX(state.win->getWidth() / 7.0f, 180);
+        float height = MAX(state.win->getHeight() / 2.75f, 260);
         const float paddingTop = 50;
 
         int32_t playlistIndex = 0;
@@ -1171,35 +1171,6 @@ void renderDownloadPlaylist() {
     renderTrackMenu();
 }
 
-
-bool isProcessRunning(const char *processName) {
-    FILE *fp;
-    char command[1024];
-    char line[1024];
-
-    // Build the command to check for the process
-    snprintf(command, sizeof(command), "ps aux | grep -v grep | grep '%s'", processName);
-
-    // Open the command for reading
-    fp = popen(command, "r");
-    if (fp == NULL) {
-        printf("Failed to run command\n");
-        exit(1);
-    }
-
-    // Read the output of the command
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        // If any output is found, the process is running
-        pclose(fp);
-        return true;
-    }
-
-    // Close the file pointer
-    pclose(fp);
-    return false;
-}
-
-
 void renderOnPlaylist() {
     if(state.currentPlaylist == -1) return;
 
@@ -1319,7 +1290,6 @@ void renderOnPlaylist() {
 
                 state.playlistDownloadRunning = true;
                 state.downloadingPlaylistName = std::filesystem::path(currentPlaylist.path).filename().string();
-                std::cout << "PRINT: " << state.downloadingPlaylistName << "\n";
 
                 state.downloadPlaylistFileCount = LyssaUtils::getPlaylistFileCountURL(currentPlaylist.url);
 
@@ -1469,7 +1439,7 @@ void renderOnPlaylist() {
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
             SoundFile& file = currentPlaylist.musicFiles[i];
             {
-                vec2s thumbnailContainerSize = (vec2s){48, 48};
+                vec2s thumbnailContainerSize = (vec2s){MAX((state.win->getWidth() / 100.0f) * 4, 24), MAX((state.win->getWidth() / 100.0f) * 4, 24.0f)};
                 float marginBottomThumbnail = 10.0f, marginTopThumbnail = 5.0f;
 
 
@@ -1509,14 +1479,15 @@ void renderOnPlaylist() {
                 if(hoveredTextDiv)
                 {
                     LfUIElementProps props = lf_get_theme().button_props;
-                    props.margin_right = 4;
-                    props.margin_left = -thumbnailContainerSize.x;
+                    props.margin_right = 8; 
+                    props.margin_left = -(thumbnailContainerSize.x);
                     props.border_width = 0;
                     props.color = lf_color_brightness(LYSSA_PLAYLIST_COLOR, 0.8); 
-                    props.corner_radius = 12;
+                    props.corner_radius = MIN(thumbnailContainerSize.y / 4.0f, 18);
                     lf_push_style_props(props);
 
-                    LfClickableItemState playButton = lf_image_button(((LfTexture){.id = state.icons["play"].id, .width = 24, .height = 24}));
+                    LfClickableItemState playButton = lf_image_button(((LfTexture){.id = state.icons["play"].id, 
+                                .width = (uint32_t)(thumbnailContainerSize.x / 2.0f), .height = (uint32_t)(thumbnailContainerSize.y / 2.0f)}));
                     onPlayButton = playButton != LF_IDLE;
 
                     if(playButton == LF_CLICKED) {
@@ -2728,7 +2699,7 @@ FileStatus addFileToPlaylist(const std::string& path, uint32_t playlistIndex) {
             .path = strToWstr(path), 
             .pathStr = path, 
             .duration = static_cast<int32_t>(getSoundDuration(path)),
-            .thumbnail = getSoundThubmnail(path, (vec2s){0.075f, 0.075f})
+            .thumbnail = getSoundThubmnail(path, (vec2s){0.1, 0.1})
             });
 
     return FileStatus::Success;
@@ -2934,7 +2905,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
     }
     files->emplace_back(file);
     if(std::filesystem::exists(path))
-        state.playlistFileThumbnailData.emplace_back(getSoundThubmnailData(path, (vec2s){60, 40}));
+        state.playlistFileThumbnailData.emplace_back(getSoundThubmnailData(path, (vec2s){120, 80}));
     else 
         state.playlistFileThumbnailData.emplace_back((TextureData){0});
 }
@@ -3157,7 +3128,7 @@ void loadPlaylistAsync(Playlist& playlist) {
                         .path = strToWstr(path),
                             .pathStr = path,
                             .duration = static_cast<int32_t>(getSoundDuration(path)),
-                            .thumbnail = getSoundThubmnail(path, (vec2s){0.075f, 0.075f})
+                            .thumbnail = getSoundThubmnail(path, (vec2s){0.1, 0.1})
                     };
 
                 } else {
@@ -3196,7 +3167,6 @@ int main(int argc, char* argv[]) {
     initWin(WIN_START_W, WIN_START_H); 
     initUI();
 
-
     if(!std::filesystem::exists(LYSSA_DIR)) { 
         std::filesystem::create_directory(LYSSA_DIR);
     }
@@ -3231,7 +3201,7 @@ int main(int argc, char* argv[]) {
         glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
 
         lf_begin();
-        lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.win->getWidth() - DIV_START_X, (float)state.win->getHeight() - DIV_START_Y}), false);
+        lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.win->getWidth() - DIV_START_X, (float)state.win->getHeight() - DIV_START_Y}), true);
 
         switch(state.currentTab) {
             case GuiTab::Dashboard:
