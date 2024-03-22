@@ -4,6 +4,15 @@ extern "C" {
     #include <leif.h>
 }
 
+// Lyssa Path 
+#ifdef _WIN32
+#define HOMEDIR "USERPROFILE"
+#else
+#define HOMEDIR "HOME"
+#endif
+
+#define LYSSA_DIR std::string(getenv(HOMEDIR)) + std::string("/.lyssa")
+
 // Window 
 #define WIN_START_W 1280 
 #define WIN_START_H 720 
@@ -34,20 +43,22 @@ extern "C" {
 
 // Colors 
 #define LYSSA_BACKGROUND_COLOR NIGHT
-#define LYSSA_PLAYLIST_COLOR PURPLE
+#define LYSSA_PLAYLIST_COLOR PURPLE 
 
 // Scrolling 
 #define DIV_SMOOTH_SCROLL true
 
 // Playlist file thumbnails 
-#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 0 // Setting this to > 0 will worsen perfomance on low-end systems
+#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 4 // Setting this to > 0 will worsen perfomance on low-end systems
 #define PLAYLIST_FILE_THUMBNAIL_COLOR GRAY
 
 // Volume
 #define VOLUME_TOGGLE_STEP 5
-#define VOLUME_MAX 100.0f 
+#define VOLUME_MAX 300.0f 
 #define VOLUME_INIT 75.0f
 
+// Buffers
+#define INPUT_BUFFER_SIZE 512
 
 // Styles & Theming 
 inline LfUIElementProps primary_button_style() {
