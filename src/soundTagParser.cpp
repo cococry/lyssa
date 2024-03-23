@@ -13,95 +13,123 @@
 
 using namespace TagLib;
 
-LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size_factor) {
-    MPEG::File file(soundPath.c_str());
+namespace SoundTagParser {
+    LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size_factor) {
+        MPEG::File file(soundPath.c_str());
 
-    LfTexture tex = {0};
-    // Get the ID3v2 tag
-    ID3v2::Tag *tag = file.ID3v2Tag();
-    if (!tag) {
-        LOG_ERROR("No ID3v2 tag found for file '%s'.\n", soundPath.c_str());
+        LfTexture tex = {0};
+        // Get the ID3v2 tag
+        ID3v2::Tag *tag = file.ID3v2Tag();
+        if (!tag) {
+            LOG_ERROR("No ID3v2 tag found for file '%s'.\n", soundPath.c_str());
+            return tex;
+        }
+
+        // Get the first APIC (Attached Picture) frame
+        ID3v2::FrameList apicFrames = tag->frameListMap()["APIC"];
+        if (apicFrames.isEmpty()) {
+            LOG_ERROR("No APIC frame found for file '%s'.\n", soundPath.c_str());
+            return tex;
+        }
+
+        // Extract the image data
+        ID3v2::AttachedPictureFrame *apicFrame = dynamic_cast<ID3v2::AttachedPictureFrame *>(apicFrames.front());
+        if (!apicFrame) {
+            LOG_ERROR("Failed to cast APIC frame for file '%s'.\n", soundPath.c_str());
+            return tex;
+        }
+
+        ByteVector imageData = apicFrame->picture();
+
+        if(size_factor.x == -1 || size_factor.y == -1)
+            tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
+        else 
+            tex = lf_load_texture_from_memory_resized_factor(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, size_factor.x, size_factor.y);
+
         return tex;
     }
 
-    // Get the first APIC (Attached Picture) frame
-    ID3v2::FrameList apicFrames = tag->frameListMap()["APIC"];
-    if (apicFrames.isEmpty()) {
-        LOG_ERROR("No APIC frame found for file '%s'.\n", soundPath.c_str());
-        return tex;
-    }
+    TextureData getSoundThubmnailData(const std::string& soundPath, vec2s size_factor) {
+        MPEG::File file(soundPath.c_str());
+        TextureData retData{};
 
-    // Extract the image data
-    ID3v2::AttachedPictureFrame *apicFrame = dynamic_cast<ID3v2::AttachedPictureFrame *>(apicFrames.front());
-    if (!apicFrame) {
-        LOG_ERROR("Failed to cast APIC frame for file '%s'.\n", soundPath.c_str());
-        return tex;
-    }
+        // Get the ID3v2 tag
+        ID3v2::Tag *tag = file.ID3v2Tag();
+        if (!tag) {
+            LOG_ERROR("No ID3v2 tag found for file '%s'.\n", soundPath.c_str());
+            return retData;
+        }
 
-    ByteVector imageData = apicFrame->picture();
+        // Get the first APIC (Attached Picture) frame
+        ID3v2::FrameList apicFrames = tag->frameListMap()["APIC"];
+        if (apicFrames.isEmpty()) {
+            LOG_ERROR("No APIC frame found for file '%s'.\n", soundPath.c_str());
+            return retData;
+        }
 
-    if(size_factor.x == -1 || size_factor.y == -1)
-        tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
-    else 
-        tex = lf_load_texture_from_memory_resized_factor(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, size_factor.x, size_factor.y);
+        // Extract the image data
+        ID3v2::AttachedPictureFrame *apicFrame = dynamic_cast<ID3v2::AttachedPictureFrame *>(apicFrames.front());
+        if (!apicFrame) {
+            LOG_ERROR("Failed to cast APIC frame for file '%s'.\n", soundPath.c_str());
+            return retData;
+        }
 
-    return tex;
-}
+        ByteVector imageData = apicFrame->picture();
 
-TextureData getSoundThubmnailData(const std::string& soundPath, vec2s size_factor) {
-  MPEG::File file(soundPath.c_str());
-    TextureData retData{};
+        if(size_factor.x == -1 || size_factor.y == -1) {
+            retData.data = lf_load_texture_data_from_memory(imageData.data(), (size_t)imageData.size(), (int32_t*)&retData.width, (int32_t*)&retData.height, &retData.channels, true); 
+        } else  {
+            retData.data = lf_load_texture_data_from_memory_resized(imageData.data(), (size_t)imageData.size(), &retData.channels, true, (uint32_t)size_factor.x, (uint32_t)size_factor.y); 
+        }
+        retData.width = size_factor.x;
+        retData.height = size_factor.y;
+        retData.path = soundPath;
 
-    // Get the ID3v2 tag
-    ID3v2::Tag *tag = file.ID3v2Tag();
-    if (!tag) {
-        LOG_ERROR("No ID3v2 tag found for file '%s'.\n", soundPath.c_str());
         return retData;
     }
 
-    // Get the first APIC (Attached Picture) frame
-    ID3v2::FrameList apicFrames = tag->frameListMap()["APIC"];
-    if (apicFrames.isEmpty()) {
-        LOG_ERROR("No APIC frame found for file '%s'.\n", soundPath.c_str());
-        return retData;
-    }
+    std::wstring getSoundArtist(const std::string& soundPath) {
+        FileRef file(soundPath.c_str());
 
-    // Extract the image data
-    ID3v2::AttachedPictureFrame *apicFrame = dynamic_cast<ID3v2::AttachedPictureFrame *>(apicFrames.front());
-    if (!apicFrame) {
-        LOG_ERROR("Failed to cast APIC frame for file '%s'.\n", soundPath.c_str());
-        return retData;
-    }
+        if (!file.isNull() && file.tag()) {
+            Tag *tag = file.tag();
 
-    ByteVector imageData = apicFrame->picture();
-
-    if(size_factor.x == -1 || size_factor.y == -1) {
-        retData.data = lf_load_texture_data_from_memory(imageData.data(), (size_t)imageData.size(), (int32_t*)&retData.width, (int32_t*)&retData.height, &retData.channels, true); 
-    } else  {
-        retData.data = lf_load_texture_data_from_memory_resized(imageData.data(), (size_t)imageData.size(), &retData.channels, true, (uint32_t)size_factor.x, (uint32_t)size_factor.y); 
-    }
-    retData.width = size_factor.x;
-    retData.height = size_factor.y;
-    retData.path = soundPath;
-
-    return retData;
-}
-
-std::wstring getSoundArtist(const std::string& soundPath) {
-    FileRef file(soundPath.c_str());
-
-    if (!file.isNull() && file.tag()) {
-        Tag *tag = file.tag();
-
-        std::wstring artist = tag->artist().toWString();
-        return artist;
-    } else {
+            std::wstring artist = tag->artist().toWString();
+            return artist;
+        } else {
+            return L"No artist found";
+        }
         return L"No artist found";
     }
-    return L"No artist found";
-}
+    std::wstring getSoundAlbum(const std::string& soundPath) {
+        FileRef file(soundPath.c_str());
 
-std::string getSoundComment(const std::string& soundPath) {
-    std::string cmd = "exiftool -s -s -s -UserDefinedText \"" + soundPath + "\" | awk '{print $2}'";
-    return LyssaUtils::getCommandOutput(cmd);
+        if (!file.isNull() && file.tag()) {
+            Tag *tag = file.tag();
+
+            return (tag->album().toWString() != L"") ? tag->album().toWString() : L"None";
+        } else {
+            return L"None";
+        }
+        return L"None";
+    }
+    uint32_t getSoundReleaseYear(const std::string& soundPath) {
+        FileRef file(soundPath.c_str());
+
+        if (!file.isNull() && file.tag()) {
+            Tag *tag = file.tag();
+
+            return tag->year();
+        } 
+        return 0;
+    }
+
+    std::string getSoundComment(const std::string& soundPath) {
+        std::string cmd = "exiftool -s -s -s -UserDefinedText \"" + soundPath + "\" | awk '{print $2}'";
+        return LyssaUtils::getCommandOutput(cmd);
+    }
+    bool isValidSoundFile(const std::string &path) {
+        TagLib::FileRef file(path.c_str());
+        return !file.isNull() && file.audioProperties();
+    }
 }

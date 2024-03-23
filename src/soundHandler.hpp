@@ -2,7 +2,6 @@
 #include "config.hpp"
 #include "log.hpp"
 
-
 #include <string>
 #include <stdint.h>
 
@@ -82,6 +81,6 @@ class SoundHandler {
 
         ma_device device;
         ma_decoder decoder;
+        static double getSoundDuration(const std::string& soundPath); 
     private:
 };
-
