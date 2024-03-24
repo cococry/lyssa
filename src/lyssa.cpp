@@ -153,21 +153,17 @@ void initWin(float width, float height) {
     glViewport(0, 0, width, height);
 
     state.currentSoundPos = 0.0;
-    ma_result result = ma_engine_init(NULL, &state.soundEngine);
-    if (result != MA_SUCCESS) {
-        std::cerr << "[Error]: Failed to initialize miniaudio.\n";
-    } 
 }
 
 void initUI() {
-    state.h1Font = lf_load_font("../assets/fonts/inter-bold.ttf", 48);
-    state.h2Font = lf_load_font("../assets/fonts/inter-bold.ttf", 40);
-    state.h3Font = lf_load_font("../assets/fonts/inter-bold.ttf", 36);
-    state.h4Font = lf_load_font("../assets/fonts/inter.ttf", 30);
-    state.h5Font = lf_load_font("../assets/fonts/inter.ttf", 24);
-    state.h6Font = lf_load_font("../assets/fonts/inter.ttf", 20);
-    state.h7Font = lf_load_font("../assets/fonts/inter.ttf", 18);
-    state.musicTitleFont = lf_load_font_ex("../assets/fonts/inter-bold.ttf", 72, 3072, 3072, 1536); 
+    state.h1Font = lf_load_font(std::string(LYSSA_DIR + "/assets/fonts/inter-bold.ttf").c_str(), 48);
+    state.h2Font = lf_load_font(std::string(LYSSA_DIR + "/assets/fonts/inter-bold.ttf").c_str(), 40);
+    state.h3Font = lf_load_font(std::string(LYSSA_DIR + "/assets/fonts/inter-bold.ttf").c_str(), 36);
+    state.h4Font = lf_load_font(std::string(LYSSA_DIR + "/assets/fonts/inter.ttf").c_str(), 30);
+    state.h5Font = lf_load_font(std::string(LYSSA_DIR + "/assets/fonts/inter.ttf").c_str(), 24);
+    state.h6Font = lf_load_font(std::string(LYSSA_DIR + "/assets/fonts/inter.ttf").c_str(), 20);
+    state.h7Font = lf_load_font(std::string(LYSSA_DIR + "/assets/fonts/inter.ttf").c_str(), 18);
+    state.musicTitleFont = lf_load_font_ex(std::string(LYSSA_DIR + "/assets/fonts/inter-bold.ttf").c_str(), 72, 3072, 3072, 1536); 
 
     loadIcons();
 
@@ -1337,7 +1333,7 @@ void renderOnPlaylist() {
                         bool hoveredPlayButton = lf_hovered((vec2s){indexPos.x - 5, indexPos.y}, 
                                 (vec2s){(float)lf_get_theme().font.font_size, (float)lf_get_theme().font.font_size}); 
                         onPlayButton = hoveredPlayButton;
-                        if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onPlayButton) {
+                        if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onPlayButton && state.playlistFileFutures.empty()) {
                             state.currentSoundFile = &file;
                             if(state.onTrackTab.trackThumbnail.width != 0) {
                                 lf_free_texture(state.onTrackTab.trackThumbnail);
@@ -1403,7 +1399,7 @@ void renderOnPlaylist() {
                     lf_pop_style_props();
                 }
 
-                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton) {
+                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton && state.playlistFileFutures.empty()) {
                     playlistPlayFileWithIndex(i, state.currentPlaylist);
                     state.currentSoundFile = &file;
                 }
@@ -1461,8 +1457,10 @@ void renderOnTrack() {
 
         float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
+        LfTexture thumbnail = (tab.trackThumbnail.width == 0) ? state.icons["music_note"] : tab.trackThumbnail;
+
         lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (thumbnailContainerSize.y - thumbnailHeight) / 2.0f}, 
-                LF_WHITE, (LfTexture){.id = tab.trackThumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);   
+                LF_WHITE, (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);   
 
         lf_set_ptr_x(ptrX);
         lf_set_ptr_y(ptrY + thumbnailContainerSize.y);
@@ -1943,6 +1941,7 @@ void renderTrackDisplay() {
 
     // Thumbnail
     {
+        LfTexture thumbnail = (playlingFile.thumbnail.width == 0) ? state.icons["music_note"] : playlingFile.thumbnail;
         lf_rect_render((vec2s){containerPos.x + padding, containerPos.y + padding}, 
                 thumbnailContainerSize, PLAYLIST_FILE_THUMBNAIL_COLOR, LF_NO_COLOR, 0.0f, PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS);
 
@@ -1964,7 +1963,7 @@ void renderTrackDisplay() {
         lf_push_style_props(props);
         if(lf_image_button((
                     (LfTexture){
-                        .id = playlingFile.thumbnail.id, 
+                        .id = thumbnail.id, 
                         .width = (uint32_t)thumbnailContainerSize.x, 
                         .height = (uint32_t)thumbnailHeight})) == LF_CLICKED) { 
             if(state.onTrackTab.trackThumbnail.width != 0 && state.currentSoundFile) 
@@ -2345,7 +2344,7 @@ std::wstring removeFileExtensionW(const std::wstring& filename) {
 }
 
 void loadIcons() {
-    for (const auto& entry : std::filesystem::directory_iterator("../assets/textures/")) {
+    for (const auto& entry : std::filesystem::directory_iterator(LYSSA_DIR + "/assets/textures/")) {
         if (entry.path().extension() == ".png") {
             state.icons[entry.path().stem()] = lf_load_texture(entry.path().c_str(), true, LF_TEX_FILTER_LINEAR); 
         }

@@ -73,8 +73,6 @@ struct GlobalState {
     Window* win = NULL;
     float deltaTime, lastTime;
 
-    ma_engine soundEngine;
-
     SoundHandler soundHandler;
     SoundFile* currentSoundFile = NULL;
     int32_t currentSoundPos;

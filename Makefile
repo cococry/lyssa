@@ -43,4 +43,6 @@ rebuild:
 install:
 	@mkdir -p $(LYSSA_DIR)
 	cp -r ./scripts/ ~/.lyssa/
+	cp -r ./assets/ ~/.lyssa/
+	sudo cp ./bin/lyssa /usr/bin/
 	
