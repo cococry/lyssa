@@ -9,19 +9,16 @@
 #include "utils.hpp"
 #include "global.hpp"
 
-#include <chrono>
 #include <cstddef>
 #include <fstream>
 #include <functional>
 #include <future>
 #include <iostream>
 #include <filesystem>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <glad/glad.h>
@@ -40,7 +37,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 
 #ifdef _WIN32
@@ -823,7 +819,7 @@ void renderDownloadPlaylist() {
             props.margin_top = 0;
             props.color = GRAY;
             lf_push_style_props(props);
-            lf_text("Download a playlist from YouTube");
+            lf_text("Download a playlist from a streaming service");
             lf_pop_style_props();
             lf_pop_font();
         }
@@ -858,7 +854,7 @@ void renderDownloadPlaylist() {
     } else  {
         state.playlistDownloadFinished = (downloadedFileCount == state.downloadPlaylistFileCount) || LyssaUtils::getCommandOutput("pgrep yt-dlp") == ""; 
         if(state.playlistDownloadFinished) {
-            FileStatus createStatus = Playlist::create(state.downloadingPlaylistName, "Playlist from YouTube", url);
+            FileStatus createStatus = Playlist::create(state.downloadingPlaylistName, "Downloaded Playlist", url);
 
             if(createStatus != FileStatus::AlreadyExists) {
                 std::string playlistDir = LYSSA_DIR + "/playlists/" + state.downloadingPlaylistName; 
