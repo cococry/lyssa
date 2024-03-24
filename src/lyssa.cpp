@@ -2193,13 +2193,12 @@ void loadPlaylists() {
 void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
     std::lock_guard<std::mutex> lock(state.mutex);
     SoundFile file{};
-    SoundMetadata soundMetadata = SoundTagParser::getSoundMetadata(path);
     if(std::filesystem::exists(path)) {
         file.path = std::filesystem::path(path); 
         file.thumbnail = (LfTexture){0};
-        file.duration = soundMetadata.duration;
-        file.artist = soundMetadata.artist;
-        file.releaseYear = soundMetadata.releaseYear;
+        file.duration = SoundHandler::getSoundDuration(path);
+        file.artist = SoundTagParser::getSoundArtist(path);
+        file.releaseYear = SoundTagParser::getSoundReleaseYear(path);
     } else {
         file.path = L"File cannot be loaded";
         file.thumbnail = (LfTexture){0};
@@ -2207,7 +2206,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
     }
     files->emplace_back(file);
     if(std::filesystem::exists(path))
-        state.playlistFileThumbnailData.emplace_back(soundMetadata.thumbnailData);
+        state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){100, 50}));
     else 
         state.playlistFileThumbnailData.emplace_back((TextureData){0});
 }
@@ -2458,7 +2457,6 @@ std::string formatDurationToMins(int32_t duration) {
         << std::setw(2) << std::setfill('0') << seconds;
     return format.str();
 }
-
 int main(int argc, char* argv[]) {
     // Initialization 
     initWin(WIN_START_W, WIN_START_H); 
@@ -2480,9 +2478,8 @@ int main(int argc, char* argv[]) {
             handleAsyncPlaylistLoading();
 
         // Updating the timestamp of the currently playing sound
-        if(!lf_input_grabbed())
-            updateSoundProgress();
-        handleTabKeyStrokes();
+
+        updateSoundProgress();
 
         // Delta-Time calculation
         float currentTime = glfwGetTime();
@@ -2530,6 +2527,8 @@ int main(int argc, char* argv[]) {
                 popup.second->render();
             } 
         }
+        if(!lf_input_grabbed())
+            handleTabKeyStrokes();
 
         lf_div_end();
         lf_end();

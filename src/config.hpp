@@ -28,7 +28,7 @@ extern "C" {
 
 // General colors
 
-#define NIGHT lf_color_from_hex(0x171617)
+#define NIGHT lf_color_from_hex(0x40303)
 #define GRAY lf_color_from_hex(0x454541)
 #define DARK_SLATE_GRAY lf_color_from_hex(0x3A4E48)
 #define BLUE_GRAY lf_color_from_hex(0x6A7B76)
