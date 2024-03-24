@@ -1,5 +1,6 @@
 #include "soundTagParser.hpp"
 #include "log.hpp"
+#include "soundHandler.hpp"
 #include "utils.hpp"
 
 #include <taglib/tag.h>
@@ -97,9 +98,9 @@ namespace SoundTagParser {
             std::wstring artist = tag->artist().toWString();
             return artist;
         } else {
-            return L"No artist found";
+            return L"-";
         }
-        return L"No artist found";
+        return L"-";
     }
     std::wstring getSoundAlbum(const std::string& soundPath) {
         FileRef file(soundPath.c_str());
@@ -107,7 +108,7 @@ namespace SoundTagParser {
         if (!file.isNull() && file.tag()) {
             Tag *tag = file.tag();
 
-            return (tag->album().toWString() != L"") ? tag->album().toWString() : L"None";
+            return (tag->album().toWString() != L"") ? tag->album().toWString() : L"-";
         } else {
             return L"None";
         }
@@ -131,5 +132,25 @@ namespace SoundTagParser {
     bool isValidSoundFile(const std::string &path) {
         TagLib::FileRef file(path.c_str());
         return !file.isNull() && file.audioProperties();
+    }
+    SoundMetadata getSoundMetadata(const std::string& soundPath) {
+        SoundMetadata metadata;
+        metadata.thumbnailData = getSoundThubmnailData(soundPath, (vec2s){120, 80});
+        metadata.duration = SoundHandler::getSoundDuration(soundPath);
+
+        FileRef file(soundPath.c_str());
+
+        if (!file.isNull() && file.tag()) {
+            Tag *tag = file.tag();
+
+            metadata.artist = tag->artist().toWString() == L"" ? L"-" : tag->artist().toWString();
+            metadata.releaseYear = tag->year();
+        } else {
+            metadata.artist = L"-";
+            metadata.releaseYear = 0;
+        }
+        metadata.comment = getSoundComment(soundPath);
+        
+        return metadata;
     }
 }

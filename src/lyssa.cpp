@@ -9,6 +9,7 @@
 #include "utils.hpp"
 #include "global.hpp"
 
+#include <cglm/types-struct.h>
 #include <cstddef>
 #include <fstream>
 #include <functional>
@@ -366,8 +367,27 @@ void renderDashboard() {
             props.margin_top = 15;
             props.corner_radius = 12;
             lf_push_style_props(props);
-            if(lf_button_fixed("Create Playlist", width, 50) == LF_CLICKED)  {
-                changeTabTo(GuiTab::CreatePlaylist);
+            if(lf_button_fixed("Add Playlist", width, 50) == LF_CLICKED)  {
+                state.popups[PopupType::TwoChoicePopup] = std::make_unique<TwoChoicePopup>(
+                        400, 
+                        "How do you want to add a Playlist?", 
+                        "Create New", 
+                        "From Folder", 
+                        [&](){
+                        changeTabTo(GuiTab::CreatePlaylist);
+                        state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+                        lf_div_ungrab();
+                        }, 
+                        [&](){
+                        if(state.playlistAddFromFolderTab.currentFolderPath.empty()) {
+                        state.playlistAddFromFolderTab.currentFolderPath = strToWstr(std::string(getenv(HOMEDIR)));
+                        state.playlistAddFromFolderTab.folderContents = loadFolderContents(state.playlistAddFromFolderTab.currentFolderPath);
+                        }
+                        changeTabTo(GuiTab::CreatePlaylistFromFolder);
+                        state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+                        lf_div_ungrab();
+                        });
+                state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
             }
             if(lf_button_fixed("Download Playlist", width, 50) == LF_CLICKED)  {
                 changeTabTo(GuiTab::DownloadPlaylist);
@@ -376,12 +396,18 @@ void renderDashboard() {
         }
     } else {
         // Constants
-        const float width = 180;
-        float height = 260;
-        const float paddingTop = 50;
 
         int32_t playlistIndex = 0;
         for(auto& playlist : state.playlists) {
+            const float paddingTop = 50;
+            const float width = 180;
+            LfTextProps nameProps = lf_text_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, playlist.name.c_str(), 
+                    lf_get_theme().font, LF_NO_COLOR, lf_get_ptr_x() + width, (vec2s){-1, -1}, true, 
+                    false, -1, -1);
+            LfTextProps descProps = lf_text_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop + nameProps.height}, playlist.desc.c_str(), 
+                    lf_get_theme().font, LF_NO_COLOR, lf_get_ptr_x() + width, (vec2s){-1, -1}, true, 
+                    false, -1, -1);
+            float height = (width - 25) + (10) + nameProps.height + (10) + descProps.height + 60;
             bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
             // Div
             LfUIElementProps props = lf_get_theme().div_props;
@@ -421,6 +447,7 @@ void renderDashboard() {
                 props.border_width = 0;
                 lf_push_style_props(props);
                 lf_text(playlist.name.c_str());
+                
                 lf_pop_style_props();
             }
 
@@ -825,7 +852,7 @@ void renderDownloadPlaylist() {
         }
 
         lf_next_line();
-        static char urlInput[INPUT_BUFFER_SIZE] ={0};
+        static char urlInput[INPUT_BUFFER_SIZE] = {0};
 
         {
             LfUIElementProps props = input_field_style();
@@ -1089,7 +1116,6 @@ void renderOnPlaylist() {
 
                 state.playlistDownloadRunning = true;
                 state.downloadingPlaylistName = std::filesystem::path(currentPlaylist.path).filename().string();
-
                 state.downloadPlaylistFileCount = LyssaUtils::getPlaylistFileCountURL(currentPlaylist.url);
 
                 clearedPlaylist = false;
@@ -1136,6 +1162,54 @@ void renderOnPlaylist() {
         lf_text(text);
         lf_pop_style_props();
         lf_pop_font();
+
+        lf_next_line();
+        {
+            std::string downloadedPlaylistDir = LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName; 
+            uint32_t downloadedFileCount = LyssaUtils::getLineCountFile(downloadedPlaylistDir + "/archive.txt");
+            const vec2s progressBarSize = (vec2s){400, 6};
+
+            LfUIElementProps props = lf_get_theme().slider_props;
+            props.border_width = 0;
+            props.color = GRAY;
+            props.text_color = BLUE_GRAY;  
+            props.corner_radius = 1.5f;
+            props.margin_top = 15;
+            props.margin_left = 0;
+            props.margin_right = 0;
+
+            {
+                vec2s textDim = lf_text_dimension(std::to_string(downloadedFileCount).c_str());
+                lf_set_ptr_x_absolute((state.win->getWidth() - progressBarSize.x - textDim.x) / 2.0f);
+
+                LfUIElementProps props = lf_get_theme().text_props;
+                props.color = lf_color_brightness(GRAY, 1.5);
+                props.margin_top = 15 - (textDim.y - progressBarSize.y) / 2.0f;
+
+                lf_push_style_props(props);
+                lf_push_font(&state.h6Font);
+                lf_text(std::to_string(downloadedFileCount).c_str());
+                lf_pop_font();
+            }
+
+            lf_push_style_props(props);
+            lf_progress_bar_int(downloadedFileCount, 0, (float)state.downloadPlaylistFileCount, progressBarSize.x, progressBarSize.y);
+            lf_pop_style_props();
+
+            {
+                std::string totalFileCount = std::to_string(state.downloadPlaylistFileCount);
+                static float totalFileCountHeight = lf_text_dimension(totalFileCount.c_str()).y;
+
+                LfUIElementProps props = lf_get_theme().text_props;
+                props.color = lf_color_brightness(GRAY, 1.5);
+                props.margin_top = 15 - (totalFileCountHeight - progressBarSize.y) / 2.0f;
+
+                lf_push_style_props(props);
+                lf_push_font(&state.h6Font);
+                lf_text(totalFileCount.c_str());
+                lf_pop_font();
+            }
+        }
     } else if(currentPlaylist.musicFiles.empty()) {
         // Text
         {
@@ -1322,7 +1396,10 @@ void renderOnPlaylist() {
                     props.margin_right = 0;
                     props.margin_top = (thumbnailContainerSize.y - lf_text_dimension(std::to_string(file.releaseYear).c_str()).y) / 2.0f;
                     lf_push_style_props(props);
-                    lf_text(std::to_string(file.releaseYear).c_str());
+                    if(file.releaseYear != 0)
+                        lf_text(std::to_string(file.releaseYear).c_str());
+                    else 
+                        lf_text("-");
                     lf_pop_style_props();
                 }
 
@@ -2117,12 +2194,13 @@ void loadPlaylists() {
 void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
     std::lock_guard<std::mutex> lock(state.mutex);
     SoundFile file{};
+    SoundMetadata soundMetadata = SoundTagParser::getSoundMetadata(path);
     if(std::filesystem::exists(path)) {
         file.path = std::filesystem::path(path); 
         file.thumbnail = (LfTexture){0};
-        file.duration = SoundHandler::getSoundDuration(path);
-        file.artist = SoundTagParser::getSoundArtist(path);
-        file.releaseYear = SoundTagParser::getSoundReleaseYear(path);
+        file.duration = soundMetadata.duration;
+        file.artist = soundMetadata.artist;
+        file.releaseYear = soundMetadata.releaseYear;
     } else {
         file.path = L"File cannot be loaded";
         file.thumbnail = (LfTexture){0};
@@ -2130,7 +2208,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
     }
     files->emplace_back(file);
     if(std::filesystem::exists(path))
-        state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){120, 80}));
+        state.playlistFileThumbnailData.emplace_back(soundMetadata.thumbnailData);
     else 
         state.playlistFileThumbnailData.emplace_back((TextureData){0});
 }

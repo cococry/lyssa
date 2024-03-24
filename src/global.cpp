@@ -21,10 +21,12 @@ GlobalState state = {
 };
 
 void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
-    ma_decoder_read_pcm_frames(&state.soundHandler.decoder, pOutput, frameCount, NULL);
-
-    float* outputBuffer = (float*)pOutput;
-    for (ma_uint32 i = 0; i < frameCount * pDevice->playback.channels; ++i) {
-        outputBuffer[i] *= state.soundHandler.volume / (float)VOLUME_MAX;
+    ma_decoder* pDecoder = (ma_decoder*)pDevice->pUserData;
+    if (pDecoder == NULL) {
+        return;
     }
+
+    ma_decoder_read_pcm_frames(pDecoder, pOutput, frameCount, NULL);
+
+    (void)pInput;
 }

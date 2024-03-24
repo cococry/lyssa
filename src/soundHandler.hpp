@@ -28,6 +28,7 @@ class SoundHandler {
             deviceConfig.playback.channels = this->decoder.outputChannels;
             deviceConfig.sampleRate = this->decoder.outputSampleRate;
             deviceConfig.dataCallback = dataCallback;
+            deviceConfig.pUserData         = &this->decoder;
 
             if (ma_device_init(NULL, &deviceConfig, &this->device) != MA_SUCCESS) {
                 return;
