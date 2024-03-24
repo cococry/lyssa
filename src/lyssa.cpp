@@ -397,13 +397,7 @@ void renderDashboard() {
         for(auto& playlist : state.playlists) {
             const float paddingTop = 50;
             const float width = 180;
-            LfTextProps nameProps = lf_text_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, playlist.name.c_str(), 
-                    lf_get_theme().font, LF_NO_COLOR, lf_get_ptr_x() + width, (vec2s){-1, -1}, true, 
-                    false, -1, -1);
-            LfTextProps descProps = lf_text_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop + nameProps.height}, playlist.desc.c_str(), 
-                    lf_get_theme().font, LF_NO_COLOR, lf_get_ptr_x() + width, (vec2s){-1, -1}, true, 
-                    false, -1, -1);
-            float height = (width - 25) + (10) + nameProps.height + (10) + descProps.height + 60;
+            const float height = 280; 
             bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
             // Div
             LfUIElementProps props = lf_get_theme().div_props;
@@ -442,7 +436,12 @@ void renderDashboard() {
                 props.padding = 0;
                 props.border_width = 0;
                 lf_push_style_props(props);
-                lf_text(playlist.name.c_str());
+                lf_set_ptr_x_absolute(lf_get_ptr_x() + props.margin_left);
+                LfTextProps textProps = lf_text_render(LF_PTR, playlist.name.c_str(), lf_get_theme().font, LF_WHITE, 
+                        lf_get_ptr_x() + width - props.margin_left * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
+                        false, false, -1, -1);
+                lf_set_ptr_y_absolute(lf_get_ptr_y() + textProps.height);
+                lf_set_ptr_x_absolute(lf_get_ptr_x() - props.margin_left);
                 
                 lf_pop_style_props();
             }

@@ -2869,8 +2869,14 @@ LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, LfColor colo
             goto next_iter;
             continue;
         }
-        if(x >= stop_point.x && stop_point.x != -1 && y + get_max_char_height_font(font) >= stop_point.y && stop_point.y != -1) {
-            break;
+        if(stop_point.x != -1 && stop_point.y != -1) {
+            if(x >= stop_point.x && stop_point.x != -1 && y + get_max_char_height_font(font) >= stop_point.y && stop_point.y != -1) {
+                break;
+            }
+        } else {
+            if(y + get_max_char_height_font(font) >= stop_point.y && stop_point.y != -1) {
+                break;
+            }
         }
 
         if(!culled && !no_render) {
