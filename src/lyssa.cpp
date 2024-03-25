@@ -488,11 +488,10 @@ void renderDashboard() {
                 LfClickableItemState deleteButton = lf_image_button(((LfTexture){.id = state.icons["delete"].id, 
                             .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
                 if(deleteButton == LF_CLICKED) {
-                    if(state.currentSoundFile != nullptr) {
+                    if(state.soundHandler.isInit) {
                         state.soundHandler.stop();
                         state.soundHandler.uninit();
                         state.currentSoundFile = nullptr;
-                        state.currentPlaylist = -1;
                     }
                     Playlist::remove(playlistIndex);
                 }
