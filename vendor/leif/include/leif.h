@@ -258,6 +258,9 @@ LfDiv _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll,
 
 void lf_div_end();
 
+LfClickableItemState _lf_item_loc(vec2s size,  const char* file, int32_t line);
+#define lf_item(size) _lf_item_loc(size, __FILE__, __LINE__)
+
 #define lf_button(text) _lf_button_loc(text, __FILE__, __LINE__)
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line);
 
@@ -473,3 +476,4 @@ void lf_image(LfTexture tex);
 void lf_rect(float width, float height, LfColor color, float corner_radius);
 
 void lf_seperator();
+

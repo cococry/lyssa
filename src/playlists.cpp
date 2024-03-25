@@ -83,7 +83,7 @@ FileStatus Playlist::addFile(const std::filesystem::path& path, uint32_t playlis
 
     metadata.seekp(0, std::ios::end);
 
-    metadata << "\"" << path << "\" ";
+    metadata << "\"" << path.string() << "\" ";
     metadata.close();
 
     state.loadedPlaylistFilepaths.emplace_back(path);

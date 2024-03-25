@@ -11,6 +11,7 @@
 
 #include <cglm/types-struct.h>
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <future>
@@ -391,102 +392,101 @@ void renderDashboard() {
             lf_pop_style_props();
         }
     } else {
-        // Constants
+        
+        lf_set_ptr_y_absolute(lf_get_ptr_y() + 15);
+        lf_div_begin(LF_PTR, ((vec2s){(float)state.win->getWidth() - DIV_START_X * 2, 
+                    (float)state.win->getHeight() - DIV_START_Y * 2 - lf_get_ptr_y() - 
+                    (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true);
+        
+        const float margin = 20; 
+        const float innerMargin = 10;
+        const vec2s size = (vec2s){220, 380};
+        const LfColor color = lf_color_brightness(GRAY, 0.3f);
+        const float ptrXStart = lf_get_ptr_x();
+        const float cornerRadius = 4.5f;
 
-        int32_t playlistIndex = 0;
+        uint32_t playlistIndex = 0;
         for(auto& playlist : state.playlists) {
-            const float paddingTop = 50;
-            const float width = 180;
-            const float height = 280; 
-            bool overDiv = area_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}, (vec2s){width, height + 20}); 
-            // Div
-            LfUIElementProps props = lf_get_theme().div_props;
-            const LfColor divColor = GRAY;
-            props.color = overDiv ? lf_color_brightness(divColor, 0.6) : lf_color_brightness(divColor, 0.4);
-            props.corner_radius = 5.0f;
-            props.padding = 0;
-            lf_push_style_props(props);
-
-            lf_push_style_props(props);
-            lf_set_div_hoverable(true);
-
-            lf_push_element_id(playlistIndex);
-            lf_div_begin(((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + paddingTop}), ((vec2s){width, overDiv ? height + 20 : height}), false);
-            lf_pop_element_id();
-            lf_set_div_hoverable(false);
-            lf_pop_style_props();
-
-            // Playlist Thumbnail
-            {
-                LfUIElementProps props = lf_get_theme().image_props;
-                props.margin_left = 12.5f;
-                props.margin_top = 12.5f;
-                props.corner_radius = 5.0f;
-                lf_push_style_props(props);
-                lf_image((LfTexture){.id = state.icons["music_note"].id, 
-                        .width = (uint32_t)(width - props.margin_left * 2), 
-                        .height = (uint32_t)(width - props.margin_top * 2)});
-                lf_pop_style_props();
+            // Go to the next line on overflow
+            if(lf_get_ptr_x() + size.x >= state.win->getWidth() - margin) {
+                lf_set_ptr_y_absolute(lf_get_ptr_y() + size.y + margin);
+                lf_set_ptr_x_absolute(ptrXStart);
             }
-            // Playlist Name
-            lf_next_line();
+            vec2s containerPos = LF_PTR;
+            LfAABB containerAABB = (LfAABB){.pos = containerPos, .size = size};
+            bool onContainer = lf_hovered(containerAABB.pos, containerAABB.size);
+
+            // Rendering the container
+            lf_rect_render(containerPos, size, onContainer ? lf_color_brightness(color, 1.3) : color, LF_NO_COLOR, 0.0f, cornerRadius);
+
+            // Rendering the thumbnail
+            lf_image_render((vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin}, 
+                    LF_WHITE, 
+                    (LfTexture) {
+                    .id = state.icons["music_note"].id,
+                    .width = (uint32_t)(size.x - innerMargin * 2.0f), 
+                    .height = (uint32_t)(size.x - innerMargin)},
+                    LF_NO_COLOR, 0.0f, cornerRadius * 2.0f);
+
+            lf_set_ptr_y_absolute(lf_get_ptr_y() + (size.x + innerMargin));
+
+            // Rendering the playlist's name
+            LfTextProps textPropsName;
             {
-                LfUIElementProps props = lf_get_theme().text_props;
-                props.margin_left = 12.5f; 
-                props.padding = 0;
-                props.border_width = 0;
-                lf_push_style_props(props);
-                lf_set_ptr_x_absolute(lf_get_ptr_x() + props.margin_left);
-                LfTextProps textProps = lf_text_render(LF_PTR, playlist.name.c_str(), lf_get_theme().font, LF_WHITE, 
-                        lf_get_ptr_x() + width - props.margin_left * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
+                lf_set_cull_end_x(lf_get_ptr_x() + size.x - innerMargin);
+                lf_set_ptr_x_absolute(lf_get_ptr_x() + innerMargin);
+                textPropsName = lf_text_render(LF_PTR, playlist.name.c_str(), lf_get_theme().font, LF_WHITE, 
+                        lf_get_ptr_x() + size.x - innerMargin * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
                         false, false, -1, -1);
-                lf_set_ptr_y_absolute(lf_get_ptr_y() + textProps.height);
-                lf_set_ptr_x_absolute(lf_get_ptr_x() - props.margin_left);
-                
-                lf_pop_style_props();
+
+                float height = textPropsName.height > lf_get_theme().font.font_size ? lf_get_theme().font.font_size * 2.0f : lf_get_theme().font.font_size;
+                lf_set_ptr_y_absolute(lf_get_ptr_y() + height);
+                lf_set_ptr_x_absolute(lf_get_ptr_x() - innerMargin);
+                lf_unset_cull_end_x();
+            }
+            // Rendering the playlist's description
+            LfTextProps textPropsDesc; 
+            {
+                lf_set_cull_end_x(lf_get_ptr_x() + size.x - innerMargin);
+                lf_set_ptr_x_absolute(lf_get_ptr_x() + innerMargin);
+                textPropsDesc = lf_text_render(LF_PTR, playlist.desc.c_str(), state.h6Font, GRAY, 
+                        lf_get_ptr_x() + size.x - innerMargin * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
+                        false, false, -1, -1);
+
+                float height = textPropsDesc.height > lf_get_theme().font.font_size ? lf_get_theme().font.font_size * 2.0f : lf_get_theme().font.font_size;
+                lf_set_ptr_y_absolute(lf_get_ptr_y() + height);
+                lf_set_ptr_x_absolute(lf_get_ptr_x() - innerMargin);
+                lf_unset_cull_end_x();
             }
 
-            // Playlist Description
-            lf_next_line();
-            {
-                LfUIElementProps props = lf_get_theme().text_props;
-                props.margin_left = 12.5f; 
-                props.padding = 0;
-                props.border_width = 0;
-                props.text_color = (LfColor){150, 150, 150, 255};
-                lf_push_style_props(props);
-                lf_push_font(&state.h6Font);
-                lf_text(playlist.desc.c_str());
-                lf_pop_font();
-                lf_pop_style_props();
-            }
-            // Buttons
-            bool overButton = false;
-            vec2s buttonSize = (vec2s){
-                MAX((state.win->getWidth() / 100.0f) * 2.0f, 20), MAX((state.win->getWidth() / 100.0f) * 2.0f, 20)};
-            if(overDiv)
-            {
+            // If container is hovered, render action buttons
+            bool onActionButton = false;
+            if(onContainer) {
+                vec2s buttonSize = (vec2s){24, 24};
                 LfUIElementProps props = lf_get_theme().button_props;
+                props.padding = 0.0f;
+                props.margin_left = innerMargin;
+                props.margin_top = 0.0f;
+                props.margin_bottom = 0.0f;
+                props.border_width = 0.0f;
                 props.color = LF_NO_COLOR;
-                props.border_color = LF_NO_COLOR;
-                props.border_width = 0;
-                props.padding = 0;
-                props.margin_top = 0;
-                props.margin_bottom = 0;
+                lf_set_image_color(lf_color_brightness(GRAY, 1.6));
                 lf_push_style_props(props);
+                lf_set_ptr_y_absolute(containerPos.y + size.y - (buttonSize.y + innerMargin * 2.0f));
 
-                float margin = 5;
-                float ptr_y = lf_get_ptr_y();
+                // Edit button
+                LfClickableItemState editButton =  lf_image_button(((LfTexture){.id = state.icons["edit"].id, 
+                            .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
+                if(editButton == LF_CLICKED) {
+                    state.currentPlaylist = playlistIndex;
+                    state.popups[PopupType::EditPlaylistPopup] = std::make_unique<EditPlaylistPopup>();
+                    state.popups[PopupType::EditPlaylistPopup]->shouldRender = true;
+                }
 
-                lf_set_ptr_y(height - buttonSize.y);
-                lf_set_ptr_x(width - buttonSize.x - props.margin_right - props.margin_left - buttonSize.x - props.margin_right - margin);
-
-
-                lf_set_image_color(LYSSA_RED);
+                props.margin_left = 5.0f;
+                lf_push_style_props(props);
                 LfClickableItemState deleteButton = lf_image_button(((LfTexture){.id = state.icons["delete"].id, 
                             .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
-                lf_unset_image_color();
-
                 if(deleteButton == LF_CLICKED) {
                     if(state.currentSoundFile != nullptr) {
                         state.soundHandler.stop();
@@ -496,22 +496,13 @@ void renderDashboard() {
                     }
                     Playlist::remove(playlistIndex);
                 }
-
-                LfClickableItemState renameButton = lf_image_button(((LfTexture){.id = state.icons["edit"].id, 
-                            .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y})); 
-
-                if(renameButton == LF_CLICKED) {
-                    state.currentPlaylist = playlistIndex;
-                    state.popups[PopupType::EditPlaylistPopup] = std::make_unique<EditPlaylistPopup>();
-                    state.popups[PopupType::EditPlaylistPopup]->shouldRender = true;
-                }
-                overButton = (renameButton != LF_IDLE || deleteButton != LF_IDLE);
-
+                onActionButton = (editButton != LF_IDLE || deleteButton != LF_IDLE);
                 lf_pop_style_props();
-                lf_set_ptr_y(ptr_y - lf_get_current_div().aabb.size.y);
+                lf_unset_image_color();
             }
-            if(lf_get_current_div().interact_state == LF_CLICKED && lf_get_current_div().id == lf_get_selected_div().id 
-                    && !overButton) {
+            
+            // On Playlist enter
+            if(onContainer && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && !onActionButton) { 
                 state.currentPlaylist = playlistIndex;
                 if(!playlist.loaded) {
                     state.loadedPlaylistFilepaths.clear();
@@ -522,18 +513,17 @@ void renderDashboard() {
                     playlist.loaded = true;
                 }
                 changeTabTo(GuiTab::OnPlaylist);
-            } 
-
-            lf_next_line();
-            lf_div_end();
-
-            lf_set_ptr_x(lf_get_ptr_x() + width + props.margin_left);
-            if(lf_get_ptr_x() + width + props.margin_left >= state.win->getWidth() - DIV_START_X * 2.0f - props.margin_right) {
-                lf_set_ptr_x(0);
-                lf_set_ptr_y(lf_get_ptr_y() + height + props.margin_bottom);
             }
+
+            // Advancing the pointer 
+            lf_set_ptr_x_absolute(containerPos.x + size.x + margin);
+            lf_set_ptr_y_absolute(containerPos.y);
+
             playlistIndex++;
         }
+        lf_set_ptr_y_absolute(lf_get_ptr_y() + size.y + margin);
+
+        lf_div_end();
     }
 
     lf_set_ptr_y(state.win->getHeight() - BACK_BUTTON_HEIGHT - 45 - DIV_START_Y * 2);
@@ -1300,9 +1290,9 @@ void renderOnPlaylist() {
 
         lf_next_line();
 
-        bool onPlayButton = false;
         for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
             SoundFile& file = currentPlaylist.musicFiles[i];
+            bool onActionButton = false;
             {
                 vec2s thumbnailContainerSize = (vec2s){48, 48};
                 float marginBottomThumbnail = 10.0f, marginTopThumbnail = 5.0f;
@@ -1331,20 +1321,21 @@ void renderOnPlaylist() {
                     if(hoveredTextDiv) {
                         bool hoveredPlayButton = lf_hovered((vec2s){indexPos.x - 5, indexPos.y}, 
                                 (vec2s){(float)lf_get_theme().font.font_size, (float)lf_get_theme().font.font_size}); 
-                        onPlayButton = hoveredPlayButton;
-                        if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onPlayButton && state.playlistFileFutures.empty()) {
-                            state.currentSoundFile = &file;
-                            if(state.onTrackTab.trackThumbnail.width != 0) {
-                                lf_free_texture(state.onTrackTab.trackThumbnail);
-                            }
-                            state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
-
-                            if(i != currentPlaylist.playingFile)
+                        onActionButton = hoveredPlayButton;
+                        if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onActionButton && state.playlistFileFutures.empty()) {
+                            if(currentPlaylist.playingFile == i) {
+                                if(state.soundHandler.isPlaying)
+                                    state.soundHandler.stop();
+                                else 
+                                    state.soundHandler.play();
+                            } else {
                                 playlistPlayFileWithIndex(i, state.currentPlaylist);
-                            changeTabTo(GuiTab::OnTrack);
+                                state.currentSoundFile = &file;
+                            }
                         }
                         lf_image_render((vec2s){indexPos.x - 5, indexPos.y}, LF_WHITE, 
-                                (LfTexture){.id = (i == currentPlaylist.playingFile) ? state.icons["pause"].id : state.icons["play"].id, .width = lf_get_theme().font.font_size, .height = lf_get_theme().font.font_size}, 
+                                (LfTexture){.id = (i == currentPlaylist.playingFile && state.soundHandler.isPlaying) ? 
+                                state.icons["pause"].id : state.icons["play"].id, .width = lf_get_theme().font.font_size, .height = lf_get_theme().font.font_size}, 
                                 LF_NO_COLOR, 0.0f, 0.0f);
                     } else {
                         lf_text_render(indexPos, 
@@ -1359,20 +1350,47 @@ void renderOnPlaylist() {
                     float aspect = (float)thumbnail.width / (float)thumbnail.height;
                     float thumbnailHeight = thumbnailContainerSize.y / aspect; 
 
-                    lf_rect_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + marginTopThumbnail}, thumbnailContainerSize, 
-                            PLAYLIST_FILE_THUMBNAIL_COLOR, LF_NO_COLOR, 0.0f, PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS);
+                    lf_set_ptr_y_absolute(lf_get_ptr_y() + marginTopThumbnail);
+                    LfUIElementProps props = lf_get_theme().button_props;
+                    props.color = PLAYLIST_FILE_THUMBNAIL_COLOR;
+                    props.border_width = 0.0f;
+                    props.corner_radius = PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS;
+                    props.padding = 0.0f;
+                    props.margin_left = 0.0f;
+                    props.margin_top = 0.0f;
+                    props.margin_right = 0.0f;
+                    props.margin_bottom = 0.0f;
+                    lf_push_style_props(props);
+                    LfClickableItemState thumbnailState = lf_item(thumbnailContainerSize);
+                    if(thumbnailState == LF_CLICKED) {
+                        state.currentSoundFile = &file;
+                        if(state.onTrackTab.trackThumbnail.width != 0) {
+                            lf_free_texture(state.onTrackTab.trackThumbnail);
+                        }
+                        state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
 
-                    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + 
-                            (thumbnailContainerSize.y - thumbnailHeight) / 2.0f + marginTopThumbnail}, LF_WHITE,
+                        if(i != currentPlaylist.playingFile)
+                            playlistPlayFileWithIndex(i, state.currentPlaylist);
+                        changeTabTo(GuiTab::OnTrack);
+                    }
+                    if(!onActionButton) {
+                        onActionButton = (thumbnailState != LF_IDLE); 
+                    }
+                    lf_pop_style_props();
+
+
+                    lf_image_render((vec2s){lf_get_ptr_x() - thumbnailContainerSize.x, lf_get_ptr_y() + 
+                            (thumbnailContainerSize.y - thumbnailHeight) / 2.0f}, LF_WHITE,
                             (LfTexture){.id = thumbnail.id, .width = 
                             (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
 
-                    lf_set_ptr_x(lf_get_ptr_x() + thumbnailContainerSize.x);
                     lf_set_line_height(thumbnailContainerSize.y + marginBottomThumbnail);
 
                     std::filesystem::path fsPath(file.path);
                     std::wstring filename = removeFileExtensionW(fsPath.filename().wstring());
 
+
+                    lf_set_ptr_x_absolute(lf_get_ptr_x() + 10.0f);
 
                     lf_set_cull_end_x((state.win->getWidth() / 1.5f + 100) - 50);
 
@@ -1398,7 +1416,7 @@ void renderOnPlaylist() {
                     lf_pop_style_props();
                 }
 
-                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onPlayButton && state.playlistFileFutures.empty()) {
+                if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onActionButton && state.playlistFileFutures.empty()) {
                     playlistPlayFileWithIndex(i, state.currentPlaylist);
                     state.currentSoundFile = &file;
                 }
@@ -2046,6 +2064,7 @@ void renderTrackProgress() {
     }
     lf_next_line();
 
+    // Controls
     {
         vec2s iconSize = (vec2s){36, 36};
         vec2s iconSizeSm = (vec2s){18, 18};

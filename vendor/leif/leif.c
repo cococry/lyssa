@@ -604,8 +604,8 @@ LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s siz
         return LF_IDLE;
     }
 
-    LfColor hover_color_rgb = hover_color ? (props.hover_color.a == 0.0f ? lf_color_brightness(color, 1.1) : props.hover_color) : color; 
-    LfColor held_color_rgb = click_color ? lf_color_brightness(color, 1.2) : color; 
+    LfColor hover_color_rgb = hover_color ? (props.hover_color.a == 0.0f ? lf_color_brightness(color, 1.2) : props.hover_color) : color; 
+    LfColor held_color_rgb = click_color ? lf_color_brightness(color, 1.3) : color; 
 
     bool is_hovered = lf_hovered(pos, size);
     if(state.active_element_id == 0) {
@@ -638,8 +638,8 @@ LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props
         return LF_IDLE;
     }
 
-    LfColor hover_color_rgb = hover_color ? (props.hover_color.a == 0.0f ? lf_color_brightness(color, 1.1) : props.hover_color) : color; 
-    LfColor held_color_rgb = click_color ? lf_color_brightness(color, 1.2) : color; 
+    LfColor hover_color_rgb = hover_color ? (props.hover_color.a == 0.0f ? lf_color_brightness(color, 1.5) : props.hover_color) : color; 
+    LfColor held_color_rgb = click_color ? lf_color_brightness(color, 1.8) : color; 
 
     bool is_hovered = lf_hovered(pos, size);
     if(is_hovered && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -674,12 +674,18 @@ void next_line_on_overflow(vec2s size, float xoffset) {
 }
 
 bool item_should_cull(LfAABB item) {
-    bool intersect;
+    bool intersect = true;
     LfAABB window =  (LfAABB){.pos = (vec2s){0, 0}, .size = (vec2s){state.dsp_w, state.dsp_h}};
-    if(item.size.x == -1 || item.size.y == -1) 
+    if(item.size.x == -1 || item.size.y == -1) {
+        item.pos.y += get_current_font().font_size;
         intersect = lf_point_intersects_aabb(item.pos, window);
-    else 
-        intersect = lf_aabb_intersects_aabb(item, window);
+    } else { 
+        if (item.pos.x + item.size.x <= window.pos.x || item.pos.x >= window.pos.x + window.size.x)
+            intersect = false;
+
+        if (item.pos.y + item.size.y <= window.pos.y || item.pos.y >= window.pos.y + window.size.y)
+            intersect = false;
+    }
 
     return !intersect && state.current_div.id == state.scrollbar_div.id;
 
@@ -1136,21 +1142,24 @@ LfClickableItemState button_fixed_element_loc(void* text, float width, float hei
 
     // Rendering the button
     LfClickableItemState ret = button(file, line, state.pos_ptr, 
-        (vec2s){render_width + padding * 2, render_height + padding * 2}, props, 
+        (vec2s){render_width + padding * 2.0f, render_height + padding * 2.0f}, props, 
                                               color, props.border_width, false, true);
 
     // Rendering the text of the button
+   
+    lf_set_cull_end_x(state.pos_ptr.x + render_width + padding);
     if(wide) {
         text_render_simple_wide((vec2s)
-        {state.pos_ptr.x + padding + ((width != -1) ? width / 2.0f - text_props.width / 2.0f : 0),
-        state.pos_ptr.y + padding + ((height != -1) ? height / 2.0f - text_props.height / 2.0f : 0)
+        {state.pos_ptr.x + padding + ((width != -1 && text_props.width < width) ? width / 2.0f - text_props.width / 2.0f : 0),
+        state.pos_ptr.y + padding + ((height != -1 && text_props.height < height) ? height / 2.0f - text_props.height / 2.0f : 0)
         }, (const wchar_t*)text, font, text_color, false);
     } else {
         text_render_simple((vec2s)
-        {state.pos_ptr.x + padding + ((width != -1) ? width / 2.0f - text_props.width / 2.0f : 0),
-        state.pos_ptr.y + padding + ((height != -1) ? height / 2.0f - text_props.height / 2.0f : 0)
+        {state.pos_ptr.x + padding + ((width != -1 &&  text_props.width < width) ? width / 2.0f - text_props.width / 2.0f : 0),
+        state.pos_ptr.y + padding + ((height != -1 && text_props.width < width) ? height / 2.0f - text_props.height / 2.0f : 0)
         }, (const char*)text, font, text_color, false);
     }
+    lf_unset_cull_end_x();
 
     // Advancing the position pointer by the width of the button
     state.pos_ptr.x += render_width + margin_right + padding * 2.0f;
@@ -2254,6 +2263,24 @@ void lf_div_end() {
     state.cull_end = (vec2s){-1, -1};
 }
 
+
+LfClickableItemState _lf_item_loc(vec2s size, const char* file, int32_t line) {
+    LfUIElementProps props = state.props_on_stack ? state.props_stack : state.theme.button_props;
+
+    next_line_on_overflow(
+        (vec2s){size.x + props.padding * 2.0f, 
+                    size.y + props.padding * 2.0f}, 
+        state.div_props.border_width);
+
+    state.pos_ptr.x += props.margin_left;
+    state.pos_ptr.y += props.margin_top;
+
+    LfClickableItemState item = button(file, line, state.pos_ptr, size, props, props.color, props.border_width, false, true);
+
+    state.pos_ptr.x += size.x + props.margin_left + props.padding * 2.0f;
+    state.pos_ptr.y -= props.margin_top;
+    return item;
+}
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line) {
     return button_element_loc((void*)text, file, line, false);
 }
