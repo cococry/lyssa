@@ -20,6 +20,7 @@ ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https:
 | Dependency         |  Reason of Usage    |
 | ----------------|-------------|
 | [leif](https://github.com/cococry/leif) | Creating the entire UI Frontend |
+| [libclipboard](https://github.com/jtanx/libclipboard) | Copy + Paste for input fields |
 | [taglib](https://github.com/taglib/taglib)| Reading metadata of ID3 tags |
 | [miniaudio](https://github.com/mackron/miniaudio) | Audio output of the player | 
 | [GLFW](https://github.com/glfw/glfw) | Handling windowing, input etc. | 
@@ -71,7 +72,7 @@ Install dependencies:
 
 #### Arch (paru): 
 ```console
-sudo paru -S make gcc glfw cglm taglib yt-dlp
+paru -S make gcc glfw cglm taglib yt-dlp libclipboard
 ```
 
 #### Debian
