@@ -32,6 +32,7 @@ ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https:
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Downloading playlists |
 | [jq](https://github.com/jqlang/jq) | Parsing JSON of playlists |
 | [ffmpeg](https://github.com/FFmpeg/FFmpeg)| yt-dlp needs ffmpeg for extracting images |
+| [exiftool](https://exiftool.org/)| Retrieving metadata of sound files |
 
 
 As lyssa uses the leif library which also depends on a few things there are some more leif dependecies:
@@ -74,12 +75,12 @@ Install dependencies:
 
 #### Arch (paru): 
 ```console
-paru -S make gcc glfw cglm taglib yt-dlp libclipboard ffmpeg jq
+paru -S make gcc glfw cglm taglib yt-dlp libclipboard ffmpeg jq perl-image-exiftool
 ```
 
 #### Debian
 ```console
-sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev yt-dlp jq ffmpeg
+sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev yt-dlp jq ffmpeg libimage-exiftool-perl
 ```
 Build the application
 ```console
