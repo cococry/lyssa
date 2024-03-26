@@ -81,12 +81,12 @@ sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev yt-dlp
 ```
 Build the application
 ```console
-make
+make rebuild install
 ```
 
 ### Running the Application
 ```console
-make run 
+lyssa 
 ```
 
 ## Contributing
