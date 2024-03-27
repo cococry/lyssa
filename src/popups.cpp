@@ -187,10 +187,13 @@ void PlaylistFileDialoguePopup::render() {
                     }
                     Playlist::removeFile(this->path, state.currentPlaylist);
                     this->shouldRender = false;
+                    lf_div_ungrab();
                     break;
                 }
             case 2: /* Add to favourites */
                 {
+                    this->shouldRender = false;
+                    lf_div_ungrab();
                     break;
                 }
             case 3:
@@ -200,6 +203,8 @@ void PlaylistFileDialoguePopup::render() {
                         std::string cmd = "xdg-open " + url + "& ";
                         system(cmd.c_str());
                     }
+                    this->shouldRender = false;
+                    lf_div_ungrab();
                     break;
                 }
             default:

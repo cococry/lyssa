@@ -193,9 +193,9 @@ unsigned char* lf_load_texture_data_from_memory_resized(const void* data, size_t
 
 unsigned char* lf_load_texture_data_from_memory_resized_factor(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, float wfactor, float hfactor);
 
-void lf_create_texture_from_image_data(LfTextureFiltering filter, uint32_t* id, float width, float height, int32_t channels, unsigned char* data); 
+void lf_create_texture_from_image_data(LfTextureFiltering filter, uint32_t* id, int32_t width, int32_t height, int32_t channels, unsigned char* data); 
 
-void lf_free_texture(LfTexture tex);
+void lf_free_texture(LfTexture* tex);
 
 void lf_free_font(LfFont* font);
 

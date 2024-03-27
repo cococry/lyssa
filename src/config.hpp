@@ -16,6 +16,8 @@ extern "C" {
 // Window 
 #define WIN_START_W 1280 
 #define WIN_START_H 720 
+#define WIN_MIN_W 1050
+#define WIN_MIN_H 450
 
 // Divs
 #define DIV_START_X 20  
@@ -28,7 +30,7 @@ extern "C" {
 
 // General colors
 
-#define NIGHT lf_color_from_hex(0x40303)
+#define NIGHT lf_color_from_hex(0x181818)
 #define GRAY lf_color_from_hex(0x454541)
 #define DARK_SLATE_GRAY lf_color_from_hex(0x3A4E48)
 #define BLUE_GRAY lf_color_from_hex(0x6A7B76)

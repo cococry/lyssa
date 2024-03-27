@@ -29,6 +29,7 @@ enum class GuiTab {
     OnTrack,
     PlaylistAddFromFile,
     PlaylistAddFromFolder,
+    PlaylistSetThumbnail,
     TabCount
 };
 
@@ -38,7 +39,8 @@ struct InputField {
 };
 
 struct CreatePlaylistState {
-    InputField nameInput, descInput;  
+    InputField nameInput, descInput; 
+    std::filesystem::path thumbnailPath;
 
     FileStatus createFileStatus;
     float createFileMessageShowTime = 3.0f; 
