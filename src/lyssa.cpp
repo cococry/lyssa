@@ -57,8 +57,6 @@
 
 #define INPUT_BUFFER_SIZE 512
 
-#define MAX(a, b) a > b ? a : b
-#define MIN(a, b) a < b ? a : b
 
 using namespace TagLib;
 
@@ -95,7 +93,6 @@ static void                     renderTrackProgress();
 static void                     renderTrackMenu();
 
 static void                     backButtonTo(GuiTab tab, const std::function<void()>& clickCb = nullptr);
-static void                     changeTabTo(GuiTab tab);
 
 static void                     loadPlaylists();
 static void                     loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path);
@@ -427,13 +424,23 @@ void renderDashboard() {
       lf_rect_render(containerPos, size, onContainer ? lf_color_brightness(color, 1.3) : color, LF_NO_COLOR, 0.0f, cornerRadius);
 
       // Rendering the thumbnail
-      lf_image_render((vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin}, 
-          LF_WHITE, 
-          (LfTexture) {
-          .id = playlist.thumbnail.width == 0 ? state.icons["music_note"].id : playlist.thumbnail.id,
-          .width = (uint32_t)(size.x - innerMargin * 2.0f), 
-          .height = (uint32_t)(size.x - innerMargin)},
-          LF_NO_COLOR, 0.0f, cornerRadius * 2.0f);
+      {
+        // Container
+        vec2s thumbnailContainerSize = (vec2s){size.x - innerMargin * 2.0f, size.x - innerMargin};
+        lf_rect_render((vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin},
+            thumbnailContainerSize, lf_color_brightness(GRAY, 0.5),
+            LF_NO_COLOR, 0.0f, cornerRadius * 2.0f);
+
+        // Thumbnail
+        LfTexture thumbnail = playlist.thumbnailPath.string().empty() ? state.icons["music_note"] : playlist.thumbnail;
+        float wThumbnail = thumbnailContainerSize.x;
+        float hThumbnail = MIN(wThumbnail / playlist.thumbnail.width * playlist.thumbnail.height, thumbnailContainerSize.y);
+         
+        lf_image_render((vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin + 
+            (thumbnailContainerSize.y - hThumbnail) / 2.0f}, LF_WHITE, 
+            (LfTexture){.id = playlist.thumbnail.id, .width = (uint32_t)wThumbnail, .height = (uint32_t)hThumbnail}, 
+            LF_NO_COLOR, 0.0f, hThumbnail >= thumbnailContainerSize.y ? cornerRadius * 2.0f : 0.0f);
+      }
 
       lf_set_ptr_y_absolute(lf_get_ptr_y() + (size.x + innerMargin));
 
@@ -1394,7 +1401,7 @@ void renderOnPlaylist() {
           indexSS << i;
           std::string indexStr = indexSS.str();
           vec2s indexPos = (vec2s){lf_get_ptr_x() + 10, lf_get_ptr_y() + (thumbnailContainerSize.y - lf_text_dimension(indexStr.c_str()).y) / 2.0f};
-          if(hoveredTextDiv) {
+          if(hoveredTextDiv || (i == currentPlaylist.playingFile)) {
             bool hoveredPlayButton = lf_hovered((vec2s){indexPos.x - 5, indexPos.y}, 
                 (vec2s){(float)lf_get_theme().font.font_size, (float)lf_get_theme().font.font_size}); 
             onActionButton = hoveredPlayButton;
@@ -2272,10 +2279,6 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
   }
 
   lf_pop_style_props();
-}
-void changeTabTo(GuiTab tab) {
-  if(state.currentTab == tab) return;
-  state.currentTab = tab;
 }
 
 void loadPlaylists() {

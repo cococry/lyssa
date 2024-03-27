@@ -21,7 +21,7 @@ void EditPlaylistPopup::render() {
     }
 
     // Beginning a new div
-    const vec2s popupSize = (vec2s){500.0f, 350.0f};
+    const vec2s popupSize = (vec2s){500.0f, 500.0f};
     LfUIElementProps div_props = lf_get_theme().div_props;
     div_props.color = lf_color_brightness(GRAY, 0.7); 
     div_props.border_width = 0;

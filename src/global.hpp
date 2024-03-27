@@ -20,6 +20,9 @@ extern "C" {
     #include <leif.h>
 }
 
+#define MAX(a, b) a > b ? a : b
+#define MIN(a, b) a < b ? a : b
+
 enum class GuiTab {
     Dashboard = 0, 
     CreatePlaylist,
@@ -127,3 +130,5 @@ struct GlobalState {
 extern GlobalState state;
 
 void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCoun);
+
+void changeTabTo(GuiTab tab);

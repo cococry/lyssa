@@ -44,3 +44,8 @@ void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput
 
     (void)pInput;
 }
+
+void changeTabTo(GuiTab tab)  {
+  if(state.currentTab == tab) return;
+  state.currentTab = tab;
+}
