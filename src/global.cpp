@@ -17,7 +17,8 @@ GlobalState state = {
     .volumeBeforeMute = VOLUME_INIT,
 
     .playlistDownloadRunning = false, 
-    .playlistDownloadFinished = false
+    .playlistDownloadFinished = false,
+    .playlistThumbnailDownloadIndex = -1
 };
 
 void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
@@ -47,5 +48,6 @@ void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput
 
 void changeTabTo(GuiTab tab)  {
   if(state.currentTab == tab) return;
+  state.previousTab = state.currentTab;
   state.currentTab = tab;
 }

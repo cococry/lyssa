@@ -91,7 +91,7 @@ struct GlobalState {
     LfFont h6Font;
     LfFont h7Font;
 
-    GuiTab currentTab;
+    GuiTab currentTab, previousTab;
 
     std::vector<Playlist> playlists;
     std::unordered_map<PopupType, std::unique_ptr<Popup>> popups;
@@ -118,11 +118,16 @@ struct GlobalState {
 
     // Async loading
     std::vector<std::future<void>> playlistFileFutures;
+    std::vector<std::future<void>> playlistFutures;
     std::vector<std::string> loadedPlaylistFilepaths;
     std::vector<TextureData> playlistFileThumbnailData;
+    std::vector<TextureData> playlistThumbnailData;
     std::mutex mutex;
 
+
     bool playlistDownloadRunning, playlistDownloadFinished;
+    int32_t playlistThumbnailDownloadIndex;
+
     std::string downloadingPlaylistName;
     uint32_t downloadPlaylistFileCount;
 };

@@ -46,7 +46,7 @@ FileStatus Playlist::create(const std::string& name, const std::string& desc, co
     metadata << "name: " << name << "\n";
     metadata << "desc: " << desc << "\n";
     metadata << "url: " << url << "\n";
-    metadata << "thumbnail: " << thumbnailPath.string() << "\n";
+    metadata << "thumbnail: " << ((url.empty()) ? thumbnailPath.string() : std::string(folderPath + "/thumbnail.jpg.jpg")) << "\n";
     metadata << "files: ";
   } else {
     return FileStatus::Failed;

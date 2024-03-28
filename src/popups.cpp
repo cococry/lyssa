@@ -117,7 +117,6 @@ void EditPlaylistPopup::render() {
     }
 
     lf_div_end();
-    lf_pop_style_props();
 
 }
 
@@ -141,12 +140,13 @@ void PlaylistFileDialoguePopup::render() {
 
 
     if(!onPlaylistAddTab) {
-        const uint32_t options_count = 4;
+        const uint32_t options_count = 5;
         static const char* options[options_count] = {
             "Add to playlist",
             "Remove",
             "Add to favourites",
-            "Open URL..."
+            "Open URL...",
+            "Set as thumbnail"
         };
 
         int32_t clickedIndex = -1;
@@ -206,6 +206,10 @@ void PlaylistFileDialoguePopup::render() {
                     this->shouldRender = false;
                     lf_div_ungrab();
                     break;
+                }
+            case 4:
+                {
+                  
                 }
             default:
                 break;

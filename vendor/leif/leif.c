@@ -1150,14 +1150,12 @@ LfClickableItemState button_fixed_element_loc(void* text, float width, float hei
   lf_set_cull_end_x(state.pos_ptr.x + render_width + padding);
   if(wide) {
     text_render_simple_wide((vec2s)
-      {state.pos_ptr.x + padding + ((width != -1 && text_props.width < width) ? width / 2.0f - text_props.width / 2.0f : 0),
-        state.pos_ptr.y + padding + ((height != -1 && text_props.height < height) ? height / 2.0f - text_props.height / 2.0f : 0)
-      }, (const wchar_t*)text, font, text_color, false);
+      {state.pos_ptr.x + padding + ((width != -1) ? (width - text_props.width) / 2.0f : 0),
+        state.pos_ptr.y + padding + ((height != -1) ? (height - text_props.height) / 2.0f : 0)}, (const wchar_t*)text, font, text_color, false);
   } else {
     text_render_simple((vec2s)
-      {state.pos_ptr.x + padding + ((width != -1 &&  text_props.width < width) ? width / 2.0f - text_props.width / 2.0f : 0),
-        state.pos_ptr.y + padding + ((height != -1 && text_props.width < width) ? height / 2.0f - text_props.height / 2.0f : 0)
-      }, (const char*)text, font, text_color, false);
+      {state.pos_ptr.x + padding + ((width != -1) ? (width - text_props.width) / 2.0f : 0),
+        state.pos_ptr.y + padding + ((height != -1) ? (height - text_props.height) / 2.0f : 0)}, (const char*)text, font, text_color, false);
   }
   lf_unset_cull_end_x();
 
@@ -1817,30 +1815,18 @@ LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering fi
 }
 
 LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
-  LfTexture tex;
+  LfTexture tex; 
   int32_t width, height, channels;
-  stbi_set_flip_vertically_on_load(!flip);
-  stbi_uc* data = stbi_load(filepath, &width,&height, &channels, 0);
-
-  if(!data) {
-    LF_ERROR("Failed to load texture file at '%s'.", filepath);
-    return tex;
-  }
-  GLenum internal_format = (channels == 4) ? GL_RGBA8 : GL_RGB8;
-  GLenum data_format = (channels == 4) ? GL_RGBA : GL_RGB;
-
-  LF_ASSERT(internal_format & data_format, "Texture file at '%s' is using an unsupported format.", filepath);
+  stbi_uc* image_data = stbi_load(filepath, &width, &height, &channels, 0);
 
   unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * channels);
 
   // Resize the original image to the downscaled size
-  stbir_resize_uint8_linear(data, width, height, channels, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
+  stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)channels);
 
-  // Creating the textures in opengl with the loaded data
   glCreateTextures(GL_TEXTURE_2D, 1, &tex.id);
-  glTextureStorage2D(tex.id, 1, internal_format, w, h);
+  glBindTexture(GL_TEXTURE_2D, tex.id);
 
-  // Setting texture parameters
   switch(filter) {
     case LF_TEX_FILTER_LINEAR:
       glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1851,18 +1837,21 @@ LfTexture lf_load_texture_resized(const char* filepath, bool flip, LfTextureFilt
       glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
       break;
   }
-  glTextureParameteri(tex.id, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTextureParameteri(tex.id, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTextureSubImage2D(tex.id, 0, 0, 0, w, h, data_format, GL_UNSIGNED_BYTE, downscaled_image);
 
-  // Deallocating the data when finished
-  stbi_image_free(data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, downscaled_image);
+  glGenerateMipmap(GL_TEXTURE_2D);
+
+  stbi_image_free(image_data);
   free(downscaled_image);
 
   tex.width = width;
   tex.height = height;
 
   return tex;
+
 }
 
 LfTexture lf_load_texture_resized_factor(const char* filepath, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
@@ -1989,13 +1978,13 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t si
 
 unsigned char* lf_load_texture_data(const char* filepath, int32_t* width, int32_t* height, int32_t* channels, bool flip) {
   stbi_set_flip_vertically_on_load(!flip);
-  stbi_uc* data = stbi_load(filepath, width, height, channels, 0);
+  stbi_uc* data = stbi_load(filepath, width, height, channels, STBI_rgb_alpha);
   return data;
 }
 
 unsigned char* lf_load_texture_data_resized(const char* filepath, int32_t w, int32_t h, int32_t* channels, bool flip) {
-  float width, height;
-  stbi_uc* data = lf_load_texture_data(filepath, (int32_t*)&width, (int32_t*)&height, channels, flip);
+  int32_t width, height;
+  stbi_uc* data = lf_load_texture_data(filepath, &width, &height, channels, flip);
   unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
   stbir_resize_uint8_linear(data, width, height, *channels, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
   stbi_image_free(data);
@@ -2076,7 +2065,6 @@ void lf_free_font(LfFont* font) {
 }
 
 LfFont lf_load_font_asset(const char* asset_name, const char* file_extension, uint32_t font_size) {
-  tex.height = 0;
   char leif_dir[strlen(getenv(HOMEDIR)) + strlen("/.leif")];
   memset(leif_dir, 0, sizeof(leif_dir));
   strcat(leif_dir, getenv(HOMEDIR));
