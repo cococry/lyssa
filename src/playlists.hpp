@@ -18,7 +18,7 @@ enum class FileStatus {
 };
 struct SoundFile {
     std::filesystem::path path;
-    std::wstring artist;
+    std::wstring artist, title;
     uint32_t releaseYear;
     int32_t duration;
     LfTexture thumbnail;

@@ -115,6 +115,16 @@ namespace SoundTagParser {
         }
         return L"None";
     }
+    std::wstring getSoundTitle(const std::string& soundPath) {
+      FileRef file(soundPath.c_str());
+
+      if (!file.isNull() && file.tag()) {
+        Tag *tag = file.tag();
+
+        return tag->title().toWString();
+      } 
+      return L"";
+    }
     uint32_t getSoundReleaseYear(const std::string& soundPath) {
         FileRef file(soundPath.c_str());
 

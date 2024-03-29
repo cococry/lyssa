@@ -227,6 +227,9 @@ void PlaylistFileDialoguePopup::render() {
 
                   playlist.thumbnail.width = fullscaleThumb.width;
                   playlist.thumbnail.height = fullscaleThumb.height;
+
+                  playlist.thumbnailPath = std::filesystem::path(playlist.path.string() + "/thumbnail.jpg.jpg");
+                  Playlist::save(state.currentPlaylist);
                   this->shouldRender = false;
                   lf_div_ungrab();
                   break;
