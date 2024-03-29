@@ -36,7 +36,7 @@ struct Playlist {
     LfTexture thumbnail;
     int32_t playingFile = -1;
 
-    bool ordered = !ASYNC_PLAYLIST_LOADING, loaded = false;
+    bool loaded = false;
 
     bool operator==(const Playlist& other) const { 
         return path == other.path;

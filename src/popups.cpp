@@ -4,11 +4,16 @@
 extern "C" {
     #include <leif.h>
 }
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
+
 #include "playlists.hpp"
 #include "soundTagParser.hpp"
 
 #include <cstring>
 #include <fstream>
+#include <algorithm>
+#include <iostream>
 
 void EditPlaylistPopup::render() {
     static char nameBuf[INPUT_BUFFER_SIZE] = {0};
@@ -209,7 +214,22 @@ void PlaylistFileDialoguePopup::render() {
                 }
             case 4:
                 {
-                  
+                  Playlist& playlist = state.playlists[state.currentPlaylist];
+                  TextureData fullscaleThumb = SoundTagParser::getSoundThubmnailData(this->path.string(), (vec2s){-1, -1});
+
+                  if (!stbi_write_jpg(std::string(playlist.path.string() + "/thumbnail.jpg.jpg").c_str(), fullscaleThumb.width, fullscaleThumb.height, 
+                        fullscaleThumb.channels, fullscaleThumb.data, 100)) {
+                    LOG_ERROR("Failed to write thumbnail file.");
+                    break;
+                  }
+                  lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &playlist.thumbnail.id, 
+                      fullscaleThumb.width, fullscaleThumb.height, fullscaleThumb.channels, fullscaleThumb.data);
+
+                  playlist.thumbnail.width = fullscaleThumb.width;
+                  playlist.thumbnail.height = fullscaleThumb.height;
+                  this->shouldRender = false;
+                  lf_div_ungrab();
+                  break;
                 }
             default:
                 break;

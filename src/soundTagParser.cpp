@@ -12,6 +12,8 @@
 #include <taglib/attachedpictureframe.h>
 #include <taglib/tfile.h>
 
+#include <iostream>
+
 using namespace TagLib;
 
 namespace SoundTagParser {
@@ -45,7 +47,7 @@ namespace SoundTagParser {
         if(size_factor.x == -1 || size_factor.y == -1)
             tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
         else 
-            tex = lf_load_texture_from_memory_resized_factor(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, size_factor.x, size_factor.y);
+            tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, (uint32_t)size_factor.x, (uint32_t)size_factor.y);
 
         return tex;
     }
@@ -80,10 +82,9 @@ namespace SoundTagParser {
         if(size_factor.x == -1 || size_factor.y == -1) {
             retData.data = lf_load_texture_data_from_memory(imageData.data(), (size_t)imageData.size(), (int32_t*)&retData.width, (int32_t*)&retData.height, &retData.channels, true); 
         } else  {
-            retData.data = lf_load_texture_data_from_memory_resized(imageData.data(), (size_t)imageData.size(), &retData.channels, true, (uint32_t)size_factor.x, (uint32_t)size_factor.y); 
+            retData.data = lf_load_texture_data_from_memory_resized_to_fit(imageData.data(), (size_t)imageData.size(), 
+                (int32_t*)&retData.width, (int32_t*)&retData.height, &retData.channels, true, size_factor.x, size_factor.y); 
         }
-        retData.width = size_factor.x;
-        retData.height = size_factor.y;
         retData.path = soundPath;
 
         return retData;

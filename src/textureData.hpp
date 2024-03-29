@@ -2,11 +2,12 @@
 
 #include <string>
 #include <stdint.h>
+#include <filesystem>
 
 struct TextureData {
     unsigned char* data;
     uint32_t width, height; 
     int32_t channels;
-    std::string path;
+    std::filesystem::path path;
 };
 

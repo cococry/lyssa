@@ -191,7 +191,8 @@ unsigned char* lf_load_texture_data_from_memory(const void* data, size_t size, i
 
 unsigned char* lf_load_texture_data_from_memory_resized(const void* data, size_t size, int32_t* channels, bool flip, uint32_t w, uint32_t h);
 
-unsigned char* lf_load_texture_data_from_memory_resized_factor(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, float wfactor, float hfactor);
+unsigned char* lf_load_texture_data_from_memory_resized_to_fit(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, uint32_t w, uint32_t h);
+
 
 void lf_create_texture_from_image_data(LfTextureFiltering filter, uint32_t* id, int32_t width, int32_t height, int32_t channels, unsigned char* data); 
 
