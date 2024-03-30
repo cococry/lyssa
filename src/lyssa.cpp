@@ -128,6 +128,7 @@ std::vector<std::filesystem::directory_entry> loadFolderContents(const std::wstr
   for (const auto& entry : std::filesystem::directory_iterator(folderpath)) {
     contents.emplace_back(entry);
   }
+  std::sort(contents.begin(), contents.end());
   return contents;
 }
 
@@ -738,7 +739,7 @@ void renderCreatePlaylistFromFolder() {
         PlaylistAddFromFolderTab& tab = state.playlistAddFromFolderTab;
         tab.currentFolderPath = std::filesystem::path(tab.currentFolderPath).parent_path().wstring();
         tab.folderContents.clear();
-        tab.folderContents = loadFolderContents(tab.currentFolderPath);
+        tab.folderContents = loadFolderContents(tab.currentFolderPath); 
         },
         nullptr,
         [&](std::filesystem::directory_entry entry, bool hovered){
