@@ -199,7 +199,8 @@ void initUI() {
       .min = 0, 
       .max = VOLUME_MAX,
       .width = 100,
-      .height = 5,
+      .height = 5.0f,
+      .handle_size = 15
   };
 }
 
@@ -1553,7 +1554,7 @@ void renderOnTrack() {
     lf_push_font(&state.h6Font);
     std::string durationMins = formatDurationToMins(state.soundHandler.getPositionInSeconds());
     LfUIElementProps props = lf_get_theme().text_props;
-    props.margin_top = 15.0f;
+    props.margin_top = 10.0f;
     props.margin_left = 0.0f;
     props.margin_right = 0.0f;
     lf_push_style_props(props);
@@ -2087,12 +2088,17 @@ void renderTrackDisplay() {
 void renderTrackProgress() {
   if(state.currentSoundFile == NULL) return;
   // Progress position in seconds
+  state.trackProgressSlider.width = state.win->getWidth() / 2.5f;
+  state.trackProgressSlider.height = 5.0f;
+  state.trackProgressSlider.min = 0.0f;
+  state.trackProgressSlider.max = state.soundHandler.lengthInSeconds;
+  state.trackProgressSlider.handle_size = 15.0f;
   {
     lf_push_font(&state.h6Font);
     std::string durationMins = formatDurationToMins(state.soundHandler.getPositionInSeconds());
     lf_set_ptr_x_absolute((state.win->getWidth() - state.trackProgressSlider.width) / 2.0f - lf_text_dimension(durationMins.c_str()).x - 15);
     LfUIElementProps props = lf_get_theme().text_props;
-    props.margin_top = 40 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
+    props.margin_top = 32.5f - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
     lf_push_style_props(props);
     lf_text(durationMins.c_str());
     lf_pop_style_props();
@@ -2104,7 +2110,7 @@ void renderTrackProgress() {
     lf_set_ptr_x_absolute((state.win->getWidth() - state.trackProgressSlider.width) / 2.0f + state.trackProgressSlider.width + 5);
     LfUIElementProps props = lf_get_theme().text_props;
     std::string durationMins = formatDurationToMins(state.soundHandler.lengthInSeconds); 
-    props.margin_top = 40 - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
+    props.margin_top = 32.5f - (lf_text_dimension(durationMins.c_str()).y - state.trackProgressSlider.handle_size) / 2.0;
     lf_push_style_props(props);
     lf_text(durationMins.c_str());
     lf_pop_style_props();
@@ -2112,11 +2118,6 @@ void renderTrackProgress() {
   }
   // Progress Bar 
   {
-    state.trackProgressSlider.width = state.win->getWidth() / 2.5f;
-    state.trackProgressSlider.height = 0.0f;
-    state.trackProgressSlider.min = 0.0f;
-    state.trackProgressSlider.max = state.soundHandler.lengthInSeconds;
-    state.trackProgressSlider.handle_size = 0.0f;
 
     lf_set_ptr_x_absolute((state.win->getWidth() - state.trackProgressSlider.width) / 2.0f);
 
@@ -2146,7 +2147,7 @@ void renderTrackProgress() {
 
   // Controls
   {
-    vec2s iconSize = (vec2s){36, 36};
+    vec2s iconSize = (vec2s){30, 30};
     vec2s iconSizeSm = (vec2s){18, 18};
     float iconMargin = 20;
     float controlWidth = (iconSizeSm.x) * 2 + iconSize.x + (iconMargin * 2);
@@ -2154,7 +2155,7 @@ void renderTrackProgress() {
     props.color = LF_NO_COLOR;
     props.border_width = 0; 
     props.corner_radius = 0; 
-    props.margin_top = (iconSize.x - iconSizeSm.x) / 2.0f - 5;
+    props.margin_top = 7.5f + (iconSize.x - iconSizeSm.x) / 2.0f - 5;
     props.margin_left = 0;
     props.margin_right = iconMargin;
     props.padding = 0;
@@ -2168,19 +2169,15 @@ void renderTrackProgress() {
     lf_unset_image_color();
     {
       LfUIElementProps playProps = props; 
-      playProps.color = LF_WHITE;
-      playProps.corner_radius = 9;
-      playProps.margin_top = -5;
+      playProps.margin_top = 2.5f;
       playProps.padding = 0;
       lf_push_style_props(playProps);   
-      lf_set_image_color(LF_BLACK);
       if(lf_image_button(((LfTexture){.id = state.soundHandler.isPlaying ? state.icons["pause"].id : state.icons["play"].id, .width = (uint32_t)iconSize.x, .height = (uint32_t)iconSize.y})) == LF_CLICKED) {
         if(state.soundHandler.isPlaying)
           state.soundHandler.stop();
         else 
           state.soundHandler.play();
       } 
-      lf_unset_image_color();
       lf_pop_style_props();
     }
     props.margin_right = 0;
@@ -2247,6 +2244,7 @@ void renderTrackVolumeControl() {
 
     lf_rect_render((vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top}, (vec2s){(float)state.volumeSlider.handle_pos, (float)state.volumeSlider.height}, 
         props.text_color, LF_NO_COLOR, 0.0f, props.corner_radius);
+
     lf_slider_int(&state.volumeSlider);
     lf_pop_style_props();
   } 
