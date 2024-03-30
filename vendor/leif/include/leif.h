@@ -283,6 +283,21 @@ LfClickableItemState _lf_button_fixed_wide_loc(const wchar_t* text, float width,
 #define lf_slider_int(slider) _lf_slider_int_loc(slider, __FILE__, __LINE__)
 LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int32_t line);
 
+#define lf_slider_int_inl_ex(slider_val, slider_min, slider_max, slider_width, slider_height, slider_handle_size, state) { \
+  static LfSlider slider = { \
+    .val = slider_val, \
+    .handle_pos = 0, \
+    .min = slider_min, \
+    .max = slider_max, \
+    .width = slider_width, \
+    .height = slider_height, \
+    .handle_size = slider_handle_size \
+  }; \
+  state = lf_slider_int(&slider); \
+} \
+
+#define lf_slider_int_inl(slider_val, slider_min, slider_max, state) lf_slider_int_inl_ex(slider_val, slider_min, slider_max, lf_get_current_div().aabb.size.x / 2.0f, 5, 0, state)
+
 #define lf_progress_bar_val(width, height, min, max, val) _lf_progress_bar_val_loc(width, height, min, max, val, __FILE__, __LINE__)
 LfClickableItemState _lf_progress_bar_val_loc(float width, float height, int32_t min, int32_t max, int32_t val, const char* file, int32_t line);
 

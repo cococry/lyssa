@@ -136,8 +136,6 @@ static void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
   glViewport(0, 0, width, height);
   state.win->setWidth(width);
   state.win->setHeight(height);
-
-  state.trackProgressSlider._init = false;
 }
 void initWin(float width, float height) {
   if(!glfwInit()) {
@@ -193,11 +191,7 @@ void initUI() {
   };
 
   state.trackProgressSlider = (LfSlider){
-    .val = reinterpret_cast<int32_t*>(&state.currentSoundPos), 
-      .min = 0, 
-      .max = 0,
-      .width = 400,
-      .height = 5,
+    .val = reinterpret_cast<int32_t*>(&state.currentSoundPos) 
   };
 
   state.volumeSlider = (LfSlider){
@@ -235,7 +229,6 @@ void handleTabKeyStrokes() {
             if(state.soundHandler.getPositionInSeconds() - 5 >= 0) {
               state.soundHandler.setPositionInSeconds(state.soundHandler.getPositionInSeconds() - 5);
               state.currentSoundPos = state.soundHandler.getPositionInSeconds();
-              state.trackProgressSlider._init = false;
             }
             break;
           }
@@ -244,13 +237,11 @@ void handleTabKeyStrokes() {
             if(state.soundHandler.getPositionInSeconds() + 5 <= state.soundHandler.lengthInSeconds) {
               state.soundHandler.setPositionInSeconds(state.soundHandler.getPositionInSeconds() + 5);
               state.currentSoundPos = state.soundHandler.getPositionInSeconds();
-              state.trackProgressSlider._init = false;
             }
             break;
           }
         case GLFW_KEY_DOWN: 
           {
-            state.volumeSlider._init = false;
             state.showVolumeSliderTrackDisplay = true;
             state.showVolumeSliderOverride = true;
             if(*(int32_t*)state.volumeSlider.val - VOLUME_TOGGLE_STEP >= 0)
@@ -261,7 +252,6 @@ void handleTabKeyStrokes() {
           }
         case GLFW_KEY_UP: 
           {
-            state.volumeSlider._init = false;
             state.showVolumeSliderTrackDisplay = true;
             state.showVolumeSliderOverride = true;
             if(*(int32_t*)state.volumeSlider.val + VOLUME_TOGGLE_STEP <= VOLUME_MAX)
@@ -276,7 +266,6 @@ void handleTabKeyStrokes() {
               state.volumeBeforeMute = state.soundHandler.volume;
 
             state.soundHandler.volume = (state.soundHandler.volume != 0.0f) ? 0.0f : state.volumeBeforeMute;
-            state.volumeSlider._init = false;
             state.showVolumeSliderTrackDisplay = true;
             state.showVolumeSliderOverride = true;
             break;
@@ -1372,7 +1361,7 @@ void renderOnPlaylist() {
       SoundFile& file = currentPlaylist.musicFiles[i];
       bool onActionButton = false;
       {
-        vec2s thumbnailContainerSize = (vec2s){48, 48};
+        vec2s thumbnailContainerSize = PLAYLIST_FILE_THUMBNAIL_SIZE;
         float marginBottomThumbnail = 10.0f, marginTopThumbnail = 5.0f;
 
         LfAABB fileAABB = (LfAABB){
@@ -1501,11 +1490,13 @@ void renderOnTrack() {
   int32_t winWidth = state.win->getWidth();
   int32_t winHeight = state.win->getHeight();
   int32_t containerSize = MAX(((winWidth < winHeight) ? winWidth / 2 : winHeight / 2), 400);
-  float margin = 15;
 
-  lf_set_ptr_x_absolute((state.win->getWidth() - containerSize) / 2.0f);
-  lf_set_ptr_y_absolute(((state.win->getHeight() - (DIV_START_Y + BACK_BUTTON_HEIGHT * 2.0f)) - 
-        (containerSize + margin + lf_get_theme().font.font_size)) / 2.0f); 
+  float margin = 15;
+  float controlsSpaceHeight = 35; 
+
+  lf_set_ptr_x_absolute((winWidth - containerSize) / 2.0f);
+  lf_set_ptr_y_absolute(((winHeight - (DIV_START_Y + BACK_BUTTON_HEIGHT * 2.0f)) - 
+        (containerSize + margin + lf_get_theme().font.font_size * 2.0f + margin + controlsSpaceHeight)) / 2.0f); 
 
   // Thumbnail container
   lf_rect_render(LF_PTR, (vec2s){(float)containerSize, (float)containerSize}, lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, 0.0f);
@@ -1537,7 +1528,7 @@ void renderOnTrack() {
       removeFileExtensionW(soundFile->path.filename().wstring()) : soundFile->title;
 
     float textWidth = lf_text_dimension_wide(filename.c_str()).x; 
-    lf_set_ptr_x_absolute((state.win->getWidth() - textWidth) / 2.0f);
+    lf_set_ptr_x_absolute((winWidth - textWidth) / 2.0f);
     lf_text_render_wchar(LF_PTR, filename.c_str(), lf_get_theme().font, -1, false, LF_WHITE);
   }
 
@@ -1549,8 +1540,122 @@ void renderOnTrack() {
     std::wstring artist = soundFile->artist == L"" ? L"-" : soundFile->artist;
 
     float textWidth = lf_text_dimension_wide(artist.c_str()).x; 
-    lf_set_ptr_x_absolute((state.win->getWidth() - textWidth) / 2.0f);
+    lf_set_ptr_x_absolute((winWidth - textWidth) / 2.0f);
     lf_text_render_wchar(LF_PTR, artist.c_str(), lf_get_theme().font, -1, false, lf_color_brightness(GRAY, 1.5f));
+  }
+
+  lf_set_ptr_y_absolute(lf_get_ptr_y() + lf_get_theme().font.font_size + margin);
+
+  float progressBarHeight = 5.0f;
+  // Progress position in seconds
+  {
+    lf_set_ptr_x_absolute((winWidth - containerSize) / 2.0f);
+    lf_push_font(&state.h6Font);
+    std::string durationMins = formatDurationToMins(state.soundHandler.getPositionInSeconds());
+    LfUIElementProps props = lf_get_theme().text_props;
+    props.margin_top = 15.0f;
+    props.margin_left = 0.0f;
+    props.margin_right = 0.0f;
+    lf_push_style_props(props);
+    lf_text(durationMins.c_str());
+    lf_pop_style_props();
+    lf_pop_font();
+  }
+  // Total sound duration
+  {
+    lf_push_font(&state.h6Font);
+    LfUIElementProps props = lf_get_theme().text_props;
+    std::string durationMins = formatDurationToMins(state.soundHandler.lengthInSeconds); 
+    lf_set_ptr_x_absolute(((winWidth - containerSize) / 2.0f) + containerSize);
+    props.margin_left = -lf_text_dimension(durationMins.c_str()).x;
+    props.margin_right = 0.0f;
+    props.margin_top = 15.0f;
+    lf_push_style_props(props);
+    lf_text(durationMins.c_str());
+    lf_pop_style_props();
+    lf_pop_font();
+  }
+  // Progress Bar
+  {
+    LfUIElementProps props = lf_get_theme().slider_props;
+    props.margin_top = 0.0f;
+    props.color = lf_color_brightness(GRAY, 1.5f);
+    props.text_color = LF_WHITE;
+    props.corner_radius = 1.5f;
+    props.border_width = 0.0f;
+
+    lf_push_style_props(props);
+    lf_set_ptr_x_absolute((winWidth - containerSize) / 2.0f);
+
+    state.trackProgressSlider.width = containerSize;
+    state.trackProgressSlider.min = 0.0f;
+    state.trackProgressSlider.max = state.soundHandler.lengthInSeconds;
+    state.trackProgressSlider.height = progressBarHeight;
+    state.trackProgressSlider.handle_size = progressBarHeight * 3.0f;
+
+
+    vec2s posPtr = (vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top};
+
+    LfClickableItemState progressBar = lf_slider_int(&state.trackProgressSlider);
+
+    lf_rect_render(posPtr, 
+        (vec2s){(float)state.trackProgressSlider.handle_pos, (float)state.trackProgressSlider.height}, 
+        props.text_color, LF_NO_COLOR, 0.0f, props.corner_radius);
+
+
+    if(progressBar == LF_CLICKED) {
+      state.soundHandler.setPositionInSeconds(state.currentSoundPos);
+    }
+
+    lf_pop_style_props();
+  }
+  lf_set_ptr_y_absolute(lf_get_ptr_y() + progressBarHeight + margin);
+
+  // Controls
+  {
+    float controlSize = 20;
+    float controlMargin = margin * 2.5f;
+
+    float controlsSpaceWidth = controlSize + controlMargin + controlsSpaceHeight + controlMargin + controlSize; 
+    lf_set_ptr_x_absolute((winWidth - controlsSpaceWidth) / 2.0f);
+
+    // Skip Down
+    bool onSkipDownButton = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, 
+        (vec2s){controlSize * 1.25f, controlSize});
+
+    if(onSkipDownButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      skipSoundDown(state.playingPlaylist);
+    }
+
+    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f},
+        lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_down"].id, 
+        .width = (uint32_t)(controlSize * 1.25f), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
+
+    lf_set_ptr_x_absolute(lf_get_ptr_x() + controlSize + controlMargin);
+
+    // Play/Pause
+    bool onPlayButton = lf_hovered(LF_PTR, (vec2s){controlsSpaceHeight * 1.25f, controlsSpaceHeight});
+    if(onPlayButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      if(state.soundHandler.isPlaying)
+        state.soundHandler.stop();
+      else 
+        state.soundHandler.play();
+    }
+    lf_image_render(LF_PTR, LF_WHITE, (LfTexture){.id = state.icons[state.soundHandler.isPlaying ? "pause" : "play"].id, .width = (uint32_t)(controlsSpaceHeight * 1.25f), 
+        .height = (uint32_t)controlsSpaceHeight}, LF_NO_COLOR, 0.0f, 0.0f);
+
+    lf_set_ptr_x_absolute(lf_get_ptr_x() + controlsSpaceHeight + controlMargin);
+
+
+    // Skip Up
+    bool onSkipUpButton = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f},
+        (vec2s){controlSize * 1.25f, controlSize});
+    if(onSkipUpButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      skipSoundUp(state.playingPlaylist);
+    }
+
+    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_up"].id, 
+        .width = (uint32_t)(controlSize * 1.25f), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
   }
 
   backButtonTo(GuiTab::OnPlaylist, [&](){
@@ -1929,7 +2034,7 @@ void renderTrackDisplay() {
   if(state.currentSoundFile == NULL) return;
   const float margin = DIV_START_X;
   const float marginThumbnail = 15;
-  const vec2s thumbnailContainerSize = (vec2s){48, 48};
+  const vec2s thumbnailContainerSize = PLAYLIST_FILE_THUMBNAIL_SIZE;
   const float padding = 10;
 
   std::filesystem::path filepath = state.currentSoundFile->path;
@@ -2008,6 +2113,10 @@ void renderTrackProgress() {
   // Progress Bar 
   {
     state.trackProgressSlider.width = state.win->getWidth() / 2.5f;
+    state.trackProgressSlider.height = 0.0f;
+    state.trackProgressSlider.min = 0.0f;
+    state.trackProgressSlider.max = state.soundHandler.lengthInSeconds;
+    state.trackProgressSlider.handle_size = 0.0f;
 
     lf_set_ptr_x_absolute((state.win->getWidth() - state.trackProgressSlider.width) / 2.0f);
 
@@ -2124,7 +2233,6 @@ void renderTrackVolumeControl() {
         state.volumeBeforeMute = state.soundHandler.volume;
       }
       state.soundHandler.volume = (state.soundHandler.volume != 0.0f) ? 0.0f : state.volumeBeforeMute;
-      state.volumeSlider._init = false;
     }
     lf_pop_style_props();
   }
@@ -2196,7 +2304,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
   }
   files->emplace_back(file);
   if(std::filesystem::exists(path)) {
-    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){48, 48}));
+    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, PLAYLIST_FILE_THUMBNAIL_SIZE));
   } else {
     state.playlistFileThumbnailData.emplace_back((TextureData){0});
   }
@@ -2255,7 +2363,6 @@ void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
   state.soundHandler.play();
 
   state.currentSoundPos = 0.0;
-  state.trackProgressSlider._init = false;
   state.trackProgressSlider.max = state.soundHandler.lengthInSeconds;
   state.playingPlaylist = playlistIndex;
 }
@@ -2303,7 +2410,6 @@ void updateSoundProgress() {
     if(state.soundPosUpdateTime >= state.soundPosUpdateTimer) {
       state.soundPosUpdateTime = 0.0f;
       state.currentSoundPos++;
-      state.trackProgressSlider._init = false;
     }
   }
 
@@ -2383,8 +2489,8 @@ std::vector<SoundFile> reorderPlaylistFiles(const std::vector<SoundFile>& soundF
 }
 
 static bool compareSoundFilesByName(const SoundFile& a, const SoundFile& b) {
-    std::wstring filenameA = a.title == L"" ? removeFileExtensionW(a.path.filename().wstring()) : a.title;
-    std::wstring filenameB = b.title == L"" ? removeFileExtensionW(b.path.filename().wstring()) : b.title;
+    std::wstring filenameA = removeFileExtensionW(a.path.filename().wstring());
+    std::wstring filenameB = removeFileExtensionW(b.path.filename().wstring());
     return filenameA < filenameB;
 }
 static bool compareTextureDataByName(const TextureData& a, const TextureData& b) {

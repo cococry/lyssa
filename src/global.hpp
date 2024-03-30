@@ -60,7 +60,6 @@ struct PlaylistAddFromFileTab {
 
 struct OnTrackTab {
     LfTexture trackThumbnail;
-    bool showVolumeSlider;
 };
 
 struct PlaylistAddFromFolderTab {

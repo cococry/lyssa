@@ -224,6 +224,7 @@ static LfTextProps              text_render_simple_wide(vec2s pos, const wchar_t
 // --- UI ---
 static bool                     area_hovered(vec2s pos, vec2s size);
 
+static LfClickableItemState     button_ex(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color, vec2s hitbox_override);
 static LfClickableItemState     button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color);
 static LfClickableItemState     div_container(vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color);
 static void                     next_line_on_overflow(vec2s size, float xoffset);
@@ -593,6 +594,9 @@ bool area_hovered(vec2s pos, vec2s size) {
 }
 
 LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width,  bool click_color, bool hover_color) {
+  return button_ex(file, line, pos, size, props, color, border_width, click_color, hover_color, (vec2s){-1, -1}); 
+}
+LfClickableItemState button_ex(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color, vec2s hitbox_override) {
   uint64_t id = DJB2_INIT;
   id = djb2_hash(id, file, strlen(file));
   id = djb2_hash(id, &line, sizeof(line));
@@ -607,7 +611,8 @@ LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s siz
   LfColor hover_color_rgb = hover_color ? (props.hover_color.a == 0.0f ? lf_color_brightness(color, 1.2) : props.hover_color) : color; 
   LfColor held_color_rgb = click_color ? lf_color_brightness(color, 1.3) : color; 
 
-  bool is_hovered = lf_hovered(pos, size);
+  bool is_hovered = lf_hovered(pos, (vec2s){hitbox_override.x != -1 ? hitbox_override.x : size.x,
+                                            hitbox_override.y != -1 ? hitbox_override.y : size.y});
   if(state.active_element_id == 0) {
     if(is_hovered && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
       state.active_element_id = id;
@@ -632,6 +637,7 @@ LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s siz
   }
   lf_rect_render(pos, size, color, props.border_color, border_width, props.corner_radius);
   return LF_IDLE;
+
 }
 LfClickableItemState div_container(vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color) {
   if(item_should_cull((LfAABB){.pos = pos, .size = size})) {
@@ -2450,8 +2456,13 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
   float margin_left = props.margin_left, margin_right = props.margin_right,
   margin_top = props.margin_top, margin_bottom =props.margin_bottom;
 
-  float handle_size = (slider->height != 0) ? slider->height * 4 : 20; // px 
-  float slider_width = (slider->width != 0) ? slider->width : 200; // px
+  float handle_size;
+  if(slider->handle_size != 0.0f) 
+    handle_size = slider->handle_size; 
+  else 
+    handle_size = (slider->height != 0) ? slider->height * 4 : 20;
+
+  float slider_width = (slider->width != 0) ? slider->width : 200;
   float slider_height = (slider->height != 0) ? slider->height : handle_size / 2.0f;
 
   LfColor color = props.color;
@@ -2468,26 +2479,17 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
   // Render the slider 
   LfUIElementProps slider_props = props;
   slider_props.border_width /= 2.0f;
-  LfClickableItemState slider_state = button(file, line, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
+  LfClickableItemState slider_state = button_ex(file, line, state.pos_ptr, (vec2s){(float)slider_width, (float)slider_height}, 
                                              slider_props, color, 0, 
-                                             false, false);
+                                             false, false, (vec2s){-1, handle_size});
 
-  // Render the handle
-  if(!slider->_init) {
-    slider->_init = true;
-    slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
-                                  handle_size / 2.0f, slider->width - handle_size / 2.0f) - (handle_size) / 2.0f;
-  }
+  slider->handle_pos = map_vals(*(int32_t*)slider->val, slider->min, slider->max,
+                                handle_size / 2.0f, slider->width - handle_size / 2.0f) - (handle_size) / 2.0f;
 
-  LfUIElementProps handle_props = props;
-  handle_props.corner_radius = props.corner_radius * 4.0f;
 
-  lf_push_element_id(1);
-  LfClickableItemState handle = button(file, line, (vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
-                                       (vec2s){handle_size, handle_size}, handle_props, handle_props.text_color, handle_props.border_width, false, false);
-  lf_pop_element_id();
+  lf_rect_render((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
+                                       (vec2s){handle_size, handle_size}, props.text_color, props.border_color, props.border_width, props.corner_radius * 3.0f);
 
-  LfClickableItemState ret_state = handle;
 
   // Check if the slider bar is pressed
 
@@ -2495,18 +2497,13 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
     slider->handle_pos = lf_get_mouse_x() - state.pos_ptr.x;
     *(int32_t*)slider->val = map_vals(slider->handle_pos, 0, slider_width, 
                                       slider->min, slider->max);
-    slider->_init = false;
-    ret_state = LF_CLICKED;
   }
-  if(handle == LF_HELD) {
+  if(slider_state == LF_HELD) {
     slider->held = true;
-    slider->_init = false;
-    ret_state = LF_HELD;
   }
   if(slider->held && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
     slider->held = false;
-    slider->_init = false;
-    ret_state = LF_RELEASED;
+    slider_state = LF_CLICKED;
   }
   if(slider->held) {
     if(lf_get_mouse_x() >= state.pos_ptr.x && lf_get_mouse_x() <= state.pos_ptr.x + slider_width - handle_size) {
@@ -2520,12 +2517,12 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
       *(int32_t*)slider->val = slider->max;
       slider->handle_pos = slider_width - handle_size;
     }
-    ret_state = LF_HELD;
+    slider_state = LF_HELD;
   }
   state.pos_ptr.x += slider_width + margin_right;
   state.pos_ptr.y -= margin_top;
 
-  return ret_state;
+  return slider_state;
 }
 
 LfClickableItemState _lf_progress_bar_val_loc(float width, float height, int32_t min, int32_t max, int32_t val, const char* file, int32_t line) {
