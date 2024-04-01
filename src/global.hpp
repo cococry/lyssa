@@ -65,6 +65,7 @@ struct OnTrackTab {
 struct PlaylistAddFromFolderTab {
     std::vector<std::filesystem::directory_entry> folderContents;
     std::wstring currentFolderPath;
+    bool addedFile;
 };
 
 enum class PopupID {

@@ -34,7 +34,7 @@ struct Playlist {
     std::string name, desc, url;
     std::filesystem::path path, thumbnailPath;
     LfTexture thumbnail;
-    int32_t playingFile = -1;
+    int32_t playingFile = -1, selectedFile = -1;
 
     bool loaded = false;
 
