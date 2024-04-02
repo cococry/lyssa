@@ -91,7 +91,7 @@ struct GlobalState {
     LfFont h6Font;
     LfFont h7Font;
 
-    GuiTab currentTab, previousTab;
+    GuiTab currentTab = GuiTab::TabCount, previousTab = GuiTab::TabCount;
 
     std::vector<Playlist> playlists;
     std::unordered_map<PopupType, std::unique_ptr<Popup>> popups;

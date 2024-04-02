@@ -24,6 +24,8 @@ struct SoundFile {
     LfTexture thumbnail;
     bool loaded;
 
+    float renderPosY;
+
     bool operator==(const SoundFile& other) const {
         return path == other.path;
     }
