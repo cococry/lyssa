@@ -30,6 +30,7 @@ enum class GuiTab {
     DownloadPlaylist,
     OnPlaylist,
     OnTrack,
+    TrackFullscreen,
     PlaylistAddFromFile,
     PlaylistAddFromFolder,
     PlaylistSetThumbnail,

@@ -72,6 +72,7 @@ static void                     renderCreatePlaylistFromFolder();
 static void                     renderDownloadPlaylist();
 static void                     renderOnPlaylist();
 static void                     renderOnTrack();
+static void                     renderTrackFullscreen();
 static void                     renderPlaylistAddFromFile();
 static void                     renderPlaylistAddFromFolder();
 static void                     renderPlaylistSetThumbnail();
@@ -227,9 +228,6 @@ void handleTabKeyStrokes() {
           } else {
             skipSoundUp(state.currentPlaylist);
           }
-          Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
-          float filePosY = currentPlaylist.musicFiles[currentPlaylist.playingFile].renderPosY;
-          currentPlaylist.scroll = -filePosY;
         }
         break;
       case GLFW_KEY_LEFT:
@@ -296,7 +294,6 @@ void handleTabKeyStrokes() {
         break;
 
       case GLFW_KEY_V: 
-        if(state.soundHandler.isInit)
         {
           if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
             state.showVolumeSliderTrackDisplay = true;
@@ -1567,6 +1564,23 @@ void renderOnTrack() {
   // Thumbnail container
   lf_rect_render(LF_PTR, (vec2s){(float)containerSize, (float)containerSize}, lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, 6.0f);
 
+  // Fullscreen button 
+  if(lf_hovered(LF_PTR, (vec2s){(float)containerSize, (float)containerSize}))
+  {
+    const uint32_t buttonSize = 24; 
+    const float padding = 10.0f;
+    const float add = containerSize - buttonSize - padding;
+
+    vec2s buttonPos = (vec2s){lf_get_ptr_x() + add, lf_get_ptr_y() + add};
+    bool hoveredButton = lf_hovered(buttonPos, (vec2s){(float)buttonSize, (float)buttonSize});
+    uint32_t icon = hoveredButton ? state.icons["fullscreen-full"].id : state.icons["fullscreen"].id; 
+
+    if(hoveredButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      changeTabTo(GuiTab::TrackFullscreen);
+    }
+
+    lf_image_render(buttonPos, LF_WHITE, (LfTexture){.id = icon, .width = buttonSize, .height = buttonSize}, LF_NO_COLOR, 0.0f, 0.0f);
+  }
   // Thumbnail
   {
     LfTexture thumbnail = state.onTrackTab.trackThumbnail.width == 0 ? state.icons["music_note"] : state.onTrackTab.trackThumbnail;
@@ -1729,6 +1743,31 @@ void renderOnTrack() {
       lf_free_texture(&state.onTrackTab.trackThumbnail);
       });   
   renderTrackMenu();
+}
+
+void renderTrackFullscreen() {
+  vec2s winSize =  {(float)state.win->getWidth(), (float)state.win->getHeight()};
+  lf_div_begin(((vec2s){0.0f, 0.0f}), winSize, false);
+  vec2s containerSize = winSize;
+
+  lf_rect_render((vec2s){0.0f, 0.0f}, (vec2s){(float)containerSize.x, (float)containerSize.y}, lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, 6.0f);
+
+  LfTexture thumbnail = state.onTrackTab.trackThumbnail.width == 0 ? state.icons["music_note"] : state.onTrackTab.trackThumbnail;
+  float thumbnailAspect = (float)thumbnail.width / (float)thumbnail.height;
+  float containerAspect = (float)containerSize.x / (float)containerSize.y;
+  float scaleFactor;
+  if (thumbnailAspect > containerAspect) {
+    scaleFactor = (float)containerSize.x / (float)thumbnail.width;
+  } else {
+    scaleFactor = (float)containerSize.y / (float)thumbnail.height;
+  }
+  float thumbnailWidth = thumbnail.width * scaleFactor; 
+  float thumbnailHeight = thumbnail.height * scaleFactor; 
+
+  lf_image_render((vec2s){0.0f, (containerSize.y - thumbnailHeight) / 2.0f}, 
+      LF_WHITE, (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailWidth, .height = (uint32_t)thumbnailHeight}, 
+      LF_NO_COLOR, 0.0f, 0.0f);
+  lf_div_end();
 }
 void renderPlaylistAddFromFile() {
   // Heading
@@ -2342,7 +2381,21 @@ void renderTrackVolumeControl() {
     lf_rect_render((vec2s){lf_get_ptr_x() + props.margin_left, lf_get_ptr_y() + props.margin_top}, (vec2s){(float)state.volumeSlider.handle_pos, (float)state.volumeSlider.height}, 
         props.text_color, LF_NO_COLOR, 0.0f, props.corner_radius);
 
-    lf_slider_int(&state.volumeSlider);
+    LfClickableItemState sliderState = lf_slider_int(&state.volumeSlider);
+
+
+    if(VOLUME_SHOW_PERCENT) {
+      std::stringstream volumeSS;
+      volumeSS << state.soundHandler.volume;
+      volumeSS << "%";
+
+      props.margin_top -= lf_text_dimension(volumeSS.str().c_str()).y;
+      lf_push_style_props(props);
+
+      if(sliderState == LF_CLICKED || sliderState == LF_HELD) {
+        lf_text((volumeSS.str().c_str()));
+      }
+    }
     lf_pop_style_props();
   } 
 }
@@ -2478,6 +2531,8 @@ void skipSoundUp(uint32_t playlistInedx) {
   state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
 
   playlistPlayFileWithIndex(playlist.playingFile, playlistInedx);
+  float filePosY = playlist.musicFiles[playlist.playingFile].renderPosY;
+  playlist.scroll = -filePosY;
 
 }
 
@@ -2495,6 +2550,8 @@ void skipSoundDown(uint32_t playlistIndex) {
   state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
 
   playlistPlayFileWithIndex(playlist.playingFile, playlistIndex);
+  float filePosY = playlist.musicFiles[playlist.playingFile].renderPosY;
+  playlist.scroll = -filePosY;
 }
 void updateSoundProgress() {
   if(!state.soundHandler.isInit) {
@@ -2759,6 +2816,9 @@ int main(int argc, char* argv[]) {
         break;
       case GuiTab::OnTrack:
         renderOnTrack();
+        break;
+      case GuiTab::TrackFullscreen:
+        renderTrackFullscreen();
         break;
       case GuiTab::PlaylistAddFromFile:
         renderPlaylistAddFromFile();

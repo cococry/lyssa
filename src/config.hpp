@@ -59,6 +59,7 @@ extern "C" {
 #define VOLUME_TOGGLE_STEP 5
 #define VOLUME_MAX 100.0f 
 #define VOLUME_INIT 75.0f
+#define VOLUME_SHOW_PERCENT true 
 
 // Buffers
 #define INPUT_BUFFER_SIZE 512

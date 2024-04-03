@@ -19,9 +19,12 @@ void EditPlaylistPopup::render() {
     static char nameBuf[INPUT_BUFFER_SIZE] = {0};
     static char descBuf[INPUT_BUFFER_SIZE] = {0};
     static bool initBufs = false;
+
+    Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
+
     if(!initBufs) {
-        memcpy(nameBuf, state.playlists[state.currentPlaylist].name.c_str(), INPUT_BUFFER_SIZE);
-        memcpy(descBuf, state.playlists[state.currentPlaylist].desc.c_str(), INPUT_BUFFER_SIZE);
+        memcpy(nameBuf, currentPlaylist.name.c_str(), INPUT_BUFFER_SIZE);
+        memcpy(descBuf, currentPlaylist.desc.c_str(), INPUT_BUFFER_SIZE);
         initBufs = true;
     }
 
@@ -110,8 +113,23 @@ void EditPlaylistPopup::render() {
         props.margin_top = 15;
         lf_push_style_props(props);
         if(lf_button_fixed("Done", 150, -1) == LF_CLICKED) {
+            std::vector<std::string> playlistFilepaths =  PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(currentPlaylist.path));
+
             Playlist::rename(std::string(nameBuf), state.currentPlaylist);
             Playlist::changeDesc(std::string(descBuf), state.currentPlaylist);
+
+            bool playlistEmpty = currentPlaylist.musicFiles.empty();
+            if(playlistEmpty) {
+              for(auto& filepath : playlistFilepaths) {
+                std::cout << filepath << "\n";
+                currentPlaylist.musicFiles.emplace_back((SoundFile){.path = filepath});
+              }
+            }
+            Playlist::save(state.currentPlaylist);
+            if(playlistEmpty) {
+              currentPlaylist.musicFiles.clear();
+              currentPlaylist.musicFiles.shrink_to_fit();
+            }
             this->shouldRender = false;
 
             memset(nameBuf, 0, INPUT_BUFFER_SIZE);
