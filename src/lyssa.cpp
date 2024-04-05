@@ -1750,7 +1750,7 @@ void renderTrackFullscreen() {
   lf_div_begin(((vec2s){0.0f, 0.0f}), winSize, false);
   vec2s containerSize = winSize;
 
-  lf_rect_render((vec2s){0.0f, 0.0f}, (vec2s){(float)containerSize.x, (float)containerSize.y}, lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, 6.0f);
+  lf_rect_render((vec2s){0.0f, 0.0f}, (vec2s){(float)containerSize.x, (float)containerSize.y}, LF_BLACK, LF_NO_COLOR, 0.0f, 0.0f);
 
   LfTexture thumbnail = state.onTrackTab.trackThumbnail.width == 0 ? state.icons["music_note"] : state.onTrackTab.trackThumbnail;
   float thumbnailAspect = (float)thumbnail.width / (float)thumbnail.height;
@@ -1764,9 +1764,59 @@ void renderTrackFullscreen() {
   float thumbnailWidth = thumbnail.width * scaleFactor; 
   float thumbnailHeight = thumbnail.height * scaleFactor; 
 
-  lf_image_render((vec2s){0.0f, (containerSize.y - thumbnailHeight) / 2.0f}, 
+  // Thumbnail
+  lf_image_render((vec2s){(containerSize.x - thumbnailWidth) / 2.0f, (containerSize.y - thumbnailHeight) / 2.0f}, 
       LF_WHITE, (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailWidth, .height = (uint32_t)thumbnailHeight}, 
       LF_NO_COLOR, 0.0f, 0.0f);
+
+  // Controls
+  {
+    float controlSize = 55.0f;
+    float controlMargin = 40.0f;
+    float controlsSpaceHeight = 65.0f;
+
+    float controlsSpaceWidth = controlSize + controlMargin + controlsSpaceHeight + controlMargin + controlSize; 
+
+    lf_set_ptr_x_absolute((winSize.x - controlsSpaceWidth) / 2.0f);
+    lf_set_ptr_y_absolute(winSize.y - controlsSpaceHeight - controlMargin);
+
+    // Skip Down
+    bool onSkipDownButton = lf_hovered(LF_PTR, (vec2s){controlSize, controlSize});
+
+    if(onSkipDownButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      skipSoundDown(state.playingPlaylist);
+    }
+
+    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_down"].id, 
+        .width = (uint32_t)(controlSize), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
+
+    lf_set_ptr_x_absolute(lf_get_ptr_x() + controlSize + controlMargin);
+
+    // Play/Pause
+    bool onPlayButton = lf_hovered(LF_PTR, (vec2s){controlsSpaceHeight, controlsSpaceHeight});
+    if(onPlayButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      if(state.soundHandler.isPlaying)
+        state.soundHandler.stop();
+      else 
+        state.soundHandler.play();
+    }
+    lf_image_render(LF_PTR, LF_WHITE, (LfTexture){.id = state.icons[state.soundHandler.isPlaying ? "pause" : "play"].id, .width = (uint32_t)(controlsSpaceHeight), 
+        .height = (uint32_t)controlsSpaceHeight}, LF_NO_COLOR, 0.0f, 0.0f);
+
+    lf_set_ptr_x_absolute(lf_get_ptr_x() + controlsSpaceHeight + controlMargin);
+
+
+    // Skip Up
+    bool onSkipUpButton = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f},
+        (vec2s){controlSize, controlSize});
+    if(onSkipUpButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      skipSoundUp(state.playingPlaylist);
+    }
+
+    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_up"].id, 
+        .width = (uint32_t)(controlSize), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
+  }
+
   lf_div_end();
 }
 void renderPlaylistAddFromFile() {
