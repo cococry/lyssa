@@ -62,6 +62,7 @@ using namespace TagLib;
 
 
 static void                     winResizeCb(GLFWwindow* window, float width, float height);
+static void                     winFocusCb(GLFWwindow* window, int focused);
 static void                     initWin(float width, float height);
 static void                     initUI();
 static void                     handleTabKeyStrokes();
@@ -90,8 +91,10 @@ static void                     renderFileDialogue(
 static void                     renderTrackDisplay();
 
 static void                     renderTrackVolumeControl();
-static void                     renderTrackProgress();
+static void                     renderTrackProgress(bool dark = false);
 static void                     renderTrackMenu();
+
+static void                     updateFullscreenTrackTab();
 
 static void                     backButtonTo(GuiTab tab, const std::function<void()>& clickCb = nullptr);
 
@@ -133,11 +136,17 @@ std::vector<std::filesystem::directory_entry> loadFolderContents(const std::wstr
   return contents;
 }
 
-static void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
+void winResizeCb(GLFWwindow* window, int32_t width, int32_t height) {
   lf_resize_display(width, height);
   glViewport(0, 0, width, height);
   state.win->setWidth(width);
   state.win->setHeight(height);
+}
+void winFocusCb(GLFWwindow* window, int focused) {
+  state.win->setFocused((bool)focused);
+  if(state.currentTab == GuiTab::TrackFullscreen) {
+    state.trackFullscreenTab.showUI = focused;
+  }
 }
 void initWin(float width, float height) {
   if(!glfwInit()) {
@@ -151,7 +160,7 @@ void initWin(float width, float height) {
   lf_set_theme(ui_theme());
 
   glfwSetFramebufferSizeCallback(state.win->getRawWindow(), winResizeCb);
-  glfwSetWindowSizeLimits(state.win->getRawWindow(), WIN_MIN_W, WIN_MIN_H, GLFW_DONT_CARE, GLFW_DONT_CARE);
+  glfwSetWindowFocusCallback(state.win->getRawWindow(), winFocusCb);
 
 
   glViewport(0, 0, width, height);
@@ -1769,55 +1778,16 @@ void renderTrackFullscreen() {
       LF_WHITE, (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailWidth, .height = (uint32_t)thumbnailHeight}, 
       LF_NO_COLOR, 0.0f, 0.0f);
 
-  // Controls
-  {
-    float controlSize = 55.0f;
-    float controlMargin = 40.0f;
-    float controlsSpaceHeight = 65.0f;
 
-    float controlsSpaceWidth = controlSize + controlMargin + controlsSpaceHeight + controlMargin + controlSize; 
-
-    lf_set_ptr_x_absolute((winSize.x - controlsSpaceWidth) / 2.0f);
-    lf_set_ptr_y_absolute(winSize.y - controlsSpaceHeight - controlMargin);
-
-    // Skip Down
-    bool onSkipDownButton = lf_hovered(LF_PTR, (vec2s){controlSize, controlSize});
-
-    if(onSkipDownButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
-      skipSoundDown(state.playingPlaylist);
-    }
-
-    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_down"].id, 
-        .width = (uint32_t)(controlSize), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
-
-    lf_set_ptr_x_absolute(lf_get_ptr_x() + controlSize + controlMargin);
-
-    // Play/Pause
-    bool onPlayButton = lf_hovered(LF_PTR, (vec2s){controlsSpaceHeight, controlsSpaceHeight});
-    if(onPlayButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
-      if(state.soundHandler.isPlaying)
-        state.soundHandler.stop();
-      else 
-        state.soundHandler.play();
-    }
-    lf_image_render(LF_PTR, LF_WHITE, (LfTexture){.id = state.icons[state.soundHandler.isPlaying ? "pause" : "play"].id, .width = (uint32_t)(controlsSpaceHeight), 
-        .height = (uint32_t)controlsSpaceHeight}, LF_NO_COLOR, 0.0f, 0.0f);
-
-    lf_set_ptr_x_absolute(lf_get_ptr_x() + controlsSpaceHeight + controlMargin);
-
-
-    // Skip Up
-    bool onSkipUpButton = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f},
-        (vec2s){controlSize, controlSize});
-    if(onSkipUpButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
-      skipSoundUp(state.playingPlaylist);
-    }
-
-    lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_up"].id, 
-        .width = (uint32_t)(controlSize), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
+  if(state.trackFullscreenTab.showUI) {
+    lf_text_render_wchar((vec2s){DIV_START_X, DIV_START_Y}, state.currentSoundFile->title.c_str(), lf_get_theme().font, -1, false, LF_WHITE);
+    lf_div_end();
+    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.win->getWidth() - DIV_START_X, (float)state.win->getHeight() - DIV_START_Y}), false);
+    backButtonTo(GuiTab::OnTrack);
+    renderTrackVolumeControl();
+    renderTrackProgress(true);
+    lf_div_end();
   }
-
-  lf_div_end();
 }
 void renderPlaylistAddFromFile() {
   // Heading
@@ -2262,7 +2232,7 @@ void renderTrackDisplay() {
     lf_set_line_should_overflow(true);
   }
 }
-void renderTrackProgress() {
+void renderTrackProgress(bool dark) {
   if(state.currentSoundFile == NULL) return;
   // Progress position in seconds
   state.trackProgressSlider.width = state.win->getWidth() / 2.5f;
@@ -2304,7 +2274,7 @@ void renderTrackProgress() {
     props.margin_left = 0;
     props.margin_right = 0;
     props.corner_radius = 1.5;
-    props.color = (LfColor){255, 255, 255, 30};
+    props.color = dark ? (LfColor){255, 255, 255, 30} : GRAY;
     props.text_color = LF_WHITE;
     props.border_width = 0;
     lf_push_style_props(props);
@@ -2340,17 +2310,16 @@ void renderTrackProgress() {
 
     lf_set_ptr_x_absolute((state.win->getWidth() - controlWidth) / 2.0f);
     lf_push_style_props(props);
-    lf_set_image_color(lf_color_brightness(GRAY, 2));
-    if(lf_image_button(((LfTexture){.id = state.icons["skip_down"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
+    if(lf_image_button(((LfTexture){.id = state.icons[dark ? "skip_down_dark" : "skip_down"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
       skipSoundDown(state.playingPlaylist);
     }
-    lf_unset_image_color();
     {
       LfUIElementProps playProps = props; 
       playProps.margin_top = -15.0f;
       playProps.padding = 0;
       lf_push_style_props(playProps);   
-      if(lf_image_button(((LfTexture){.id = state.soundHandler.isPlaying ? state.icons["pause"].id : state.icons["play"].id, .width = (uint32_t)iconSize.x, .height = (uint32_t)iconSize.y})) == LF_CLICKED) {
+      if(lf_image_button(((LfTexture){.id = state.soundHandler.isPlaying ? state.icons[dark ? "pause_dark" : "pause"].id : state.icons[dark ? "play_dark" : "play"].id, 
+              .width = (uint32_t)iconSize.x, .height = (uint32_t)iconSize.y})) == LF_CLICKED) {
         if(state.soundHandler.isPlaying)
           state.soundHandler.stop();
         else 
@@ -2360,11 +2329,9 @@ void renderTrackProgress() {
     }
     props.margin_right = 0;
     lf_push_style_props(props);
-    lf_set_image_color(lf_color_brightness(GRAY, 2));
-    if(lf_image_button(((LfTexture){.id = state.icons["skip_up"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
+    if(lf_image_button(((LfTexture){.id = state.icons[dark ? "skip_up_dark" : "skip_up"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
       skipSoundUp(state.playingPlaylist);
     }
-    lf_unset_image_color();
     lf_pop_style_props();
   }
 }
@@ -2373,6 +2340,17 @@ void renderTrackMenu() {
   if(state.currentTab != GuiTab::OnTrack) {
     renderTrackProgress();
     renderTrackDisplay();
+  }
+}
+
+void updateFullscreenTrackTab() {
+  state.trackFullscreenTab.uiTimer += state.deltaTime;
+  if(state.trackFullscreenTab.uiTimer >= state.trackFullscreenTab.uiTime) {
+    state.trackFullscreenTab.showUI = false;
+  }
+  if(lf_mouse_move_event().happened) {
+    state.trackFullscreenTab.showUI = true;
+    state.trackFullscreenTab.uiTimer = 0.0f;
   }
 }
 
@@ -2824,6 +2802,7 @@ int main(int argc, char* argv[]) {
 
     // Updating the timestamp of the currently playing sound
     updateSoundProgress();
+    updateFullscreenTrackTab();
 
     if(state.playlistThumbnailDownloadIndex != -1) {
       if(LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") {

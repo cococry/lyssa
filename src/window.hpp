@@ -62,9 +62,18 @@ class Window {
             _height = height;
         }
 
+        bool isFocused() const {
+          return focused;
+        }
+
+        void setFocused(bool focused) {
+          this->focused = focused;
+        } 
+
     private:
         GLFWwindow* _window;
 
         std::string _title = "";
         uint32_t _width = 0, _height = 0;
+        bool focused;
 };

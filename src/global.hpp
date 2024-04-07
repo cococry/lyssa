@@ -59,6 +59,12 @@ struct PlaylistAddFromFileTab {
     float addFileMessageTimer = 0.0f;
 };
 
+struct TrackFullscreenTab {
+  float uiTime = FULLSCREEN_TRACK_UI_TIME;
+  float uiTimer = 0.0f;
+  bool showUI = true;
+};
+
 struct OnTrackTab {
     LfTexture trackThumbnail;
 };
@@ -103,6 +109,7 @@ struct GlobalState {
     PlaylistAddFromFileTab playlistAddFromFileTab;
     PlaylistAddFromFolderTab playlistAddFromFolderTab;
     OnTrackTab onTrackTab;
+    TrackFullscreenTab trackFullscreenTab;
 
 
     int32_t currentPlaylist, playingPlaylist;
