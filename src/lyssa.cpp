@@ -2348,7 +2348,7 @@ void updateFullscreenTrackTab() {
   if(state.trackFullscreenTab.uiTimer >= state.trackFullscreenTab.uiTime) {
     state.trackFullscreenTab.showUI = false;
   }
-  if(lf_mouse_move_event().happened) {
+  if(lf_mouse_move_event().happened || lf_key_event().happened) {
     state.trackFullscreenTab.showUI = true;
     state.trackFullscreenTab.uiTimer = 0.0f;
   }
