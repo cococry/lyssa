@@ -61,6 +61,7 @@ As lyssa uses the leif library which also depends on a few things there are some
 - [x] Loading files into playlists dynamically
 - [x] Using software like yt-dlp to download YouTube playlist UI 
 - [ ] Playlist Shuffle Mode
+- [x] Fullscreened Tracks
 - [ ] Searching Playlists for Files
 - [ ] Moving files in playlists
 
