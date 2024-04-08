@@ -138,6 +138,8 @@ struct GlobalState {
 
     std::string downloadingPlaylistName;
     uint32_t downloadPlaylistFileCount;
+
+    bool shuffle, replayTrack;
 };
 
 extern GlobalState state;
