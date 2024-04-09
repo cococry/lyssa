@@ -37,6 +37,11 @@ enum class GuiTab {
     TabCount
 };
 
+enum class DashboardTab {
+  Home = 0,
+  Favourites
+};
+
 struct InputField {
     LfInputField input;
     char buffer[INPUT_BUFFER_SIZE] = {0};
@@ -89,16 +94,18 @@ struct GlobalState {
     SoundFile* currentSoundFile = NULL;
     int32_t currentSoundPos;
 
-    LfFont musicTitleFont;
-    LfFont h1Font;
-    LfFont h2Font;
-    LfFont h3Font;
-    LfFont h4Font;
-    LfFont h5Font;
-    LfFont h6Font;
-    LfFont h7Font;
+    LfFont musicTitleFont,
+    h1Font,
+    h2Font,
+    h3Font,
+    h4Font,
+    h5Font,
+    h5BoldFont,
+    h6Font,
+    h7Font;
 
     GuiTab currentTab = GuiTab::TabCount, previousTab = GuiTab::TabCount;
+    DashboardTab dashboardTab;
 
     std::vector<Playlist> playlists;
     std::unordered_map<PopupType, std::unique_ptr<Popup>> popups;
