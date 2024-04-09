@@ -20,11 +20,13 @@ extern "C" {
 #define WIN_MIN_H 450
 
 // Divs
-#define DIV_START_X 20  
-#define DIV_START_Y 20
+#define DIV_START_X 20.0f
+#define DIV_START_Y 20.0f
+
+#define DASHBOARD_NAV_WIDTH 200.0f
 
 // Back button 
-#define BACK_BUTTON_WIDTH 20 
+#define BACK_BUTTON_WIDTH 20
 #define BACK_BUTTON_HEIGHT 40
 #define BACK_BUTTON_MARGIN_BOTTOM 50
 

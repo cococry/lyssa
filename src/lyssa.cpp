@@ -366,266 +366,511 @@ void handleTabKeyStrokes() {
   }
 }
 
+static void renderHomepage() {
+  lf_push_font(&state.h1Font);
+  lf_text("Your Playlists");
+  lf_pop_font();
+  if(state.playlists.size() > 1)  {
+    {
+      const float width = 170;
+      const float height = -1;
+      LfUIElementProps props = primary_button_style();
+      props.margin_right = 0;
+      props.margin_left = 0;
+      lf_push_style_props(props);
+      lf_push_font(&state.h1Font);
+      lf_set_ptr_x_absolute(state.win->getWidth() - ((width + props.padding * 2.0f) * 2.0f) - DIV_START_X * 2);
+      lf_pop_font();
 
-void renderDashboard() {
-
-  if(state.dashboardTab == DashboardTab::Home) {
-    lf_push_font(&state.h1Font);
-    lf_text("Your Playlists");
-    lf_pop_font();
-    if(!state.playlists.empty()) {
-      {
-        const float width = 170;
-        const float height = -1;
-        LfUIElementProps props = primary_button_style();
-        props.margin_right = 0;
-        props.margin_left = 0;
-        lf_push_style_props(props);
-        lf_push_font(&state.h1Font);
-        lf_set_ptr_x_absolute(state.win->getWidth() - ((width + props.padding * 2.0f) * 2.0f) - DIV_START_X * 2);
-        lf_pop_font();
-
-        if(lf_button_fixed("Download Playlist", width, height) == LF_CLICKED) { 
-          changeTabTo(GuiTab::DownloadPlaylist);
-        }
-        props.margin_left = 10;
-        lf_push_style_props(props);
-        if(lf_button_fixed("Add Playlist", width, height) == LF_CLICKED) {
-          state.popups[PopupType::TwoChoicePopup] = std::make_unique<TwoChoicePopup>(
-              400, 
-              "How do you want to add a Playlist?", 
-              "Create New", 
-              "From Folder", 
-              [&](){
-              changeTabTo(GuiTab::CreatePlaylist);
-              state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
-              lf_div_ungrab();
-              }, 
-              [&](){
-              if(state.playlistAddFromFolderTab.currentFolderPath.empty()) {
-              state.playlistAddFromFolderTab.currentFolderPath = strToWstr(std::string(getenv(HOMEDIR)));
-              state.playlistAddFromFolderTab.folderContents = loadFolderContents(state.playlistAddFromFolderTab.currentFolderPath);
-              }
-              changeTabTo(GuiTab::CreatePlaylistFromFolder);
-              state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
-              lf_div_ungrab();
-              });
-          state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
-        }
-        lf_pop_style_props();
+      if(lf_button_fixed("Download Playlist", width, height) == LF_CLICKED) { 
+        changeTabTo(GuiTab::DownloadPlaylist);
       }
-    }
-
-    lf_next_line();
-    if(state.playlists.empty()) {
-      {
-        const char* text = "You don't have any playlists.";
-        float textWidth = lf_text_dimension(text).x;
-        lf_set_ptr_x((state.win->getWidth() - textWidth) / 2.0f - DIV_START_X);
-        LfUIElementProps props = lf_get_theme().text_props;
-        props.margin_top = 40;
-        props.margin_left = 0;
-        props.margin_right = 0;
-        lf_push_style_props(props);
-        lf_text(text);
-        lf_pop_style_props();
-      }
-      lf_next_line();
-      {
-        const float width = 200;
-        lf_set_ptr_x((state.win->getWidth() - ((width + (lf_get_theme().button_props.padding * 2)) + 5) * 2) / 2.0f - DIV_START_X);
-        LfUIElementProps props = primary_button_style();
-        props.margin_right = 5;
-        props.margin_left = 5;
-        props.margin_top = 15;
-        props.corner_radius = 12;
-        lf_push_style_props(props);
-        if(lf_button_fixed("Add Playlist", width, 50) == LF_CLICKED)  {
-          state.popups[PopupType::TwoChoicePopup] = std::make_unique<TwoChoicePopup>(
-              400, 
-              "How do you want to add a Playlist?", 
-              "Create New", 
-              "From Folder", 
-              [&](){
-              changeTabTo(GuiTab::CreatePlaylist);
-              state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
-              lf_div_ungrab();
-              }, 
-              [&](){
-              if(state.playlistAddFromFolderTab.currentFolderPath.empty()) {
-              state.playlistAddFromFolderTab.currentFolderPath = strToWstr(std::string(getenv(HOMEDIR)));
-              state.playlistAddFromFolderTab.folderContents = loadFolderContents(state.playlistAddFromFolderTab.currentFolderPath);
-              }
-              changeTabTo(GuiTab::CreatePlaylistFromFolder);
-              state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
-              lf_div_ungrab();
-              });
-          state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
-        }
-        if(lf_button_fixed("Download Playlist", width, 50) == LF_CLICKED)  {
-          changeTabTo(GuiTab::DownloadPlaylist);
-        }
-        lf_pop_style_props();
-      }
-    } else {
-
-      lf_set_ptr_y_absolute(lf_get_ptr_y() + 15);
-      lf_div_begin(LF_PTR, ((vec2s){(float)state.win->getWidth() - DIV_START_X * 2, 
-            (float)state.win->getHeight() - DIV_START_Y * 2 - lf_get_ptr_y() - 
-            (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true);
-
-      const float margin = 20; 
-      const float innerMargin = 10;
-      const vec2s size = (vec2s){220, 380};
-      const LfColor color = lf_color_brightness(GRAY, 0.4f);
-      const float ptrXStart = lf_get_ptr_x();
-      const float cornerRadius = 4.5f;
-
-      for(uint32_t i = 0; i < state.playlists.size(); i++) {
-        Playlist& playlist = state.playlists[i];
-        // Go to the next line on overflow
-        if(lf_get_ptr_x() + size.x >= state.win->getWidth() - margin) {
-          lf_set_ptr_y_absolute(lf_get_ptr_y() + size.y + margin);
-          lf_set_ptr_x_absolute(ptrXStart);
-        }
-        vec2s containerPos = LF_PTR;
-        LfAABB containerAABB = (LfAABB){.pos = containerPos, .size = size};
-        bool onContainer = lf_hovered(containerAABB.pos, containerAABB.size);
-
-        // Rendering the container
-        lf_rect_render(containerPos, size, onContainer ? lf_color_brightness(color, 1.3) : color, LF_NO_COLOR, 0.0f, cornerRadius);
-
-        // Rendering the thumbnail
-        {
-          // Container
-          LfAABB thumbnailAABB = (LfAABB){
-            .pos = (vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin}, 
-              .size = (vec2s){size.x - innerMargin * 2.0f, size.x - innerMargin}};
-
-          lf_rect_render(thumbnailAABB.pos, thumbnailAABB.size, 
-              lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, cornerRadius * 2.0f);
-
-          // Thumbnail
-          LfTexture thumbnail = playlist.thumbnail.width == 0 ? state.icons["music_note"] : playlist.thumbnail;
-
-          float thumbnailAspect = (float)thumbnail.width / (float)thumbnail.height;
-          float containerAspect = (float)thumbnailAABB.size.x / (float)thumbnailAABB.size.y;
-          float scaleFactor;
-          if (thumbnailAspect > containerAspect) {
-            scaleFactor = (float)thumbnailAABB.size.x / (float)thumbnail.width;
-          } else {
-            scaleFactor = (float)thumbnailAABB.size.y / (float)thumbnail.height;
-          }
-          float thumbnailWidth = thumbnail.width * scaleFactor; 
-          float thumbnailHeight = thumbnail.height * scaleFactor; 
-
-          lf_image_render((vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin + 
-              (thumbnailAABB.size.y - thumbnailHeight) / 2.0f}, LF_WHITE, 
-              (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailWidth, .height = (uint32_t)thumbnailHeight}, 
-              LF_NO_COLOR, 0.0f, ((thumbnailHeight + cornerRadius * 4.0f > thumbnailAABB.size.y) ? cornerRadius * 2.0f : 0.0f));
-        }
-
-        lf_set_ptr_y_absolute(lf_get_ptr_y() + (size.x + innerMargin));
-
-        // Rendering the playlist's name
-        LfTextProps textPropsName;
-        {
-          lf_set_cull_end_x(lf_get_ptr_x() + size.x - innerMargin);
-          lf_set_ptr_x_absolute(lf_get_ptr_x() + innerMargin);
-          textPropsName = lf_text_render(LF_PTR, playlist.name.c_str(), lf_get_theme().font, LF_WHITE, 
-              lf_get_ptr_x() + size.x - innerMargin * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
-              false, false, -1, -1);
-
-          float height = textPropsName.height > lf_get_theme().font.font_size ? lf_get_theme().font.font_size * 2.0f : lf_get_theme().font.font_size;
-          lf_set_ptr_y_absolute(lf_get_ptr_y() + height);
-          lf_set_ptr_x_absolute(lf_get_ptr_x() - innerMargin);
-          lf_unset_cull_end_x();
-        }
-        // Rendering the playlist's description
-        LfTextProps textPropsDesc; 
-        {
-          lf_set_cull_end_x(lf_get_ptr_x() + size.x - innerMargin);
-          lf_set_ptr_x_absolute(lf_get_ptr_x() + innerMargin);
-          textPropsDesc = lf_text_render(LF_PTR, playlist.desc.c_str(), state.h6Font, GRAY, 
-              lf_get_ptr_x() + size.x - innerMargin * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
-              false, false, -1, -1);
-
-          float height = textPropsDesc.height > lf_get_theme().font.font_size ? lf_get_theme().font.font_size * 2.0f : lf_get_theme().font.font_size;
-          lf_set_ptr_y_absolute(lf_get_ptr_y() + height);
-          lf_set_ptr_x_absolute(lf_get_ptr_x() - innerMargin);
-          lf_unset_cull_end_x();
-        }
-
-        // If container is hovered, render action buttons
-        bool onActionButton = false;
-        if(onContainer) {
-          vec2s buttonSize = (vec2s){24, 24};
-          LfUIElementProps props = lf_get_theme().button_props;
-          props.padding = 0.0f;
-          props.margin_left = innerMargin;
-          props.margin_top = 0.0f;
-          props.margin_bottom = 0.0f;
-          props.border_width = 0.0f;
-          props.color = LF_NO_COLOR;
-          lf_set_image_color(lf_color_brightness(GRAY, 1.6));
-          lf_push_style_props(props);
-          lf_set_ptr_y_absolute(containerPos.y + size.y - (buttonSize.y + innerMargin * 2.0f));
-
-          // Edit button
-          LfClickableItemState editButton =  lf_image_button(((LfTexture){.id = state.icons["edit"].id, 
-                .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
-          if(editButton == LF_CLICKED) {
-            state.currentPlaylist = i;
-            state.popups[PopupType::EditPlaylistPopup] = std::make_unique<EditPlaylistPopup>();
-            state.popups[PopupType::EditPlaylistPopup]->shouldRender = true;
-          }
-
-          props.margin_left = 5.0f;
-          lf_push_style_props(props);
-          LfClickableItemState deleteButton = lf_image_button(((LfTexture){.id = state.icons["delete"].id, 
-                .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
-          if(deleteButton == LF_CLICKED) {
-            if(state.soundHandler.isInit) {
-              state.soundHandler.stop();
-              state.soundHandler.uninit();
-              state.currentSoundFile = nullptr;
+      props.margin_left = 10;
+      lf_push_style_props(props);
+      if(lf_button_fixed("Add Playlist", width, height) == LF_CLICKED) {
+        state.popups[PopupType::TwoChoicePopup] = std::make_unique<TwoChoicePopup>(
+            400, 
+            "How do you want to add a Playlist?", 
+            "Create New", 
+            "From Folder", 
+            [&](){
+            changeTabTo(GuiTab::CreatePlaylist);
+            state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+            lf_div_ungrab();
+            }, 
+            [&](){
+            if(state.playlistAddFromFolderTab.currentFolderPath.empty()) {
+            state.playlistAddFromFolderTab.currentFolderPath = strToWstr(std::string(getenv(HOMEDIR)));
+            state.playlistAddFromFolderTab.folderContents = loadFolderContents(state.playlistAddFromFolderTab.currentFolderPath);
             }
-            Playlist::remove(i);
-          }
-          LfClickableItemState thumbnailButton = lf_image_button(((LfTexture){.id = state.icons["thumbnail"].id, .width = 29, .height = 26}));
-          if(thumbnailButton == LF_CLICKED) {
-            state.currentPlaylist = i;
-            changeTabTo(GuiTab::PlaylistSetThumbnail);
-          }
-          onActionButton = (editButton != LF_IDLE || deleteButton != LF_IDLE || thumbnailButton != LF_IDLE);
-          lf_pop_style_props();
-          lf_unset_image_color();
-        }
-
-        // On Playlist enter
-        if(onContainer && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && !onActionButton) { 
-          state.currentPlaylist = i;
-          if(!playlist.loaded) {
-            state.loadedPlaylistFilepaths.clear();
-            state.loadedPlaylistFilepaths.shrink_to_fit();
-
-            state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(playlist.path));
-            loadPlaylistAsync(playlist);
-            playlist.loaded = true;
-          }
-          changeTabTo(GuiTab::OnPlaylist);
-        }
-
-        // Advancing the pointer 
-        lf_set_ptr_x_absolute(containerPos.x + size.x + margin);
-        lf_set_ptr_y_absolute(containerPos.y);
+            changeTabTo(GuiTab::CreatePlaylistFromFolder);
+            state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+            lf_div_ungrab();
+            });
+        state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
       }
-      lf_set_ptr_y_absolute(lf_get_ptr_y() + size.y + margin);
+      lf_pop_style_props();
+    }
+  }
 
-      lf_div_end();
+  lf_next_line();
+  if(state.playlists.size() == 1 /* No playlist, only favourites */) {
+    {
+      const char* text = "You don't have any playlists.";
+      float textWidth = lf_text_dimension(text).x;
+      lf_set_ptr_x(((state.win->getWidth() - DASHBOARD_NAV_WIDTH) - textWidth) / 2.0f - DIV_START_X);
+      LfUIElementProps props = lf_get_theme().text_props;
+      props.margin_top = 40;
+      props.margin_left = 0;
+      props.margin_right = 0;
+      lf_push_style_props(props);
+      lf_text(text);
+      lf_pop_style_props();
+    }
+    lf_next_line();
+    {
+      const float width = 200;
+      lf_set_ptr_x(((state.win->getWidth() - DASHBOARD_NAV_WIDTH) - ((width + (lf_get_theme().button_props.padding * 2)) + 5) * 2) / 2.0f - DIV_START_X);
+      LfUIElementProps props = primary_button_style();
+      props.margin_right = 5;
+      props.margin_left = 5;
+      props.margin_top = 15;
+      props.corner_radius = 12;
+      lf_push_style_props(props);
+      if(lf_button_fixed("Add Playlist", width, 50) == LF_CLICKED)  {
+        state.popups[PopupType::TwoChoicePopup] = std::make_unique<TwoChoicePopup>(
+            400, 
+            "How do you want to add a Playlist?", 
+            "Create New", 
+            "From Folder", 
+            [&](){
+            changeTabTo(GuiTab::CreatePlaylist);
+            state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+            lf_div_ungrab();
+            }, 
+            [&](){
+            if(state.playlistAddFromFolderTab.currentFolderPath.empty()) {
+            state.playlistAddFromFolderTab.currentFolderPath = strToWstr(std::string(getenv(HOMEDIR)));
+            state.playlistAddFromFolderTab.folderContents = loadFolderContents(state.playlistAddFromFolderTab.currentFolderPath);
+            }
+            changeTabTo(GuiTab::CreatePlaylistFromFolder);
+            state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+            lf_div_ungrab();
+            });
+        state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
+      }
+      if(lf_button_fixed("Download Playlist", width, 50) == LF_CLICKED)  {
+        changeTabTo(GuiTab::DownloadPlaylist);
+      }
+      lf_pop_style_props();
     }
   } else {
-    lf_text("Favourites");
+
+    lf_set_ptr_y_absolute(lf_get_ptr_y() + 15);
+    lf_div_begin(LF_PTR, ((vec2s){(float)state.win->getWidth() - DIV_START_X * 2, 
+          (float)state.win->getHeight() - DIV_START_Y * 2 - lf_get_ptr_y() - 
+          (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true);
+
+    const float margin = 20; 
+    const float innerMargin = 10;
+    const vec2s size = (vec2s){220, 380};
+    const LfColor color = lf_color_brightness(GRAY, 0.4f);
+    const float ptrXStart = lf_get_ptr_x();
+    const float cornerRadius = 4.5f;
+
+    for(uint32_t i = 0; i < state.playlists.size(); i++) {
+      Playlist& playlist = state.playlists[i];
+      if(playlist.path == LYSSA_DIR + "/playlists/favourites") continue;
+
+      // Go to the next line on overflow
+      if(lf_get_ptr_x() + size.x >= state.win->getWidth() - margin) {
+        lf_set_ptr_y_absolute(lf_get_ptr_y() + size.y + margin);
+        lf_set_ptr_x_absolute(ptrXStart);
+      }
+      vec2s containerPos = LF_PTR;
+      LfAABB containerAABB = (LfAABB){.pos = containerPos, .size = size};
+      bool onContainer = lf_hovered(containerAABB.pos, containerAABB.size);
+
+      // Rendering the container
+      lf_rect_render(containerPos, size, onContainer ? lf_color_brightness(color, 1.3) : color, LF_NO_COLOR, 0.0f, cornerRadius);
+
+      // Rendering the thumbnail
+      {
+        // Container
+        LfAABB thumbnailAABB = (LfAABB){
+          .pos = (vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin}, 
+            .size = (vec2s){size.x - innerMargin * 2.0f, size.x - innerMargin}};
+
+        lf_rect_render(thumbnailAABB.pos, thumbnailAABB.size, 
+            lf_color_brightness(GRAY, 0.5), LF_NO_COLOR, 0.0f, cornerRadius * 2.0f);
+
+        // Thumbnail
+        LfTexture thumbnail = playlist.thumbnail.width == 0 ? state.icons["music_note"] : playlist.thumbnail;
+
+        float thumbnailAspect = (float)thumbnail.width / (float)thumbnail.height;
+        float containerAspect = (float)thumbnailAABB.size.x / (float)thumbnailAABB.size.y;
+        float scaleFactor;
+        if (thumbnailAspect > containerAspect) {
+          scaleFactor = (float)thumbnailAABB.size.x / (float)thumbnail.width;
+        } else {
+          scaleFactor = (float)thumbnailAABB.size.y / (float)thumbnail.height;
+        }
+        float thumbnailWidth = thumbnail.width * scaleFactor; 
+        float thumbnailHeight = thumbnail.height * scaleFactor; 
+
+        lf_image_render((vec2s){lf_get_ptr_x() + innerMargin, lf_get_ptr_y() + innerMargin + 
+            (thumbnailAABB.size.y - thumbnailHeight) / 2.0f}, LF_WHITE, 
+            (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailWidth, .height = (uint32_t)thumbnailHeight}, 
+            LF_NO_COLOR, 0.0f, ((thumbnailHeight + cornerRadius * 4.0f > thumbnailAABB.size.y) ? cornerRadius * 2.0f : 0.0f));
+      }
+
+      lf_set_ptr_y_absolute(lf_get_ptr_y() + (size.x + innerMargin));
+
+      // Rendering the playlist's name
+      LfTextProps textPropsName;
+      {
+        lf_set_cull_end_x(lf_get_ptr_x() + size.x - innerMargin);
+        lf_set_ptr_x_absolute(lf_get_ptr_x() + innerMargin);
+        textPropsName = lf_text_render(LF_PTR, playlist.name.c_str(), lf_get_theme().font, LF_WHITE, 
+            lf_get_ptr_x() + size.x - innerMargin * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
+            false, false, -1, -1);
+
+        float height = textPropsName.height > lf_get_theme().font.font_size ? lf_get_theme().font.font_size * 2.0f : lf_get_theme().font.font_size;
+        lf_set_ptr_y_absolute(lf_get_ptr_y() + height);
+        lf_set_ptr_x_absolute(lf_get_ptr_x() - innerMargin);
+        lf_unset_cull_end_x();
+      }
+      // Rendering the playlist's description
+      LfTextProps textPropsDesc; 
+      {
+        lf_set_cull_end_x(lf_get_ptr_x() + size.x - innerMargin);
+        lf_set_ptr_x_absolute(lf_get_ptr_x() + innerMargin);
+        textPropsDesc = lf_text_render(LF_PTR, playlist.desc.c_str(), state.h6Font, GRAY, 
+            lf_get_ptr_x() + size.x - innerMargin * 2.0f, (vec2s){-1, lf_get_ptr_y() + lf_get_theme().font.font_size * 2.0f}, 
+            false, false, -1, -1);
+
+        float height = textPropsDesc.height > lf_get_theme().font.font_size ? lf_get_theme().font.font_size * 2.0f : lf_get_theme().font.font_size;
+        lf_set_ptr_y_absolute(lf_get_ptr_y() + height);
+        lf_set_ptr_x_absolute(lf_get_ptr_x() - innerMargin);
+        lf_unset_cull_end_x();
+      }
+
+      // If container is hovered, render action buttons
+      bool onActionButton = false;
+      if(onContainer) {
+        vec2s buttonSize = (vec2s){24, 24};
+        LfUIElementProps props = lf_get_theme().button_props;
+        props.padding = 0.0f;
+        props.margin_left = innerMargin;
+        props.margin_top = 0.0f;
+        props.margin_bottom = 0.0f;
+        props.border_width = 0.0f;
+        props.color = LF_NO_COLOR;
+        lf_set_image_color(lf_color_brightness(GRAY, 1.6));
+        lf_push_style_props(props);
+        lf_set_ptr_y_absolute(containerPos.y + size.y - (buttonSize.y + innerMargin * 2.0f));
+
+        // Edit button
+        LfClickableItemState editButton =  lf_image_button(((LfTexture){.id = state.icons["edit"].id, 
+              .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
+        if(editButton == LF_CLICKED) {
+          state.currentPlaylist = i;
+          state.popups[PopupType::EditPlaylistPopup] = std::make_unique<EditPlaylistPopup>();
+          state.popups[PopupType::EditPlaylistPopup]->shouldRender = true;
+        }
+
+        props.margin_left = 5.0f;
+        lf_push_style_props(props);
+        LfClickableItemState deleteButton = lf_image_button(((LfTexture){.id = state.icons["delete"].id, 
+              .width = (uint32_t)buttonSize.x, .height = (uint32_t)buttonSize.y}));
+        if(deleteButton == LF_CLICKED) {
+          if(state.soundHandler.isInit) {
+            state.soundHandler.stop();
+            state.soundHandler.uninit();
+            state.currentSoundFile = nullptr;
+          }
+          Playlist::remove(i);
+        }
+        LfClickableItemState thumbnailButton = lf_image_button(((LfTexture){.id = state.icons["thumbnail"].id, .width = 29, .height = 26}));
+        if(thumbnailButton == LF_CLICKED) {
+          state.currentPlaylist = i;
+          changeTabTo(GuiTab::PlaylistSetThumbnail);
+        }
+        onActionButton = (editButton != LF_IDLE || deleteButton != LF_IDLE || thumbnailButton != LF_IDLE);
+        lf_pop_style_props();
+        lf_unset_image_color();
+      }
+
+      // On Playlist enter
+      if(onContainer && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && !onActionButton) { 
+        state.currentPlaylist = i;
+        if(!playlist.loaded) {
+          state.loadedPlaylistFilepaths.clear();
+          state.loadedPlaylistFilepaths.shrink_to_fit();
+
+          state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(playlist.path));
+          loadPlaylistAsync(playlist);
+          playlist.loaded = true;
+        }
+        changeTabTo(GuiTab::OnPlaylist);
+      }
+
+      // Advancing the pointer 
+      lf_set_ptr_x_absolute(containerPos.x + size.x + margin);
+      lf_set_ptr_y_absolute(containerPos.y);
+    }
+    lf_set_ptr_y_absolute(lf_get_ptr_y() + size.y + margin);
+
+    lf_div_end();
+  }
+
+}
+
+static void renderFavourites() {
+  Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
+  lf_push_font(&state.h1Font);
+  LfUIElementProps props = lf_get_theme().text_props;
+  props.margin_bottom = DIV_START_Y;
+  lf_push_style_props(props);
+  lf_text(currentPlaylist.name.c_str());
+  lf_pop_style_props();
+
+  lf_pop_font();
+
+  lf_next_line();
+
+
+  if(currentPlaylist.musicFiles.empty()) {
+    // Text
+    {
+      lf_set_ptr_y(100);
+      lf_push_font(&state.h5Font);
+      const char* text = "There is no music in this playlist.";
+      float textWidth = lf_text_dimension(text).x;
+
+      // Centering the text
+      lf_set_ptr_x((state.win->getWidth() - textWidth) / 2.0f - DIV_START_X);
+
+      LfUIElementProps props = lf_get_theme().text_props;
+      props.margin_top = 80;
+      props.margin_left = 0;
+      props.margin_right = 0;
+      lf_push_style_props(props);
+      lf_text(text);
+      lf_pop_style_props();
+      lf_pop_font();
+    }
+    lf_next_line();
+    // Buttons 
+    {
+      lf_push_font(&state.h6Font);
+      const float buttonWidth = 175;
+      LfUIElementProps props = lf_get_theme().button_props;
+      props.color = (LfColor){240, 240, 240, 255};
+      props.text_color = LF_BLACK;
+      props.corner_radius = 10; 
+      props.border_width = 0;
+      props.margin_top = 20;
+
+      // Centering the buttons
+      lf_set_ptr_x((state.win->getWidth() - 
+            (buttonWidth + props.padding * 2.0f) * 2.0f - (props.margin_right + props.margin_left) * 2.f) / 2.0f - DIV_START_X);
+
+      lf_push_style_props(props);
+      if(lf_button_fixed("Add from file", buttonWidth, 40) == LF_CLICKED) {
+        changeTabTo(GuiTab::PlaylistAddFromFile);
+      }
+      if(lf_button_fixed("Add from Folder", buttonWidth, 40) == LF_CLICKED) {
+        if(state.playlistAddFromFolderTab.currentFolderPath.empty()) {
+          state.playlistAddFromFolderTab.currentFolderPath = strToWstr(std::string(getenv(HOMEDIR)));
+          state.playlistAddFromFolderTab.folderContents =  loadFolderContents(state.playlistAddFromFolderTab.currentFolderPath);
+        }
+        if(state.soundHandler.isInit) {
+          state.soundHandler.stop();
+          state.soundHandler.uninit();
+          state.currentSoundFile = nullptr;
+        }
+        changeTabTo(GuiTab::PlaylistAddFromFolder);
+      }
+      lf_pop_style_props();
+      lf_pop_font();
+    }
+  } else {
+    lf_next_line();
+
+
+    /* Heading */
+    {
+      LfUIElementProps props = lf_get_theme().text_props;
+      props.margin_bottom = 20;
+      props.margin_right = 30;
+      props.text_color = lf_color_brightness(GRAY, 1.6);
+      lf_push_style_props(props);
+      lf_text("#");
+
+      props.margin_left = 0;
+      props.margin_right = 0;
+      lf_push_style_props(props);
+      lf_text("Title");
+
+
+      lf_set_ptr_x_absolute((state.win->getWidth() - DASHBOARD_NAV_WIDTH) / 1.5f + 100);
+      lf_text("Year");
+
+      lf_set_ptr_x((state.win->getWidth() - DASHBOARD_NAV_WIDTH) - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_get_theme().text_props.margin_left);
+      lf_text("Duration");
+      lf_pop_style_props();
+
+      lf_next_line();
+    }
+    // Seperator
+    {
+      LfUIElementProps props = lf_get_theme().button_props;
+      props.color = lf_color_brightness(GRAY, 0.4);
+      lf_push_style_props(props);
+      lf_seperator();
+      lf_pop_style_props();
+    }
+
+    // Begin a new div container for the files
+    lf_div_begin_ex(LF_PTR, ((vec2s){(float)state.win->getWidth() - DIV_START_X * 2, 
+          (float)state.win->getHeight() - DIV_START_Y * 2 - lf_get_ptr_y() - 
+          (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true, &currentPlaylist.scroll, 
+        &currentPlaylist.scrollVelocity);
+
+    lf_next_line();
+
+    for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
+      SoundFile& file = currentPlaylist.musicFiles[i];
+      bool onActionButton = false;
+      {
+        vec2s thumbnailContainerSize = PLAYLIST_FILE_THUMBNAIL_SIZE;
+        float marginBottomThumbnail = 10.0f, marginTopThumbnail = 5.0f;
+
+        file.renderPosY = (lf_get_ptr_y() - currentPlaylist.scroll) - lf_get_current_div().aabb.size.y;
+
+        LfAABB fileAABB = (LfAABB){
+          .pos = (vec2s){lf_get_ptr_x(), lf_get_ptr_y()},
+            .size = (vec2s){(float)state.win->getWidth() - DIV_START_X * 2, (float)thumbnailContainerSize.y + marginBottomThumbnail}
+        };
+
+        bool hoveredTextDiv = lf_hovered(fileAABB.pos, fileAABB.size);
+        if(hoveredTextDiv && lf_mouse_move_event().happened) {
+          currentPlaylist.selectedFile = (int32_t)i;
+        }
+        if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_RIGHT)) {
+          state.popups[PopupType::PlaylistFileDialoguePopup] = std::make_unique<PlaylistFileDialoguePopup>(file.path, (vec2s){(float)lf_get_mouse_x(), (float)lf_get_mouse_y()});
+          state.popups[PopupType::PlaylistFileDialoguePopup]->shouldRender = true;
+        }
+        if(currentPlaylist.playingFile == i) {
+          lf_rect_render(fileAABB.pos, fileAABB.size, lf_color_brightness(GRAY, 0.75),
+              LF_NO_COLOR, 0.0f, 3.0f);
+        } 
+
+        // Index 
+        {
+          std::stringstream indexSS;
+          indexSS << i + 1;
+          std::string indexStr = indexSS.str();
+          vec2s indexPos = (vec2s){lf_get_ptr_x() + 10, lf_get_ptr_y() + (thumbnailContainerSize.y - lf_text_dimension(indexStr.c_str()).y) / 2.0f};
+          if(hoveredTextDiv || (i == currentPlaylist.playingFile)) {
+            bool hoveredPlayButton = lf_hovered((vec2s){indexPos.x - 5, indexPos.y}, 
+                (vec2s){(float)lf_get_theme().font.font_size, (float)lf_get_theme().font.font_size}); 
+            onActionButton = hoveredPlayButton;
+            if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onActionButton && state.playlistFileFutures.empty()) {
+              if(currentPlaylist.playingFile == i) {
+                if(state.soundHandler.isPlaying)
+                  state.soundHandler.stop();
+                else 
+                  state.soundHandler.play();
+              } else {
+                playlistPlayFileWithIndex(i, state.currentPlaylist);
+                state.currentSoundFile = &file;
+              }
+            }
+            lf_image_render((vec2s){indexPos.x - 2.5f, indexPos.y}, LF_WHITE, 
+                (LfTexture){.id = (i == currentPlaylist.playingFile && state.soundHandler.isPlaying) ? 
+                state.icons["pause_raw"].id : state.icons["play_raw"].id, .width = lf_get_theme().font.font_size, .height = lf_get_theme().font.font_size}, 
+                LF_NO_COLOR, 0.0f, 0.0f);
+          } else {
+            lf_text_render(indexPos, 
+                indexStr.c_str(), lf_get_theme().font, LF_WHITE, -1, (vec2s){-1, -1}, false, false, -1, -1);
+          }
+          lf_set_ptr_x_absolute(lf_get_ptr_x() + 50);
+        }
+
+        // Thumbnail + Title
+        {
+          lf_set_ptr_y_absolute(lf_get_ptr_y() + marginTopThumbnail);
+          LfClickableItemState thumbnailState = renderSoundFileThumbnail(thumbnailContainerSize, file, [&](){
+              if(i != currentPlaylist.playingFile)
+              playlistPlayFileWithIndex(i, state.currentPlaylist);
+              });        
+          if(!onActionButton) {
+            onActionButton = (thumbnailState != LF_IDLE); 
+          }
+          lf_set_line_height(thumbnailContainerSize.y + marginBottomThumbnail);
+
+          std::filesystem::path fsPath(file.path);
+          std::wstring filename = file.title == L"" ? removeFileExtensionW(fsPath.filename().wstring()) : file.title;
+
+
+          /* Title */
+          lf_set_ptr_x_absolute(lf_get_ptr_x() + 10.0f);
+
+          lf_set_cull_end_x(((state.win->getWidth() - DASHBOARD_NAV_WIDTH) / 1.5f + 100) - 50);
+
+          lf_text_render_wchar((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + marginTopThumbnail}, filename.c_str(), state.h5Font, -1, false, 
+              currentPlaylist.selectedFile == i ? lf_color_brightness(LF_WHITE, 0.7f) : LF_WHITE);
+          lf_text_render_wchar((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + marginTopThumbnail + state.h5Font.font_size}, file.artist.empty() ? L"-" : file.artist.c_str(), state.h5Font, -1, false, 
+              lf_color_brightness(GRAY, 1.4f));
+
+          lf_unset_cull_end_x();
+        } 
+        {
+          lf_set_ptr_x_absolute((state.win->getWidth() - DASHBOARD_NAV_WIDTH) / 1.5f + 100);
+          LfUIElementProps props = lf_get_theme().text_props;
+          props.text_color = lf_color_brightness(GRAY, 1.6f);
+          props.margin_left = 0;
+          props.margin_right = 0;
+          props.margin_top = (thumbnailContainerSize.y - lf_text_dimension(std::to_string(file.releaseYear).c_str()).y) / 2.0f;
+          lf_push_style_props(props);
+          if(file.releaseYear != 0)
+            lf_text(std::to_string(file.releaseYear).c_str());
+          else 
+            lf_text("-");
+          lf_pop_style_props();
+        }
+
+        if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onActionButton && state.playlistFileFutures.empty()) {
+          playlistPlayFileWithIndex(i, state.currentPlaylist);
+          state.currentSoundFile = &file;
+          //lf_set_current_div_scroll(-relativeY);
+        }
+
+        // Duration 
+        {
+          lf_set_ptr_x((state.win->getWidth() - DASHBOARD_NAV_WIDTH) - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_get_theme().text_props.margin_left);
+          LfUIElementProps props = lf_get_theme().text_props;
+          std::string durationText = formatDurationToMins(file.duration);
+          props.margin_top = (thumbnailContainerSize.y - lf_text_dimension(durationText.c_str()).y) / 2.0f;
+          lf_push_style_props(props);
+          lf_text(durationText.c_str());
+          lf_pop_style_props();
+        }
+        lf_next_line(); 
+      }
+    }
+    lf_div_end();
+  }
+
+}
+
+void renderDashboard() {
+  if(state.dashboardTab == DashboardTab::Home) {
+    renderHomepage();
+  } else {
+    renderFavourites();
   }
 
   lf_set_ptr_y(state.win->getHeight() - BACK_BUTTON_HEIGHT - 45 - DIV_START_Y * 2);
@@ -640,7 +885,7 @@ void renderDasbhoardNavigation() {
   LfUIElementProps props = lf_get_theme().div_props;
   props.color = lf_color_brightness(LYSSA_BACKGROUND_COLOR, 0.9f);
   lf_push_style_props(props);
-  lf_div_begin(((vec2s){0.0f, 0.0f}), ((vec2s){200.0f, (float)state.win->getHeight()}), false);
+  lf_div_begin(((vec2s){0.0f, 0.0f}), ((vec2s){DASHBOARD_NAV_WIDTH, (float)state.win->getHeight()}), false);
   lf_pop_style_props();
 
   bool hoveredHome = lf_hovered(lf_get_current_div().aabb.pos, 
@@ -654,6 +899,8 @@ void renderDasbhoardNavigation() {
   lf_push_font((state.dashboardTab == DashboardTab::Home) ? &state.h5BoldFont : &state.h5Font);
   LfUIElementProps imageProps = lf_get_theme().image_props;
   imageProps.margin_left = 10.0f;
+  imageProps.margin_bottom = 5.0f;
+  imageProps.margin_top = 15.0f;
   lf_push_style_props(imageProps);
   lf_image((LfTexture){.id = state.icons[state.dashboardTab == DashboardTab::Home ? "home_selected" : "home"].id, .width = 30, .height = 30});
   lf_pop_style_props();
@@ -679,6 +926,16 @@ void renderDasbhoardNavigation() {
 
   if(hoveredFavourites && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
     state.dashboardTab = DashboardTab::Favourites;
+    state.currentPlaylist = 0; // 0 is allocated for favourites
+    Playlist& favourites = state.playlists[state.currentPlaylist];
+    if(!favourites.loaded) {
+      state.loadedPlaylistFilepaths.clear();
+      state.loadedPlaylistFilepaths.shrink_to_fit();
+
+      state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(favourites.path));
+      loadPlaylistAsync(favourites);
+      favourites.loaded = true;
+    }
   }
 
   lf_push_font((state.dashboardTab == DashboardTab::Favourites) ? &state.h5BoldFont : &state.h5Font);
@@ -2598,13 +2855,24 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
 
 void loadPlaylists() {
   uint32_t playlistI = 0;
+
+  std::string favouritesDir = LYSSA_DIR + "/playlists/favourites";
+  Playlist favourites;
+  favourites.path = favouritesDir;
+  favourites.name = PlaylistMetadata::getName(std::filesystem::directory_entry(favouritesDir));
+  favourites.desc = PlaylistMetadata::getDesc(std::filesystem::directory_entry(favouritesDir));
+  favourites.url = "";
+  favourites.thumbnailPath = "";
+  state.playlists.emplace_back(favourites);
+
   for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR + "/playlists/")) {
+    if(folder.path().filename() == "favourites") continue;
     Playlist playlist{};
     playlist.path = folder.path().string();
-      playlist.name = PlaylistMetadata::getName(folder);
-      playlist.desc = PlaylistMetadata::getDesc(folder);
-      playlist.url = PlaylistMetadata::getUrl(folder);
-      playlist.thumbnailPath = PlaylistMetadata::getThumbnailPath(folder);
+    playlist.name = PlaylistMetadata::getName(folder);
+    playlist.desc = PlaylistMetadata::getDesc(folder);
+    playlist.url = PlaylistMetadata::getUrl(folder);
+    playlist.thumbnailPath = PlaylistMetadata::getThumbnailPath(folder);
     if(std::find(state.playlists.begin(), state.playlists.end(), playlist) == state.playlists.end()) {
       if(playlist.thumbnailPath != "") {
         playlist.thumbnail = lf_load_texture_resized(playlist.thumbnailPath.string().c_str(), false, LF_TEX_FILTER_LINEAR, 180, 180);
