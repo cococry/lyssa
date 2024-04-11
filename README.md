@@ -44,9 +44,8 @@ As lyssa uses the leif library which also depends on a few things there are some
 | [stb_image_resize2](https://github.com/nothings/stb/blob/master/stb_image_resize2.h) | Resizing images |
 | [stb_truetype](https://github.com/nothings/stb/blob/master/stb_truetype.h) | Loading font glyphs from font files |
 | [cglm](https://github.com/recp/cglm) | Linear Algebra Math | 
-| [*GLFW](https://github.com/glfw/glfw) | Handling windowing, input etc. | 
+| [GLFW](https://github.com/glfw/glfw) | Handling windowing, input etc. | 
 | [libclipboard](https://github.com/jtanx/libclipboard) | Copy + Paste for input fields |
-*: This library is an optional library and will be replacable with other libraries
 
 
 ## Features
