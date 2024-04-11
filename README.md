@@ -20,7 +20,6 @@ ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https:
 | Dependency         |  Reason of Usage    |
 | ----------------|-------------|
 | [leif](https://github.com/cococry/leif) | Creating the entire UI Frontend |
-| [libclipboard](https://github.com/jtanx/libclipboard) | Copy + Paste for input fields |
 | [taglib](https://github.com/taglib/taglib)| Reading metadata of ID3 tags |
 | [miniaudio](https://github.com/mackron/miniaudio) | Audio output of the player | 
 | [GLFW](https://github.com/glfw/glfw) | Handling windowing, input etc. | 
@@ -46,7 +45,7 @@ As lyssa uses the leif library which also depends on a few things there are some
 | [stb_truetype](https://github.com/nothings/stb/blob/master/stb_truetype.h) | Loading font glyphs from font files |
 | [cglm](https://github.com/recp/cglm) | Linear Algebra Math | 
 | [*GLFW](https://github.com/glfw/glfw) | Handling windowing, input etc. | 
-
+| [libclipboard](https://github.com/jtanx/libclipboard) | Copy + Paste for input fields |
 *: This library is an optional library and will be replacable with other libraries
 
 
