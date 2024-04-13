@@ -62,7 +62,8 @@ As lyssa uses the leif library which also depends on a few things there are some
 - [x] Deleting files in Playlist
 - [x] Loading files into playlists dynamically
 - [x] Downloading playlists from streaming services 
-- [ ] Playlist Shuffle Mode
+- [x] Playlist Shuffle Mode
+- [x] Replay mode for tracks
 - [x] Fullscreened Tracks
 - [ ] Searching Playlists for Files
 - [ ] Moving files in playlists
