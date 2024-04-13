@@ -6,6 +6,10 @@ The player is as easy and [suckless](https://suckless.org/philosophy) as possibl
 is made to be modern and aestethic. The goal of this project is to make listening to 
 music amazing, visually and audibly. 
 
+Lyssa has the capability to easily download music from 
+various streaming services. Under the hood, yt-dlp 
+is used to download the music files. 
+
 The Lyssa application is written in C++ 17. It uses the [Leif Library](https://github.com/cococry/leif), a GUI Library that i've
 written in C, for the entire User Interface of the Application. For windowing, the [GLFW Library](https://github.com/glfw/glfw) is used. Additionally, Lyssa depends on [taglib](https://github.com/taglib/taglib) for handling 
 ID3 Tags for Music Files. For Audio, Lyssa uses the [miniaudio.h library](https://github.com/mackron/miniaudio).
@@ -57,7 +61,7 @@ As lyssa uses the leif library which also depends on a few things there are some
 - [x] Deleting Playlists
 - [x] Deleting files in Playlist
 - [x] Loading files into playlists dynamically
-- [x] Using software like yt-dlp to download YouTube playlist UI 
+- [x] Downloading playlists from streaming services 
 - [ ] Playlist Shuffle Mode
 - [x] Fullscreened Tracks
 - [ ] Searching Playlists for Files
