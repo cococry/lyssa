@@ -68,8 +68,7 @@ static void                     initWin(float width, float height);
 static void                     initUI();
 static void                     handleTabKeyStrokes();
 
-static void                     renderDashboard();
-static void                     renderDasbhoardNavigation();
+static void                     renderDashboardNav();
 static void                     renderCreatePlaylist(std::function<void()> onCreateCb = nullptr, std::function<void()> clientUICb = nullptr, std::function<void()> backButtonCb = nullptr);
 static void                     renderCreatePlaylistFromFolder();
 static void                     renderDownloadPlaylist();
@@ -95,6 +94,8 @@ static void                     renderTrackDisplay();
 static void                     renderTrackVolumeControl();
 static void                     renderTrackProgress(bool dark = false);
 static void                     renderTrackMenu();
+
+static void                     beginBottomNavBar();
 
 static void                     updateFullscreenTrackTab();
 
@@ -632,13 +633,56 @@ static void renderFavourites() {
   LfUIElementProps props = lf_get_theme().text_props;
   props.margin_bottom = DIV_START_Y;
   lf_push_style_props(props);
-  lf_text(currentPlaylist.name.c_str());
+  lf_text("Favourites");
   lf_pop_style_props();
 
   lf_pop_font();
 
-  lf_next_line();
 
+  // "Add More" button
+  if(!currentPlaylist.musicFiles.empty())
+  {
+    lf_push_font(&state.h5Font);
+    const char* text = "Add more music";
+
+    float textWidth = lf_text_dimension(text).x;
+
+    LfUIElementProps props = primary_button_style();  
+    props.margin_left = 0;
+    props.margin_right = 0;
+
+    // Rendering the button in the top right
+    lf_set_ptr_x_absolute(state.win->getWidth() - (textWidth + props.padding * 2.0f) - DIV_START_X);
+
+    lf_push_style_props(props);
+    float ptr_x = lf_get_ptr_x();
+    float ptr_y = lf_get_ptr_y();
+    if(lf_button(text) == LF_CLICKED) {
+      state.popups[PopupType::TwoChoicePopup] = std::make_unique<TwoChoicePopup>(
+          400, 
+          "How do you want to add Music?", 
+          "From File", 
+          "From Folder", 
+          [&](){
+          changeTabTo(GuiTab::PlaylistAddFromFile);
+          state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+          lf_div_ungrab();
+          }, 
+          [&](){
+          if(state.playlistAddFromFolderTab.currentFolderPath.empty()) {
+          state.playlistAddFromFolderTab.currentFolderPath = strToWstr(std::string(getenv(HOMEDIR)));
+          state.playlistAddFromFolderTab.folderContents = loadFolderContents(state.playlistAddFromFolderTab.currentFolderPath);
+          }
+          changeTabTo(GuiTab::PlaylistAddFromFolder);
+          state.popups[PopupType::TwoChoicePopup]->shouldRender = false;
+          lf_div_ungrab();
+          }); 
+      state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
+    }  
+    lf_pop_style_props();
+  }
+
+  lf_next_line();
 
   if(currentPlaylist.musicFiles.empty()) {
     // Text
@@ -649,7 +693,7 @@ static void renderFavourites() {
       float textWidth = lf_text_dimension(text).x;
 
       // Centering the text
-      lf_set_ptr_x((state.win->getWidth() - textWidth) / 2.0f - DIV_START_X);
+      lf_set_ptr_x((state.win->getWidth() - DASHBOARD_NAV_WIDTH - textWidth) / 2.0f - DIV_START_X);
 
       LfUIElementProps props = lf_get_theme().text_props;
       props.margin_top = 80;
@@ -673,7 +717,7 @@ static void renderFavourites() {
       props.margin_top = 20;
 
       // Centering the buttons
-      lf_set_ptr_x((state.win->getWidth() - 
+      lf_set_ptr_x((state.win->getWidth() - DASHBOARD_NAV_WIDTH - 
             (buttonWidth + props.padding * 2.0f) * 2.0f - (props.margin_right + props.margin_left) * 2.f) / 2.0f - DIV_START_X);
 
       lf_push_style_props(props);
@@ -873,14 +917,12 @@ void renderDashboard() {
     renderFavourites();
   }
 
-  lf_set_ptr_y(state.win->getHeight() - BACK_BUTTON_HEIGHT - 45 - DIV_START_Y * 2);
-  lf_set_ptr_x(DIV_START_X);
+  beginBottomNavBar();
   renderTrackMenu();
-
   lf_div_end();
 }
 
-void renderDasbhoardNavigation() {
+void renderDashboardNav() {
   if(state.currentTab != GuiTab::Dashboard) return;
   LfUIElementProps props = lf_get_theme().div_props;
   props.color = lf_color_brightness(LYSSA_BACKGROUND_COLOR, 0.9f);
@@ -889,7 +931,7 @@ void renderDasbhoardNavigation() {
   lf_pop_style_props();
 
   bool hoveredHome = lf_hovered(lf_get_current_div().aabb.pos, 
-      (vec2s){lf_get_current_div().aabb.size.x, 30.0f});
+      (vec2s){lf_get_current_div().aabb.size.x, 50.0f});
 
 
   if(hoveredHome && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -922,7 +964,7 @@ void renderDasbhoardNavigation() {
   lf_pop_style_props();
 
   bool hoveredFavourites = lf_hovered((vec2s){0.0f, 
-      lf_get_ptr_y()}, (vec2s){lf_get_current_div().aabb.size.x, 30.0f});
+      lf_get_ptr_y()}, (vec2s){lf_get_current_div().aabb.size.x, 50.0f});
 
   if(hoveredFavourites && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
     state.dashboardTab = DashboardTab::Favourites;
@@ -948,6 +990,7 @@ void renderDasbhoardNavigation() {
 
   lf_pop_font();
 
+  lf_div_end();
 }
 
 void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()> clientUICb, std::function<void()> backButtonCb) {
@@ -1099,6 +1142,7 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
     }
   }
 
+  beginBottomNavBar();
   backButtonTo(GuiTab::Dashboard, [&](){
       state.createPlaylistTab.createFileMessageTimer = state.createPlaylistTab.createFileMessageShowTime;
       loadPlaylists();
@@ -1106,6 +1150,7 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
       backButtonCb();
       });
   renderTrackMenu();
+  lf_div_end();
 }
 
 void renderCreatePlaylistFromFolder() {
@@ -1181,11 +1226,13 @@ void renderCreatePlaylistFromFolder() {
           return false;
         }, 
         state.playlistAddFromFolderTab.folderContents, {}, true);
+    beginBottomNavBar();
     backButtonTo(GuiTab::Dashboard, [&](){
         state.createPlaylistTab.createFileMessageTimer = state.createPlaylistTab.createFileMessageShowTime;
         loadPlaylists();
         });
     renderTrackMenu();
+    lf_div_end();
   } else {
     renderCreatePlaylist([&](){
         loadPlaylists();
@@ -1286,12 +1333,14 @@ void renderDownloadPlaylist() {
         changeTabTo(GuiTab::OnPlaylist);
       }
     }
+    beginBottomNavBar();
     backButtonTo(GuiTab::Dashboard, [&](){
         state.playlistDownloadRunning = false;
         state.playlistDownloadFinished = false;
         loadPlaylists();
         });
     renderTrackMenu();
+    lf_div_end();
     return;
   }
   if(!state.playlistDownloadRunning) {
@@ -1463,10 +1512,12 @@ void renderDownloadPlaylist() {
     }
   }
   if(LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") {
+    beginBottomNavBar();
     backButtonTo(GuiTab::Dashboard, [&](){
         loadPlaylists();
         });
     renderTrackMenu();
+    lf_div_end();
   }
 }
 
@@ -1891,11 +1942,13 @@ void renderOnPlaylist() {
   }
 
   if(state.playlistFileFutures.empty()) {
+    beginBottomNavBar();
     backButtonTo(GuiTab::Dashboard, [&](){
         showPlaylistSettings = false;
         state.playlists[state.currentPlaylist].selectedFile = -1;
         });
     renderTrackMenu();
+    lf_div_end();
   }
 }
 void renderOnTrack() {
@@ -2139,11 +2192,13 @@ void renderOnTrack() {
     lf_unset_image_color();
   }
 
-  backButtonTo(GuiTab::OnPlaylist, [&](){
+  beginBottomNavBar();
+  backButtonTo(state.previousTab, [&](){
       if(state.onTrackTab.trackThumbnail.width != 0)
       lf_free_texture(&state.onTrackTab.trackThumbnail);
       });   
   renderTrackMenu();
+  lf_div_end();
 }
 
 void renderTrackFullscreen() {
@@ -2174,7 +2229,8 @@ void renderTrackFullscreen() {
   if(state.trackFullscreenTab.showUI) {
     lf_text_render_wchar((vec2s){DIV_START_X, DIV_START_Y}, state.currentSoundFile->title.c_str(), lf_get_theme().font, -1, false, LF_WHITE);
     lf_div_end();
-    lf_div_begin(((vec2s){DIV_START_X, DIV_START_Y}), ((vec2s){(float)state.win->getWidth() - DIV_START_X, (float)state.win->getHeight() - DIV_START_Y}), false);
+    lf_div_begin(((vec2s){DIV_START_X, state.win->getHeight() - BACK_BUTTON_HEIGHT - 45 - DIV_START_Y * 2}), ((vec2s){(float)state.win->getWidth(), BACK_BUTTON_HEIGHT + 45 + DIV_START_Y * 2}),
+        false);
     backButtonTo(GuiTab::OnTrack);
     renderTrackVolumeControl();
     renderTrackProgress(true);
@@ -2241,8 +2297,10 @@ void renderPlaylistAddFromFile() {
       lf_pop_font();
     }
   }
-  backButtonTo(GuiTab::OnPlaylist);
+  beginBottomNavBar();
+  backButtonTo(state.previousTab);
   renderTrackMenu();
+  lf_div_end();
 }
 
 static void renderTopBarAddFromFolder() {
@@ -2357,7 +2415,8 @@ void renderPlaylistAddFromFolder() {
       state.playlistAddFromFolderTab.folderContents, supportedFileFormats, false);
 
 
-  backButtonTo(GuiTab::OnPlaylist, [&](){
+  beginBottomNavBar();
+  backButtonTo(state.previousTab, [&](){
       if(state.playlistAddFromFolderTab.addedFile) {
       if(state.soundHandler.isInit) {
       state.soundHandler.stop();
@@ -2377,6 +2436,7 @@ void renderPlaylistAddFromFolder() {
       }
       });
   renderTrackMenu();
+  lf_div_end();
 }
 static void renderPlaylistSetThumbnail() {
   lf_push_font(&state.h1Font);
@@ -2437,7 +2497,10 @@ static void renderPlaylistSetThumbnail() {
         nullptr,
         folderContents, supportedFileFormats, false);
   }
+  beginBottomNavBar();
   backButtonTo(state.previousTab);
+  renderTrackMenu();
+  lf_div_end();
 }
 
   void renderFileDialogue(
@@ -2750,6 +2813,10 @@ void renderTrackMenu() {
     renderTrackDisplay();
   }
 }
+void beginBottomNavBar() {
+  lf_div_begin(((vec2s){DIV_START_X, state.win->getHeight() - BACK_BUTTON_HEIGHT - 45 - DIV_START_Y * 2}), ((vec2s){(float)state.win->getWidth(), BACK_BUTTON_HEIGHT + 45 + DIV_START_Y * 2}),
+      false);
+}
 
 void updateFullscreenTrackTab() {
   state.trackFullscreenTab.uiTimer += state.deltaTime;
@@ -2838,7 +2905,6 @@ void renderTrackVolumeControl() {
 void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
   lf_next_line();
 
-  lf_set_ptr_y(state.win->getHeight() - BACK_BUTTON_MARGIN_BOTTOM - BACK_BUTTON_HEIGHT * 2);
   LfUIElementProps props = lf_get_theme().button_props;
   props.color = (LfColor){0, 0, 0, 0};
   props.border_width = 0;
@@ -3268,7 +3334,7 @@ int main(int argc, char* argv[]) {
 
     lf_begin();
 
-    renderDasbhoardNavigation();
+    renderDashboardNav();
 
     vec2s divStart = (vec2s){DIV_START_X, DIV_START_Y};
     if(state.currentTab == GuiTab::Dashboard) {

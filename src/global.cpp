@@ -48,6 +48,8 @@ void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput
 
 void changeTabTo(GuiTab tab)  {
   if(state.currentTab == tab) return;
-  state.previousTab = state.currentTab;
+  if(tab != GuiTab::TrackFullscreen && state.currentTab != GuiTab::TrackFullscreen) {
+    state.previousTab = state.currentTab;
+  }
   state.currentTab = tab;
 }

@@ -1,4 +1,4 @@
-#include "include/leif.h"
+#include "include/leif/leif.h"
 #include <cglm/mat4.h>
 #include <cglm/types-struct.h>
 #include <ctype.h>
@@ -683,15 +683,14 @@ bool item_should_cull(LfAABB item) {
   bool intersect = true;
   LfAABB window =  (LfAABB){.pos = (vec2s){0, 0}, .size = (vec2s){state.dsp_w, state.dsp_h}};
   if(item.size.x == -1 || item.size.y == -1) {
-    item.pos.y += get_current_font().font_size;
-    intersect = lf_point_intersects_aabb(item.pos, window);
-  } else { 
-    if (item.pos.x + item.size.x <= window.pos.x || item.pos.x >= window.pos.x + window.size.x)
-      intersect = false;
+    item.size.x = state.dsp_w;
+    item.size.y = get_current_font().font_size;
+  }  
+  if (item.pos.x + item.size.x <= window.pos.x || item.pos.x >= window.pos.x + window.size.x)
+    intersect = false;
 
-    if (item.pos.y + item.size.y <= window.pos.y || item.pos.y >= window.pos.y + window.size.y)
-      intersect = false;
-  }
+  if (item.pos.y + item.size.y <= window.pos.y || item.pos.y >= window.pos.y + window.size.y)
+    intersect = false;
 
   return !intersect && state.current_div.id == state.scrollbar_div.id;
 
@@ -2889,7 +2888,7 @@ void lf_pop_font() {
 
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, LfColor color, 
                            int32_t wrap_point, vec2s stop_point, bool no_render, bool render_solid, int32_t start_index, int32_t end_index) { 
-  bool culled = item_should_cull((LfAABB){.pos = (vec2s){pos.x, pos.y + get_current_font().font_size}, .size = (vec2s){-1, -1}});
+  bool culled = item_should_cull((LfAABB){.pos = (vec2s){pos.x, pos.y}, .size = (vec2s){-1, -1}});
 
   float tex_index = -1.0f;
   if(!culled && !no_render) {
