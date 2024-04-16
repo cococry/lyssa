@@ -91,8 +91,8 @@ struct GlobalState {
     float deltaTime, lastTime;
 
     SoundHandler soundHandler;
-    SoundFile* currentSoundFile = NULL;
-    int32_t currentSoundPos;
+    SoundFile* currentSoundFile = NULL, *previousSoundFile = NULL;
+    int32_t currentSoundPos, previousSoundPos;
 
     LfFont musicTitleFont,
     h1Font,

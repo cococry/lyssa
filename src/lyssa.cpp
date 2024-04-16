@@ -1638,6 +1638,8 @@ void renderOnPlaylist() {
         if(state.soundHandler.isInit) {
           state.soundHandler.stop();
           state.soundHandler.uninit();
+          state.previousSoundFile = state.currentSoundFile;
+          state.previousSoundPos = state.currentSoundPos;
           state.currentSoundFile = nullptr;
         }
         system(std::string(LYSSA_DIR + "/scripts/download-yt.sh \"" + currentPlaylist.url + "\" " + LYSSA_DIR + "/downloaded_playlists/ &").c_str());
@@ -1765,6 +1767,8 @@ void renderOnPlaylist() {
         if(state.soundHandler.isInit) {
           state.soundHandler.stop();
           state.soundHandler.uninit();
+          state.previousSoundFile = state.currentSoundFile;
+          state.previousSoundPos = state.currentSoundPos;
           state.currentSoundFile = nullptr;
         }
         changeTabTo(GuiTab::PlaylistAddFromFolder);
@@ -3204,14 +3208,35 @@ void handleAsyncPlaylistLoading() {
     if(state.loadedPlaylistFilepaths.size() == state.playlists[state.currentPlaylist].musicFiles.size() && !state.playlistFileFutures.empty()) {
       state.playlistFileFutures.clear();
       state.playlistFileFutures.shrink_to_fit();
-      std::sort(state.playlists[state.currentPlaylist].musicFiles.begin(),
-          state.playlists[state.currentPlaylist].musicFiles.end(), compareSoundFilesByName);
+
+      Playlist& playlist = state.playlists[state.currentPlaylist];
+      std::sort(playlist.musicFiles.begin(), playlist.musicFiles.end(), compareSoundFilesByName);
       std::sort(state.playlistFileThumbnailData.begin(), state.playlistFileThumbnailData.end(), compareTextureDataByName);
+
+      if(state.previousSoundFile) {
+        std::cout << state.previousSoundFile->path << "\n";
+        Playlist& playingPlaylist = state.playlists[state.playingPlaylist];
+        auto it = std::find(playingPlaylist.musicFiles.begin(), playingPlaylist.musicFiles.end(), (SoundFile){.path = state.previousSoundFile->path});
+        if(it != playingPlaylist.musicFiles.end()) {
+          uint32_t index = std::distance(playingPlaylist.musicFiles.begin(), it);
+          playlistPlayFileWithIndex(index, state.playingPlaylist);
+          state.currentSoundFile = state.previousSoundFile;
+          state.currentSoundPos = state.previousSoundPos;
+          state.soundHandler.setPositionInSeconds(state.currentSoundPos);
+        }
+      }
     }
   }
 }
 
 void loadPlaylistAsync(Playlist& playlist) {
+  if(state.soundHandler.isInit) {
+    state.soundHandler.stop();
+    state.soundHandler.uninit();
+    state.previousSoundFile = state.currentSoundFile;
+    state.previousSoundPos = state.currentSoundPos;
+    state.currentSoundFile = nullptr;
+  }
   state.playlistFileThumbnailData.clear();
   state.playlistFileThumbnailData.shrink_to_fit();
 
