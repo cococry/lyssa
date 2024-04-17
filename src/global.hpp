@@ -90,6 +90,8 @@ struct GlobalState {
     Window* win = NULL;
     float deltaTime, lastTime;
 
+    float sideNavigationWidth; 
+
     SoundHandler soundHandler;
     SoundFile* currentSoundFile = NULL, *previousSoundFile = NULL;
     int32_t currentSoundPos, previousSoundPos;

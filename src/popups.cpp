@@ -164,16 +164,16 @@ void PlaylistFileDialoguePopup::render() {
 
     if(!onPlaylistAddTab) {
         const uint32_t options_count = 5;
-        static const char* options[options_count] = {
-            "Add to playlist",
-            "Remove",
-            "Add to favourites",
-            "Open URL...",
-            "Set as thumbnail"
-        };
+        static const char* options[options_count];
+        options[0] = "Add to playlist...";
+        options[1] = "Remove";
+        options[2] = Playlist::metadataContainsFile(this->path.string(), 0) ? "" : "Add to favourites";
+        options[3] = "Open URL...";
+        options[4] = state.currentPlaylist != 0 ? "Set as thumbnail" : "";
 
         int32_t clickedIndex = -1;
         for(uint32_t i = 0; i < options_count; i++) {
+            if(strlen(options[i]) == 0) continue;
             // Option
             props = lf_get_theme().text_props;
             props.hover_text_color = lf_color_brightness(GRAY, 2);
@@ -215,11 +215,23 @@ void PlaylistFileDialoguePopup::render() {
                 }
             case 2: /* Add to favourites */
                 {
-                    this->shouldRender = false;
-                    lf_div_ungrab();
-                    break;
+                 
+                  Playlist& favourites = state.playlists[0]; // 0th playlist is favourites
+                  if(favourites.loaded) {
+                    Playlist::addFile(this->path, 0);
+                    favourites.loaded = false;
+                  } else {
+                    std::ofstream metadata(favourites.path.string() + "/.metadata", std::ios::app);
+                    metadata.seekp(0, std::ios::end);
+
+                    metadata << "\"" << this->path.string() << "\" ";
+                    metadata.close();
+                  }
+                  this->shouldRender = false;
+                  lf_div_ungrab();
+                  break;
                 }
-            case 3:
+            case 3: /* Open URL */
                 {
                     std::string url = SoundTagParser::getSoundComment(this->path.string());
                     if(url != "") {
@@ -230,7 +242,7 @@ void PlaylistFileDialoguePopup::render() {
                     lf_div_ungrab();
                     break;
                 }
-            case 4:
+            case 4: /* Set thumbnail */
                 {
                   Playlist& playlist = state.playlists[state.currentPlaylist];
                   TextureData fullscaleThumb = SoundTagParser::getSoundThubmnailData(this->path.string(), (vec2s){-1, -1});

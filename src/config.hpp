@@ -23,7 +23,6 @@ extern "C" {
 #define DIV_START_X 20.0f
 #define DIV_START_Y 20.0f
 
-#define DASHBOARD_NAV_WIDTH 200.0f
 
 // Back button 
 #define BACK_BUTTON_WIDTH 20
