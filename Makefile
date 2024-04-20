@@ -44,6 +44,7 @@ install:
 	@mkdir -p $(LYSSA_DIR)
 	cp -r ./scripts/ ~/.lyssa/
 	cp -r ./assets/ ~/.lyssa/
+	cp -r ./.lyssa/favourites/ ~/.lyssa/playlists
 	@if [ ! -d ~/.lyssa/playlists/ ]; then \
 		mkdir ~/.lyssa/playlists; \
 	fi
