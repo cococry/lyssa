@@ -44,12 +44,14 @@ install:
 	@mkdir -p $(LYSSA_DIR)
 	cp -r ./scripts/ ~/.lyssa/
 	cp -r ./assets/ ~/.lyssa/
-	cp -r ./.lyssa/favourites/ ~/.lyssa/playlists
 	@if [ ! -d ~/.lyssa/playlists/ ]; then \
 		mkdir ~/.lyssa/playlists; \
 	fi
 	@if [ ! -d ~/.lyssa/downloaded_playlists/ ]; then \
 		mkdir ~/.lyssa/downloaded_playlists; \
+	fi
+	if [ ! -d ~/.lyssa/playlists/favourites ]; then \
+		cp -r ./.lyssa/favourites/ ~/.lyssa/playlists; \
 	fi
 	cp -r ./vendor/leif/.leif/ ~
 	sudo cp ./bin/lyssa /usr/bin/

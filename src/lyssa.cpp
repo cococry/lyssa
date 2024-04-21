@@ -1,4 +1,4 @@
-#include "config.hpp"
+#include "config.hpp" 
 #include "leif.h"
 #include "log.hpp"
 #include "playlists.hpp"
@@ -649,6 +649,7 @@ void renderDashboard() {
 }
 
 void renderDashboardNav() {
+  if(state.currentTab == GuiTab::OnTrack || state.currentTab == GuiTab::TrackFullscreen) return; 
   LfUIElementProps props = lf_get_theme().div_props;
   props.color = lf_color_brightness(LYSSA_BACKGROUND_COLOR, 0.9f);
   lf_push_style_props(props);
@@ -704,6 +705,7 @@ void renderDashboardNav() {
       loadPlaylistAsync(favourites);
       favourites.loaded = true;
     }
+    changeTabTo(GuiTab::Dashboard);
   }
 
   lf_push_font((state.dashboardTab == DashboardTab::Favourites) ? &state.h5BoldFont : &state.h5Font);
@@ -846,7 +848,7 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
       lf_push_font(&state.h4Font);
       LfUIElementProps props = lf_get_theme().button_props;
       switch(state.createPlaylistTab.createFileStatus) {
-        case FileStatus::Failed:
+      case FileStatus::Failed:
           props.text_color = LYSSA_RED;
           lf_push_style_props(props);
           lf_text("Failed to create playlist.");
@@ -866,6 +868,7 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
       }
       lf_pop_font();
     }
+    lf_pop_style_props();
   }
 
   beginBottomNavBar();
@@ -1286,7 +1289,7 @@ void renderOnPlaylist() {
       props.text_color = LYSSA_PLAYLIST_COLOR;
       props.margin_bottom = 20;
       lf_push_style_props(props);
-      lf_text(currentPlaylist.name.c_str());
+      lf_text(currentPlaylist.name == "favourites" ? "Favourites" : currentPlaylist.name.c_str());
       lf_pop_style_props();
     }
     lf_pop_font();
@@ -1350,8 +1353,9 @@ void renderOnPlaylist() {
             }); 
         state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
       }  
-      lf_pop_style_props();
     }
+    lf_pop_style_props();
+
 
     if(showPlaylistSettings) {
       lf_next_line();
@@ -1563,7 +1567,7 @@ void renderOnPlaylist() {
       lf_text("Title");
 
 
-      lf_set_ptr_x_absolute((state.win->getWidth() - state.sideNavigationWidth) / 1.5f + 100);
+      lf_set_ptr_x_absolute((state.win->getWidth()) / 1.5f + 100);
       lf_text("Year");
 
       lf_set_ptr_x((state.win->getWidth() - state.sideNavigationWidth) - (lf_text_dimension("Duration").x) -  DIV_START_X * 2 - lf_get_theme().text_props.margin_left);
@@ -1675,9 +1679,11 @@ void renderOnPlaylist() {
               lf_color_brightness(GRAY, 1.4f));
 
           lf_unset_cull_end_x();
-        } 
+        }
+
+        // Year
         {
-          lf_set_ptr_x_absolute((state.win->getWidth() - state.sideNavigationWidth) / 1.5f + 100);
+          lf_set_ptr_x_absolute((state.win->getWidth()) / 1.5f + 100);
           LfUIElementProps props = lf_get_theme().text_props;
           props.text_color = lf_color_brightness(GRAY, 1.6f);
           props.margin_left = 0;
@@ -2091,13 +2097,6 @@ static void renderTopBarAddFromFolder() {
   props.margin_right = 0;
   lf_push_style_props(props);
   LfClickableItemState addAllButton = lf_button("Add All");
-  if(addAllButton != LF_IDLE) {
-    props.text_color = LF_WHITE;
-    lf_push_style_props(props);
-    lf_text("Adds all files from the current folder");
-    lf_pop_style_props();
-    props.text_color = LF_BLACK;
-  }
   if(addAllButton == LF_CLICKED) {
     if(!state.playlistFileThumbnailData.empty()) {
       state.playlistFileThumbnailData.clear();
@@ -2325,8 +2324,8 @@ static void renderPlaylistSetThumbnail() {
   float divMarginButton = 15;
 
   lf_push_style_props(divProps);
-  lf_div_begin(((vec2s){lf_get_ptr_x() + DIV_START_X - lf_get_theme().button_props.margin_left, lf_get_ptr_y() + DIV_START_Y}), (((vec2s){(float)state.win->getWidth() - (DIV_START_X * 4),
-          (float)state.win->getHeight() - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM) - divMarginButton})), true);
+  lf_div_begin(((vec2s){lf_get_ptr_x() + DIV_START_X - lf_get_theme().button_props.margin_left, lf_get_ptr_y() + DIV_START_Y}), (((vec2s){(float)lf_get_current_div().aabb.size.x - (DIV_START_X * 4),
+          (float)lf_get_current_div().aabb.size.y - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM) - divMarginButton})), true);
 
   vec2s initialPtr = LF_PTR;
 
