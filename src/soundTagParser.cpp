@@ -125,6 +125,17 @@ namespace SoundTagParser {
       } 
       return L"";
     }
+    int32_t getSoundDuration(const std::string& soundPath) {
+      TagLib::FileRef fileRef(soundPath.c_str());
+
+      if (!fileRef.isNull() && fileRef.audioProperties()) {
+        TagLib::AudioProperties *properties = fileRef.audioProperties();
+        int durationInSeconds = properties->length();
+        return durationInSeconds;
+      } else {
+        return 0;
+      }
+    }
     uint32_t getSoundReleaseYear(const std::string& soundPath) {
         FileRef file(soundPath.c_str());
 

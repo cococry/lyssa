@@ -1009,7 +1009,7 @@ void renderDownloadPlaylist() {
       lf_push_font(&state.h1Font);
 
       std::string text = "Finished Downloading Playlist";
-      lf_set_ptr_x_absolute((state.win->getWidth() - lf_text_dimension(text.c_str()).x) / 2.0f);
+      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - lf_text_dimension(text.c_str()).x) / 2.0f);
       lf_text(text.c_str());
       lf_pop_style_props();
       lf_pop_font();
@@ -1023,7 +1023,7 @@ void renderDownloadPlaylist() {
       props.color = GRAY;
       lf_push_style_props(props);
       std::string text = "Downloading of playlist \"" + state.downloadingPlaylistName + "\" with " + std::to_string(state.downloadPlaylistFileCount) + " files finished.";
-      lf_set_ptr_x_absolute((state.win->getWidth() - lf_text_dimension(text.c_str()).x) / 2.0f);
+      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - lf_text_dimension(text.c_str()).x) / 2.0f);
       lf_text(text.c_str());
       lf_pop_style_props();
       lf_pop_font();
@@ -1037,7 +1037,7 @@ void renderDownloadPlaylist() {
       props.margin_right = 0; 
 
       lf_push_style_props(props);
-      lf_set_ptr_x_absolute((state.win->getWidth() - (180 + props.padding * 2.0f)) / 2.0f);
+      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - (180 + props.padding * 2.0f)) / 2.0f);
       if(lf_button_fixed("Open Playlist", 180, -1) == LF_CLICKED) {
         loadPlaylists();
         state.playlistDownloadRunning = false;
@@ -1061,6 +1061,7 @@ void renderDownloadPlaylist() {
         }
         changeTabTo(GuiTab::OnPlaylist);
       }
+      lf_pop_style_props();
     }
     beginBottomNavBar();
     backButtonTo(GuiTab::Dashboard, [&](){
@@ -1159,7 +1160,7 @@ void renderDownloadPlaylist() {
       props.margin_bottom = 10;
       lf_push_style_props(props);
       lf_push_font(&state.h1Font);
-      lf_set_ptr_x_absolute((state.win->getWidth() - lf_text_dimension(title.c_str()).x) / 2.0f);
+      lf_set_ptr_x_absolute(((state.win->getWidth()) + state.sideNavigationWidth - lf_text_dimension(title.c_str()).x) / 2.0f);
       lf_text(title.c_str());
       lf_pop_style_props();
       lf_pop_font();
@@ -1168,7 +1169,7 @@ void renderDownloadPlaylist() {
       std::string subtitle = std::string("This can take a while.");
       props.margin_bottom = 15;
       lf_push_style_props(props);
-      lf_set_ptr_x_absolute((state.win->getWidth() - lf_text_dimension(subtitle.c_str()).x) / 2.0f);
+      lf_set_ptr_x_absolute(((state.win->getWidth()) + state.sideNavigationWidth - lf_text_dimension(subtitle.c_str()).x) / 2.0f);
       lf_text(subtitle.c_str());
       lf_pop_style_props();
       lf_next_line();
@@ -1189,7 +1190,7 @@ void renderDownloadPlaylist() {
 
       {
         vec2s textDim = lf_text_dimension(std::to_string(downloadedFileCount).c_str());
-        lf_set_ptr_x_absolute((state.win->getWidth() - progressBarSize.x - textDim.x) / 2.0f);
+        lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - progressBarSize.x - textDim.x) / 2.0f);
 
         LfUIElementProps props = lf_get_theme().text_props;
         props.color = lf_color_brightness(GRAY, 1.5);
@@ -1232,7 +1233,7 @@ void renderDownloadPlaylist() {
       props.margin_top = 15;
       props.text_color = LF_WHITE;
       lf_push_style_props(props);
-      lf_set_ptr_x_absolute((state.win->getWidth() - (buttonSize + props.padding * 2.0f)) / 2.0f);
+      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth)  - (buttonSize + props.padding * 2.0f)) / 2.0f);
       if(lf_button_fixed("Cancle Download", buttonSize, -1) == LF_CLICKED) {
         state.playlistDownloadRunning = false;
         system("pkill yt-dlp &");
@@ -1586,7 +1587,7 @@ void renderOnPlaylist() {
     }
 
     // Begin a new div container for the files
-    lf_div_begin_ex(LF_PTR, ((vec2s){(float)state.win->getWidth() - DIV_START_X * 2, 
+    lf_div_begin_ex(LF_PTR, ((vec2s){(float)state.win->getWidth() - DIV_START_X * 1.5f - state.sideNavigationWidth, 
           (float)state.win->getHeight() - DIV_START_Y * 2 - lf_get_ptr_y() - 
           (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true, &currentPlaylist.scroll, 
         &currentPlaylist.scrollVelocity);
@@ -2734,7 +2735,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
   if(std::filesystem::exists(path)) {
     file.path = std::filesystem::path(path); 
     file.thumbnail = (LfTexture){0};
-    file.duration = SoundHandler::getSoundDuration(path);
+    file.duration = SoundTagParser::getSoundDuration(path);
     file.artist = SoundTagParser::getSoundArtist(path);
     file.title = SoundTagParser::getSoundTitle(path);
     file.releaseYear = SoundTagParser::getSoundReleaseYear(path);
@@ -2769,7 +2770,7 @@ void addFileToPlaylistAsync(std::vector<SoundFile>* files, std::string path, uin
   file.path = strToWstr(path);
   file.path = path;
   file.thumbnail = (LfTexture){0};
-  file.duration = SoundHandler::getSoundDuration(path);
+  file.duration = SoundTagParser::getSoundDuration(path);
   file.artist = SoundTagParser::getSoundArtist(path);
   file.releaseYear = SoundTagParser::getSoundReleaseYear(path);
   files->emplace_back(file);
@@ -3028,7 +3029,7 @@ void loadPlaylistAsync(Playlist& playlist) {
             .path = path,
               .artist = SoundTagParser::getSoundArtist(path),
               .releaseYear = SoundTagParser::getSoundReleaseYear(path),
-              .duration = static_cast<int32_t>(SoundHandler::getSoundDuration(path)),
+              .duration = static_cast<int32_t>(SoundTagParser::getSoundDuration(path)),
               .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){0.1, 0.1}),
           };
 

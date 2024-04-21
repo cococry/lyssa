@@ -21,6 +21,7 @@ namespace SoundTagParser {
     std::wstring getSoundArtist(const std::string& soundPath);
     std::wstring getSoundAlbum(const std::string& soundPath);
     std::wstring getSoundTitle(const std::string& soundPath);
+    int32_t getSoundDuration(const std::string& soundPath);
     uint32_t getSoundReleaseYear(const std::string& soundPath);
     std::string getSoundComment(const std::string& soundPath);
     SoundMetadata getSoundMetadata(const std::string& soundPath);
