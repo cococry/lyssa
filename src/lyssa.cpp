@@ -253,25 +253,7 @@ void handleTabKeyStrokes() {
           if(lf_key_is_down(GLFW_KEY_LEFT_SHIFT)) {
             skipSoundDown(state.currentPlaylist);
           } else {
-            if(!state.shuffle) {
-              skipSoundUp(state.currentPlaylist);
-            } else {
-              Playlist& playlist = state.playlists[state.currentPlaylist];
-
-              RandomEngine random(0, playlist.musicFiles.size() - 1);
-              playlist.playingFile = random.randInt();
-
-              state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-              if(state.onTrackTab.trackThumbnail.width != 0) {
-                lf_free_texture(&state.onTrackTab.trackThumbnail);
-              }
-              state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
-
-              playlistPlayFileWithIndex(playlist.playingFile, state.currentPlaylist);
-              float filePosY = playlist.musicFiles[playlist.playingFile].renderPosY;
-              playlist.scroll = -filePosY;
-            }
-
+            skipSoundUp(state.currentPlaylist);
           }
         }
         break;
@@ -2560,20 +2542,7 @@ void renderTrackProgress(bool dark) {
     }
     lf_push_style_props(props);
     if(lf_image_button(((LfTexture){.id = state.icons[dark ? "skip_up_dark" : "skip_up"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
-      Playlist& playlist = state.playlists[state.playingPlaylist];
-
-      RandomEngine random(0, playlist.musicFiles.size() - 1);
-      playlist.playingFile = random.randInt();
-
-      state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-      if(state.onTrackTab.trackThumbnail.width != 0) {
-        lf_free_texture(&state.onTrackTab.trackThumbnail);
-      }
-      state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
-
-      playlistPlayFileWithIndex(playlist.playingFile, state.currentPlaylist);
-      float filePosY = playlist.musicFiles[playlist.playingFile].renderPosY;
-      playlist.scroll = -filePosY;
+      skipSoundUp(state.playingPlaylist);
     }
     props.margin_right = 0;
     lf_push_style_props(props);
@@ -2807,16 +2776,35 @@ void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
 
   state.currentSoundPos = 0.0;
   state.trackProgressSlider.max = state.soundHandler.lengthInSeconds;
+
+  if(state.playingPlaylist != playlistIndex) {
+    state.alreadyPlayedTracks.clear();
+  }
   state.playingPlaylist = playlistIndex;
+
+  if(std::find(state.alreadyPlayedTracks.begin(), state.alreadyPlayedTracks.end(), i) == state.alreadyPlayedTracks.end()) {
+    state.alreadyPlayedTracks.push_back(i);
+  }
+  if(state.alreadyPlayedTracks.size() >= state.playlists[state.currentPlaylist].musicFiles.size()) {
+    state.alreadyPlayedTracks.clear();
+  }
 }
 
 void skipSoundUp(uint32_t playlistInedx) {
   Playlist& playlist = state.playlists[playlistInedx];
 
-  if(playlist.playingFile + 1 < playlist.musicFiles.size())
-    playlist.playingFile++;
-  else 
-    playlist.playingFile = 0;
+  if(!state.shuffle) {
+    if(playlist.playingFile + 1 < playlist.musicFiles.size())
+      playlist.playingFile++;
+    else 
+      playlist.playingFile = 0;
+  } else {
+    RandomEngine random(0, playlist.musicFiles.size() - 1);
+    playlist.playingFile = random.randInt();
+    while(std::find(state.alreadyPlayedTracks.begin(), state.alreadyPlayedTracks.end(), playlist.playingFile) != state.alreadyPlayedTracks.end()) {
+      playlist.playingFile = random.randInt();
+    }
+  }
 
   state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
   if(state.onTrackTab.trackThumbnail.width != 0) {
@@ -2827,7 +2815,6 @@ void skipSoundUp(uint32_t playlistInedx) {
   playlistPlayFileWithIndex(playlist.playingFile, playlistInedx);
   float filePosY = playlist.musicFiles[playlist.playingFile].renderPosY;
   playlist.scroll = -filePosY;
-
 }
 
 void skipSoundDown(uint32_t playlistIndex) {
@@ -2862,24 +2849,7 @@ void updateSoundProgress() {
 
   if(state.currentSoundPos >= (uint32_t)state.soundHandler.lengthInSeconds && !state.trackProgressSlider.held) {
     if(!state.replayTrack) {
-      if(!state.shuffle) {
-        skipSoundUp(state.currentPlaylist);
-      } else {
-        Playlist& playlist = state.playlists[state.currentPlaylist];
-
-        RandomEngine random(0, playlist.musicFiles.size() - 1);
-        playlist.playingFile = random.randInt();
-
-        state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-        if(state.onTrackTab.trackThumbnail.width != 0) {
-          lf_free_texture(&state.onTrackTab.trackThumbnail);
-        }
-        state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
-
-        playlistPlayFileWithIndex(playlist.playingFile, state.currentPlaylist);
-        float filePosY = playlist.musicFiles[playlist.playingFile].renderPosY;
-        playlist.scroll = -filePosY;
-      }
+      skipSoundUp(state.currentPlaylist);
     } else {
       state.currentSoundPos = 0.0f;
       state.soundHandler.setPositionInSeconds(state.currentSoundPos);
@@ -3141,7 +3111,7 @@ int main(int argc, char* argv[]) {
 
     renderDashboardNav();
 
-    vec2s divStart = (vec2s){state.sideNavigationWidth + DIV_START_X, DIV_START_Y};
+    vec2s divStart = (vec2s){state.currentTab == GuiTab::OnTrack ? 0.0f : state.sideNavigationWidth + DIV_START_X, DIV_START_Y};
 
     lf_div_begin(divStart, ((vec2s){(float)state.win->getWidth() - divStart.x, (float)state.win->getHeight() - divStart.y}), true);
 

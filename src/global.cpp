@@ -5,6 +5,7 @@ GlobalState state = {
     .deltaTime = 0.0f,
     .lastTime = 0.0f,
     .currentSoundFile = NULL,
+    .skipDownAmount = 1,
     .currentPlaylist = -1, 
     .playingPlaylist = -1,
 
@@ -18,7 +19,8 @@ GlobalState state = {
 
     .playlistDownloadRunning = false, 
     .playlistDownloadFinished = false,
-    .playlistThumbnailDownloadIndex = -1
+    .playlistThumbnailDownloadIndex = -1, 
+  
 };
 
 void miniaudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {

@@ -112,6 +112,9 @@ struct GlobalState {
     std::vector<Playlist> playlists;
     std::unordered_map<PopupType, std::unique_ptr<Popup>> popups;
 
+    std::vector<uint32_t> alreadyPlayedTracks;
+    uint32_t skipDownAmount;
+
     std::unordered_map<std::string, LfTexture> icons;
 
     CreatePlaylistState createPlaylistTab;
