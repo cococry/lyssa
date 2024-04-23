@@ -126,10 +126,10 @@ namespace SoundTagParser {
       return L"";
     }
     int32_t getSoundDuration(const std::string& soundPath) {
-      TagLib::FileRef fileRef(soundPath.c_str());
+      FileRef fileRef(soundPath.c_str());
 
       if (!fileRef.isNull() && fileRef.audioProperties()) {
-        TagLib::AudioProperties *properties = fileRef.audioProperties();
+        AudioProperties *properties = fileRef.audioProperties();
         int durationInSeconds = properties->length();
         return durationInSeconds;
       } else {

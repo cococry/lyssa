@@ -105,6 +105,8 @@ static void                     loadPlaylists();
 static void                     loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path);
 static void                     addFileToPlaylistAsync(std::vector<SoundFile>* files, std::string path, uint32_t playlistIndex);
 
+static void                     moveFileInPlaylistIdx(uint32_t playlistIndex, uint32_t fromIndex, uint32_t toIndex);
+
 static std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folderPath);
 static void                     playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex);
 
@@ -117,6 +119,8 @@ static void                     updateSoundProgress();
 static std::string              removeFileExtension(const std::string& filename);
 static std::wstring             removeFileExtensionW(const std::wstring& filename);
 
+static void                     terminateAudio();
+
 static void                     loadIcons();
 
 static std::string              wStrToStr(const std::wstring& wstr);
@@ -127,7 +131,7 @@ static void                     handleAsyncPlaylistLoading();
 static void                     loadPlaylistAsync(Playlist& playlist);
 
 static LfClickableItemState     renderSoundFileThumbnail(vec2s thumbnailContainerSize, SoundFile& file, 
-                                                          const std::function<void()>& clickCb = nullptr);
+                                                          const std::function<void()>& clickCb = nullptr, bool uiResponse = true);
 
 
 std::vector<std::filesystem::directory_entry> loadFolderContents(const std::wstring& folderpath) {
@@ -1346,13 +1350,7 @@ void renderOnPlaylist() {
       props.margin_top = -10;
       lf_push_style_props(props);
       if(lf_button("Sync Downloads") == LF_CLICKED) {
-        if(state.soundHandler.isInit) {
-          state.soundHandler.stop();
-          state.soundHandler.uninit();
-          state.previousSoundFile = state.currentSoundFile;
-          state.previousSoundPos = state.currentSoundPos;
-          state.currentSoundFile = nullptr;
-        }
+        terminateAudio();
         system(std::string(LYSSA_DIR + "/scripts/download-yt.sh \"" + currentPlaylist.url + "\" " + LYSSA_DIR + "/downloaded_playlists/ &").c_str());
 
         state.playlistDownloadRunning = true;
@@ -1576,11 +1574,16 @@ void renderOnPlaylist() {
 
     lf_next_line();
 
+    static bool draggingTrack = false;
+    static std::wstring draggingTrackTitle = L"";
+    static int32_t draggingTrackIndex = -1;
     for(uint32_t i = 0; i < currentPlaylist.musicFiles.size(); i++) {
       SoundFile& file = currentPlaylist.musicFiles[i];
       bool onActionButton = false;
       {
         vec2s thumbnailContainerSize = PLAYLIST_FILE_THUMBNAIL_SIZE;
+        vec2s startPtr= LF_PTR;
+
         float marginBottomThumbnail = 10.0f, marginTopThumbnail = 5.0f;
 
         file.renderPosY = (lf_get_ptr_y() - currentPlaylist.scroll) - lf_get_current_div().aabb.size.y;
@@ -1613,7 +1616,7 @@ void renderOnPlaylist() {
             bool hoveredPlayButton = lf_hovered((vec2s){indexPos.x - 5, indexPos.y}, 
                 (vec2s){(float)lf_get_theme().font.font_size, (float)lf_get_theme().font.font_size}); 
             onActionButton = hoveredPlayButton;
-            if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onActionButton && state.playlistFileFutures.empty()) {
+            if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onActionButton && state.playlistFileFutures.empty() && !draggingTrack) {
               if(currentPlaylist.playingFile == i) {
                 if(state.soundHandler.isPlaying)
                   state.soundHandler.stop();
@@ -1638,10 +1641,35 @@ void renderOnPlaylist() {
         // Thumbnail + Title
         {
           lf_set_ptr_y_absolute(lf_get_ptr_y() + marginTopThumbnail);
-          LfClickableItemState thumbnailState = renderSoundFileThumbnail(thumbnailContainerSize, file, [&](){
-              if(i != currentPlaylist.playingFile)
-              playlistPlayFileWithIndex(i, state.currentPlaylist);
-              });        
+          LfClickableItemState thumbnailState = renderSoundFileThumbnail(thumbnailContainerSize, file, nullptr, false);
+
+          if(thumbnailState == LF_CLICKED) {
+            if(!draggingTrack) {
+              if(i != currentPlaylist.playingFile) {
+                state.currentSoundFile = &file;
+                if(state.onTrackTab.trackThumbnail.width != 0) {
+                  lf_free_texture(&state.onTrackTab.trackThumbnail);
+                }
+                state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path, (vec2s){-1, -1});
+                changeTabTo(GuiTab::OnTrack);
+                playlistPlayFileWithIndex(i, state.currentPlaylist);
+              }
+            } else {
+              if(state.currentSoundFile) {
+                if(*state.currentSoundFile == currentPlaylist.musicFiles[draggingTrackIndex]) {
+                  terminateAudio();
+                }
+              }
+              moveFileInPlaylistIdx(state.currentPlaylist, draggingTrackIndex, i);
+              draggingTrack = false;
+              draggingTrackTitle = L"";
+            }
+          }
+          if(thumbnailState != LF_IDLE && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
+            draggingTrack = true;
+            draggingTrackTitle = file.title;
+            draggingTrackIndex = i;
+          }
           if(!onActionButton) {
             onActionButton = (thumbnailState != LF_IDLE); 
           }
@@ -1681,9 +1709,19 @@ void renderOnPlaylist() {
         }
 
         if(lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && hoveredTextDiv && !onActionButton && state.playlistFileFutures.empty()) {
-          playlistPlayFileWithIndex(i, state.currentPlaylist);
-          state.currentSoundFile = &file;
-          //lf_set_current_div_scroll(-relativeY);
+          if(!draggingTrack) {
+            playlistPlayFileWithIndex(i, state.currentPlaylist);
+            state.currentSoundFile = &file;
+          } else {
+            if(state.currentSoundFile) {
+              if(*state.currentSoundFile == currentPlaylist.musicFiles[draggingTrackIndex]) {
+                terminateAudio();
+              }
+            }
+            moveFileInPlaylistIdx(state.currentPlaylist, draggingTrackIndex, i);
+            draggingTrack = false;
+            draggingTrackTitle = L"";
+          }
         }
 
         // Duration 
@@ -1696,10 +1734,30 @@ void renderOnPlaylist() {
           lf_text(durationText.c_str());
           lf_pop_style_props();
         }
+        if(draggingTrackTitle != L"" && hoveredTextDiv) {
+          lf_rect_render(startPtr, (vec2s){fileAABB.size.x - state.sideNavigationWidth - DIV_START_X * 2.0f , 1}, LYSSA_PLAYLIST_COLOR, LF_NO_COLOR, 0.0f, 0.0f);
+        }
+        if(lf_get_current_div().id != lf_get_selected_div().id && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+          draggingTrack = false;
+          draggingTrackTitle = L"";
+        }
         lf_next_line(); 
       }
     }
     lf_div_end();
+    if(draggingTrack) {
+      LfUIElementProps props = lf_get_theme().div_props;
+      props.color = GRAY;
+      props.corner_radius = 3.5f;
+      lf_push_style_props(props);
+      lf_div_begin(((vec2s){(float)lf_get_mouse_x() + 10, (float)lf_get_mouse_y() + 10}), ((vec2s){
+            lf_text_dimension_wide(draggingTrackTitle.c_str()).x + 15.0f, 50.0f}), false);
+      lf_pop_style_props();
+
+      lf_text_wide(draggingTrackTitle.c_str());
+
+      lf_div_end();
+    }
   }
 
   if(state.playlistFileFutures.empty()) {
@@ -2759,6 +2817,22 @@ std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folde
   return files;
 }
 
+void moveFileInPlaylistIdx(uint32_t playlistIndex, uint32_t fromIndex, uint32_t toIndex) {
+  std::vector<SoundFile>& files = state.playlists[playlistIndex].musicFiles;
+  if (fromIndex < 0 || fromIndex >= files.size() || toIndex < 0 || toIndex >= files.size()) {
+    LOG_ERROR("Index out of range. files.size(): %i, fromIndex: %i, toIndex: %i", files.size(), fromIndex, toIndex);
+  }
+
+  SoundFile element = files[fromIndex];
+  if (fromIndex < toIndex) {
+    files.insert(files.begin() + toIndex + 1, element);
+    files.erase(files.begin() + fromIndex);
+  } else {
+    files.erase(files.begin() + fromIndex);
+    files.insert(files.begin() + toIndex, element);
+  }
+}
+
 void playlistPlayFileWithIndex(uint32_t i, uint32_t playlistIndex) {
   if(!state.playlistFileFutures.empty()) return;
   Playlist& playlist = state.playlists[playlistIndex];
@@ -2865,6 +2939,15 @@ std::string removeFileExtension(const std::string& filename) {
   } else {
     return filename;
   }
+}
+
+void terminateAudio() {
+  if(!state.soundHandler.isInit) return;
+  state.soundHandler.stop();
+  state.soundHandler.uninit();
+  state.previousSoundFile = state.currentSoundFile;
+  state.previousSoundPos = state.currentSoundPos;
+  state.currentSoundFile = nullptr;
 }
 
 std::wstring removeFileExtensionW(const std::wstring& filename) {
@@ -3016,7 +3099,7 @@ void loadPlaylistAsync(Playlist& playlist) {
   }
 }
 
-LfClickableItemState renderSoundFileThumbnail(vec2s thumbnailContainerSize, SoundFile& file, const std::function<void()>& clickCb) {
+LfClickableItemState renderSoundFileThumbnail(vec2s thumbnailContainerSize, SoundFile& file, const std::function<void()>& clickCb, bool uiResponse) {
   LfTexture thumbnail = (file.thumbnail.width == 0) ? state.icons["music_note"] : file.thumbnail;
   float aspect = (float)thumbnail.width / (float)thumbnail.height;
   float thumbnailHeight = thumbnailContainerSize.y / aspect; 
@@ -3031,7 +3114,7 @@ LfClickableItemState renderSoundFileThumbnail(vec2s thumbnailContainerSize, Soun
   props.margin_bottom = 0.0f;
   lf_push_style_props(props);
   LfClickableItemState thumbnailState = lf_item(thumbnailContainerSize);
-  if(thumbnailState == LF_CLICKED && state.playlistFileFutures.empty()) {
+  if(thumbnailState == LF_CLICKED && state.playlistFileFutures.empty() && uiResponse) {
     state.currentSoundFile = &file;
     if(state.onTrackTab.trackThumbnail.width != 0) {
       lf_free_texture(&state.onTrackTab.trackThumbnail);
