@@ -188,6 +188,8 @@ void initUI() {
 
   state.currentTab = GuiTab::Dashboard;
 
+  state.infoCards = InfoCardHandler(15.0f, 60.0f);
+
   loadIcons();
 
   state.createPlaylistTab.nameInput.input = (LfInputField){
@@ -228,6 +230,11 @@ void initUI() {
 void handleTabKeyStrokes() {
   if(lf_key_event().pressed && lf_key_event().happened) {
     switch(lf_key_event().keycode) {
+      case GLFW_KEY_H: 
+        {
+          state.infoCards.addCard("Key pressed", "H");
+          break;
+        }
       case GLFW_KEY_SPACE:
         if(state.soundHandler.isInit)
         {
@@ -2722,6 +2729,7 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
     if(clickCb)
       clickCb();
     changeTabTo(tab);
+    state.infoCards.addCard("You clicked back", "Back button was pressed");
   }
 
   lf_pop_style_props();
@@ -3242,6 +3250,10 @@ int main(int argc, char* argv[]) {
       handleTabKeyStrokes();
 
     lf_div_end();
+
+    state.infoCards.render();
+    state.infoCards.update();
+
     lf_end();
 
     glfwPollEvents();

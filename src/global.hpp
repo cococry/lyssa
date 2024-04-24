@@ -6,6 +6,7 @@
 #include "textureData.hpp"
 #include "popups.hpp"
 #include "playlists.hpp"
+#include "infoCard.hpp"
 
 #include <memory>
 #include <string>
@@ -93,6 +94,8 @@ struct GlobalState {
     float sideNavigationWidth; 
 
     SoundHandler soundHandler;
+    InfoCardHandler infoCards;
+
     SoundFile* currentSoundFile = NULL, *previousSoundFile = NULL;
     int32_t currentSoundPos, previousSoundPos;
 
