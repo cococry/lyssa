@@ -7,7 +7,6 @@
 
 struct InfoCard {
   std::string title;
-  std::string desc = "";
 
   bool operator==(const InfoCard& other) const {
     return title == other.title;
@@ -25,7 +24,7 @@ class InfoCardHandler {
     InfoCardHandler() = default;
     InfoCardHandler(float cardPadding, float cardH);
 
-    void addCard(const std::string& title, const std::string& desc, LfColor bgColor = lf_color_brightness(GRAY, 0.6f), LfColor textColor = LF_WHITE);
+    void addCard(const std::string& title, LfColor bgColor = lf_color_brightness(GRAY, 0.6f), LfColor textColor = LF_WHITE);
 
     void render();
     void update();

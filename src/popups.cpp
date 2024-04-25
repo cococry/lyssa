@@ -121,7 +121,6 @@ void EditPlaylistPopup::render() {
       bool playlistEmpty = currentPlaylist.musicFiles.empty();
       if(playlistEmpty) {
         for(auto& filepath : playlistFilepaths) {
-          std::cout << filepath << "\n";
           currentPlaylist.musicFiles.emplace_back((SoundFile){.path = filepath});
         }
       }
@@ -211,6 +210,7 @@ void PlaylistFileDialoguePopup::render() {
           Playlist::removeFile(this->path, state.currentPlaylist);
           this->shouldRender = false;
           lf_div_ungrab();
+          state.infoCards.addCard("Removed from playlist.");
           break;
         }
       case 2: /* Add to favourites */
@@ -229,6 +229,7 @@ void PlaylistFileDialoguePopup::render() {
           }
           this->shouldRender = false;
           lf_div_ungrab();
+          state.infoCards.addCard("Added to favourites.");
           break;
         }
       case 3: /* Open URL */
@@ -262,6 +263,7 @@ void PlaylistFileDialoguePopup::render() {
           Playlist::save(state.currentPlaylist);
           this->shouldRender = false;
           lf_div_ungrab();
+          state.infoCards.addCard("Changed thumbnail of playlist.");
           break;
         }
       default:
@@ -313,6 +315,7 @@ void PlaylistFileDialoguePopup::render() {
           onPlaylistAddTab = false;
           lf_set_current_div_scroll(0.0f);
           lf_div_ungrab();
+          state.infoCards.addCard("Added to \"" + playlist.name + "\"");
         }
         lf_pop_style_props();
 

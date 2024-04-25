@@ -230,11 +230,6 @@ void initUI() {
 void handleTabKeyStrokes() {
   if(lf_key_event().pressed && lf_key_event().happened) {
     switch(lf_key_event().keycode) {
-      case GLFW_KEY_H: 
-        {
-          state.infoCards.addCard("Key pressed", "H");
-          break;
-        }
       case GLFW_KEY_SPACE:
         if(state.soundHandler.isInit)
         {
@@ -636,8 +631,10 @@ void renderDashboard() {
     renderFavourites();
   }
 
-  beginBottomNavBar();
-  renderTrackMenu();
+  if(state.dashboardTab != DashboardTab::Favourites) {
+    beginBottomNavBar();
+    renderTrackMenu();
+  }
   lf_div_end();
 }
 
@@ -814,15 +811,30 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
     props.margin_top = 10;
     lf_push_style_props(props);
     if(lf_button_fixed("Create", 150, -1) == LF_CLICKED) {
-      state.createPlaylistTab.createFileStatus = Playlist::create(std::string(state.createPlaylistTab.nameInput.buffer), std::string(state.createPlaylistTab.descInput.buffer), "",
+      FileStatus status = Playlist::create(std::string(state.createPlaylistTab.nameInput.buffer), std::string(state.createPlaylistTab.descInput.buffer), "",
           state.createPlaylistTab.thumbnailPath); 
+
+      switch(status) {
+        case FileStatus::Failed:
+          state.infoCards.addCard("Failed to create playlist.", LYSSA_RED);
+          break;
+        case FileStatus::AlreadyExists:
+          props.text_color = LYSSA_RED;
+          lf_push_style_props(props);
+          state.infoCards.addCard("Playlist already exists.", LYSSA_RED);
+          break;
+        case FileStatus::Success:
+          state.infoCards.addCard("Successfully created playlist.", LYSSA_GREEN, LF_BLACK);
+          break;
+        default:
+          break;
+      }
       memset(state.createPlaylistTab.nameInput.input.buf, 0, INPUT_BUFFER_SIZE);
       memset(state.createPlaylistTab.nameInput.buffer, 0, INPUT_BUFFER_SIZE);
 
       memset(state.createPlaylistTab.descInput.input.buf, 0, INPUT_BUFFER_SIZE);
       memset(state.createPlaylistTab.descInput.buffer, 0, INPUT_BUFFER_SIZE);
 
-      state.createPlaylistTab.createFileMessageTimer = 0.0f;
       state.createPlaylistTab.thumbnailPath = "";
       if(onCreateCb) 
         onCreateCb();
@@ -833,40 +845,9 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
   if(clientUICb)
     clientUICb();
 
-  // File Status Message
-  if(state.createPlaylistTab.createFileStatus != FileStatus::None) {
-    if(state.createPlaylistTab.createFileMessageTimer < state.createPlaylistTab.createFileMessageShowTime) {
-      state.createPlaylistTab.createFileMessageTimer += state.deltaTime;
-      lf_next_line();
-      lf_push_font(&state.h4Font);
-      LfUIElementProps props = lf_get_theme().button_props;
-      switch(state.createPlaylistTab.createFileStatus) {
-      case FileStatus::Failed:
-          props.text_color = LYSSA_RED;
-          lf_push_style_props(props);
-          lf_text("Failed to create playlist.");
-          break;
-        case FileStatus::AlreadyExists:
-          props.text_color = LYSSA_RED;
-          lf_push_style_props(props);
-          lf_text("Playlist already exists.");
-          break;
-        case FileStatus::Success:
-          props.text_color = LYSSA_GREEN;
-          lf_push_style_props(props);
-          lf_text("Created playlist.");
-          break;
-        default:
-          break;
-      }
-      lf_pop_font();
-    }
-    lf_pop_style_props();
-  }
 
   beginBottomNavBar();
   backButtonTo(GuiTab::Dashboard, [&](){
-      state.createPlaylistTab.createFileMessageTimer = state.createPlaylistTab.createFileMessageShowTime;
       loadPlaylists();
       if(backButtonCb)
       backButtonCb();
@@ -950,7 +931,6 @@ void renderCreatePlaylistFromFolder() {
         state.playlistAddFromFolderTab.folderContents, {}, true);
     beginBottomNavBar();
     backButtonTo(GuiTab::Dashboard, [&](){
-        state.createPlaylistTab.createFileMessageTimer = state.createPlaylistTab.createFileMessageShowTime;
         loadPlaylists();
         });
     renderTrackMenu();
@@ -1769,6 +1749,12 @@ void renderOnPlaylist() {
 
   if(state.playlistFileFutures.empty()) {
     beginBottomNavBar();
+    backButtonTo(GuiTab::Dashboard, [&](){
+        if(state.dashboardTab == DashboardTab::Favourites) {
+          state.dashboardTab = DashboardTab::Home;
+        }
+        loadPlaylists();
+        });
     renderTrackMenu();
     lf_div_end();
   }
@@ -2729,7 +2715,6 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
     if(clickCb)
       clickCb();
     changeTabTo(tab);
-    state.infoCards.addCard("You clicked back", "Back button was pressed");
   }
 
   lf_pop_style_props();

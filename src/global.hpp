@@ -51,10 +51,6 @@ struct InputField {
 struct CreatePlaylistState {
     InputField nameInput, descInput; 
     std::filesystem::path thumbnailPath;
-
-    FileStatus createFileStatus;
-    float createFileMessageShowTime = 3.0f; 
-    float createFileMessageTimer = 0.0f;
 };
 
 struct PlaylistAddFromFileTab {
