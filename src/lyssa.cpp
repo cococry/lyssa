@@ -651,6 +651,7 @@ void renderDashboardNav() {
 
 
   if(hoveredHome && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+    loadPlaylists();
     state.dashboardTab = DashboardTab::Home;
     changeTabTo(GuiTab::Dashboard);
   }
@@ -1633,6 +1634,8 @@ void renderOnPlaylist() {
           if(thumbnailState == LF_CLICKED) {
             if(!draggingTrack) {
               if(i != currentPlaylist.playingFile) {
+                draggingTrack = false;
+                draggingTrackTitle = L"";
                 state.currentSoundFile = &file;
                 if(state.onTrackTab.trackThumbnail.width != 0) {
                   lf_free_texture(&state.onTrackTab.trackThumbnail);
@@ -1652,10 +1655,12 @@ void renderOnPlaylist() {
               draggingTrackTitle = L"";
             }
           }
-          if(thumbnailState != LF_IDLE && lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT)) {
-            draggingTrack = true;
+          if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && thumbnailState != LF_IDLE) {
             draggingTrackTitle = file.title;
             draggingTrackIndex = i;
+          } 
+          if(!draggingTrack && draggingTrackTitle != L"" && lf_mouse_move_event().happened) {
+            draggingTrack = true;
           }
           if(!onActionButton) {
             onActionButton = (thumbnailState != LF_IDLE); 
@@ -1721,7 +1726,7 @@ void renderOnPlaylist() {
           lf_text(durationText.c_str());
           lf_pop_style_props();
         }
-        if(draggingTrackTitle != L"" && hoveredTextDiv) {
+        if(draggingTrack && hoveredTextDiv) {
           lf_rect_render(startPtr, (vec2s){fileAABB.size.x - state.sideNavigationWidth - DIV_START_X * 2.0f , 1}, LYSSA_PLAYLIST_COLOR, LF_NO_COLOR, 0.0f, 0.0f);
         }
         if(lf_get_current_div().id != lf_get_selected_div().id && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {

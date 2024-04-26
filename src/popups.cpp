@@ -241,6 +241,7 @@ void PlaylistFileDialoguePopup::render() {
           }
           this->shouldRender = false;
           lf_div_ungrab();
+          state.infoCards.addCard("Opening URL...");
           break;
         }
       case 4: /* Set thumbnail */
