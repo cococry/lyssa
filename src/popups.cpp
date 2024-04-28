@@ -1,6 +1,9 @@
 #include "popups.hpp"
 #include "config.hpp"
 #include "global.hpp"
+
+#include <filesystem>
+
 extern "C" {
 #include <leif.h>
 }
@@ -144,12 +147,12 @@ void EditPlaylistPopup::render() {
 
 void PlaylistFileDialoguePopup::render() {
   if(!this->shouldRender) return;
-  const vec2s popupSize =(vec2s){200, 200};
+  const vec2s popupSize =(vec2s){300, 230};
   static bool onPlaylistAddTab = false;
 
   LfUIElementProps props = lf_get_theme().div_props;
-  props.color = lf_color_brightness(GRAY, 0.35);
-  props.corner_radius = 4;
+  props.color = lf_color_brightness(GRAY, 0.6);
+  props.corner_radius = 5;
   lf_push_style_props(props);
 
   static float div_scroll = 0.0f;
@@ -166,13 +169,22 @@ void PlaylistFileDialoguePopup::render() {
     static const char* options[options_count];
     options[0] = "Add to playlist...";
     options[1] = "Remove";
-    options[2] = Playlist::metadataContainsFile(this->path.string(), 0) ? "" : "Add to favourites";
+    options[2] = Playlist::metadataContainsFile(this->path.string(), 0) ? "Remove from favourites" : "Add to favourites";
     options[3] = "Open URL...";
     options[4] = state.currentPlaylist != 0 ? "Set as thumbnail" : "";
+
+    static uint32_t optionIcons[options_count];
+    optionIcons[0] = state.icons["add_symbol"].id;
+    optionIcons[1] = state.icons["delete"].id;
+    optionIcons[2] = state.icons["favourite"].id;
+    optionIcons[3] = state.icons["more"].id;
+    optionIcons[4] = state.icons["thumbnail"].id;
 
     int32_t clickedIndex = -1;
     for(uint32_t i = 0; i < options_count; i++) {
       if(strlen(options[i]) == 0) continue;
+      uint32_t texWidth = (i == 4) ? 22 : 20;
+      lf_image((LfTexture){.id = optionIcons[i], .width = texWidth, .height = 20});
       // Option
       props = lf_get_theme().text_props;
       props.hover_text_color = lf_color_brightness(GRAY, 2);
@@ -215,21 +227,38 @@ void PlaylistFileDialoguePopup::render() {
         }
       case 2: /* Add to favourites */
         {
-
-          Playlist& favourites = state.playlists[0]; // 0th playlist is favourites
-          if(favourites.loaded) {
-            Playlist::addFile(this->path, 0);
-            favourites.loaded = false;
+          if(Playlist::metadataContainsFile(this->path.string(), 0)) {
+            Playlist& favourites = state.playlists[0];
+            if(!favourites.loaded) {
+              std::vector<std::string> paths = PlaylistMetadata::getFilepaths(
+                  std::filesystem::directory_entry(state.playlists[0].path));
+              for(auto& path : paths) {
+                favourites.musicFiles.push_back((SoundFile){.path = path});
+              }
+              Playlist::removeFile(this->path.string(), 0);
+              favourites.musicFiles.clear();
+            } else {
+              Playlist::removeFile(this->path.string(), 0);
+            }
+            this->shouldRender = false;
+            lf_div_ungrab();
+            state.infoCards.addCard("Removed from favourites.");
           } else {
-            std::ofstream metadata(favourites.path.string() + "/.metadata", std::ios::app);
-            metadata.seekp(0, std::ios::end);
+            Playlist& favourites = state.playlists[0]; // 0th playlist is favourites
+            if(favourites.loaded) {
+              Playlist::addFile(this->path, 0);
+              favourites.loaded = false;
+            } else {
+              std::ofstream metadata(favourites.path.string() + "/.metadata", std::ios::app);
+              metadata.seekp(0, std::ios::end);
 
-            metadata << "\"" << this->path.string() << "\" ";
-            metadata.close();
+              metadata << "\"" << this->path.string() << "\" ";
+              metadata.close();
+            }
+            this->shouldRender = false;
+            lf_div_ungrab();
+            state.infoCards.addCard("Added to favourites.");
           }
-          this->shouldRender = false;
-          lf_div_ungrab();
-          state.infoCards.addCard("Added to favourites.");
           break;
         }
       case 3: /* Open URL */

@@ -52,7 +52,8 @@ extern "C" {
 #define DIV_SMOOTH_SCROLL true
 
 // Playlist file thumbnails 
-#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 2.0f // Setting this to > 0 will worsen perfomance on low-end systems
+#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 0.0f // Setting this to > 0 will worsen perfomance on low-end systems
+#define PLAYLIST_ON_TRACK_CORNER_RADIUS PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS * 4.0f
 #define PLAYLIST_FILE_THUMBNAIL_COLOR GRAY
 #define PLAYLIST_FILE_THUMBNAIL_SIZE (vec2s){48, 48}
 
@@ -64,6 +65,9 @@ extern "C" {
 
 // Buffers
 #define INPUT_BUFFER_SIZE 512
+
+// Info cards 
+#define MAX_INFO_CARDS 5
 
 // Fullscreen Tab 
 #define FULLSCREEN_TRACK_UI_TIME 3.0f // Time in seconds till the UI of fullscreend track disappears 

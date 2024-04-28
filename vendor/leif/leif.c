@@ -2461,6 +2461,10 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
   else 
     handle_size = (slider->height != 0) ? slider->height * 4 : 20;
 
+  if(slider->held) {
+    handle_size = (slider->height != 0) ? slider->height * 4.5 : 22.5;
+    printf("Held.!\n");
+  }
   float slider_width = (slider->width != 0) ? slider->width : 200;
   float slider_height = (slider->height != 0) ? slider->height : handle_size / 2.0f;
 
@@ -2487,7 +2491,8 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
 
 
   lf_rect_render((vec2s){state.pos_ptr.x + slider->handle_pos, state.pos_ptr.y - (handle_size) / 2.0f + slider_height / 2.0f}, 
-                                       (vec2s){handle_size, handle_size}, props.text_color, props.border_color, props.border_width, props.corner_radius * 3.0f);
+                                       (vec2s){handle_size, handle_size}, props.text_color, props.border_color, props.border_width, 
+                 slider->held ? props.corner_radius * 3.5f : props.corner_radius * 3.0f);
 
 
   // Check if the slider bar is pressed

@@ -1,4 +1,5 @@
 #include "infoCard.hpp"
+#include "config.hpp"
 #include "global.hpp"
 
 #include "leif.h" 
@@ -8,12 +9,14 @@ InfoCardHandler::InfoCardHandler(float cardPadding, float cardH)
 }
 
 void InfoCardHandler::addCard(const std::string& title, LfColor bgColor, LfColor textColor) {
-  _infoCards.push_back((InfoCard){
-      .title = title, 
-      .width = lf_text_dimension(title.c_str()).x + _cardPadding + 50.0f,
-      .bgColor = bgColor,
-      .textColor = textColor
-      });
+  if(_infoCards.size() + 1 <= MAX_INFO_CARDS) {
+    _infoCards.push_back((InfoCard){
+        .title = title, 
+        .width = lf_text_dimension(title.c_str()).x + _cardPadding + 50.0f,
+        .bgColor = bgColor,
+        .textColor = textColor
+        });
+  }
 }
 void InfoCardHandler::render() {
   float yOffset = 0.0f;
