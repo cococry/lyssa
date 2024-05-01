@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+TryExec=lyssa
+Exec=lyssa
+Icon=/usr/share/icons/lyssa/512x512/appicon.png
+Terminal=false
+Categories=Audio;Player;
+
+Name=Lyssa
+GenericName=Music Player
+Comment=An aestethic, modern, configurable music player

@@ -55,5 +55,6 @@ install:
 	fi
 	cp -r ./vendor/leif/.leif/ ~
 	sudo cp ./bin/lyssa /usr/bin/
-	
-	
+	sudo cp ./Lyssa.desktop /usr/share/applications
+	sudo cp -r ./logo /usr/share/icons/lyssa
+		
