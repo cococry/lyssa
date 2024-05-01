@@ -3,7 +3,7 @@
 #include <vector>
 #include "config.hpp"
 
-#include "leif.h"
+#include <leif/leif.h>
 
 struct InfoCard {
   std::string title;

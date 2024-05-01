@@ -1,7 +1,7 @@
 #pragma once
 
 extern "C" {
-    #include <leif.h>
+    #include <leif/leif.h>
 }
 #include <string>
 #include <filesystem>
@@ -18,6 +18,8 @@ class Popup {
     public:
         virtual void render() = 0; 
         bool shouldRender;
+
+        void update();
     private:
 };
 

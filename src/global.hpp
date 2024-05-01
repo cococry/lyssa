@@ -18,7 +18,7 @@
 #include <miniaudio.h>
 
 extern "C" {
-    #include <leif.h>
+    #include <leif/leif.h>
 }
 
 #define MAX(a, b) a > b ? a : b

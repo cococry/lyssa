@@ -2,7 +2,9 @@
 #include "config.hpp"
 #include "global.hpp"
 
-#include "leif.h" 
+extern "C" {
+  #include <leif/leif.h>
+}
 
 InfoCardHandler::InfoCardHandler(float cardPadding, float cardH) 
   : _cardPadding(cardPadding), _cardH(cardH) {

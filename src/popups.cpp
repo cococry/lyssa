@@ -4,9 +4,6 @@
 
 #include <filesystem>
 
-extern "C" {
-#include <leif.h>
-}
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
@@ -18,6 +15,12 @@ extern "C" {
 #include <algorithm>
 #include <iostream>
 
+void Popup::update() {
+  if(lf_key_went_down(GLFW_KEY_ESCAPE)) {
+    this->shouldRender = false;
+    lf_div_ungrab();
+  }
+}
 void EditPlaylistPopup::render() {
   static char nameBuf[INPUT_BUFFER_SIZE] = {0};
   static char descBuf[INPUT_BUFFER_SIZE] = {0};
@@ -170,6 +173,9 @@ void PlaylistFileDialoguePopup::render() {
     options[0] = "Add to playlist...";
     options[1] = "Remove";
     options[2] = Playlist::metadataContainsFile(this->path.string(), 0) ? "Remove from favourites" : "Add to favourites";
+    if(state.currentTab == GuiTab::Dashboard && state.dashboardTab == DashboardTab::Favourites) {
+      options[2] = "";
+    }
     options[3] = "Open URL...";
     options[4] = state.currentPlaylist != 0 ? "Set as thumbnail" : "";
 

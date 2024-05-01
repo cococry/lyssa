@@ -4,7 +4,7 @@
 #include <filesystem>
 
 extern "C" {
-#include <leif.h>
+#include <leif/leif.h>
 }
 
 #include <string>

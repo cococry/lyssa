@@ -221,8 +221,6 @@ static void                     renderer_begin();
 static LfTextProps              text_render_simple(vec2s pos, const char* text, LfFont font, LfColor font_color, bool no_render);
 static LfTextProps              text_render_simple_wide(vec2s pos, const wchar_t* text, LfFont font, LfColor font_color, bool no_render);
 
-// --- UI ---
-static bool                     area_hovered(vec2s pos, vec2s size);
 
 static LfClickableItemState     button_ex(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color, vec2s hitbox_override);
 static LfClickableItemState     button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width, bool click_color, bool hover_color);
@@ -587,11 +585,6 @@ LfTextProps text_render_simple_wide(vec2s pos, const wchar_t* text, LfFont font,
   return lf_text_render_wchar(pos, text, font, -1, no_render, font_color);
 }
 
-bool area_hovered(vec2s pos, vec2s size) {
-  bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
-    lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
-  return hovered;
-}
 
 LfClickableItemState button(const char* file, int32_t line, vec2s pos, vec2s size, LfUIElementProps props, LfColor color, float border_width,  bool click_color, bool hover_color) {
   return button_ex(file, line, pos, size, props, color, border_width, click_color, hover_color, (vec2s){-1, -1}); 
@@ -2260,7 +2253,7 @@ double lf_get_mouse_scroll_y() {
 }
 
 LfDiv _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, float* scroll_velocity, const char* file, int32_t line) {
-  bool hovered_div = area_hovered(pos, size);
+  bool hovered_div = lf_area_hovered(pos, size);
   if(hovered_div) {
     state.scroll_velocity_ptr = scroll_velocity;
     state.scroll_ptr = scroll;
@@ -2463,7 +2456,6 @@ LfClickableItemState _lf_slider_int_loc(LfSlider* slider, const char* file, int3
 
   if(slider->held) {
     handle_size = (slider->height != 0) ? slider->height * 4.5 : 22.5;
-    printf("Held.!\n");
   }
   float slider_width = (slider->width != 0) ? slider->width : 200;
   float slider_height = (slider->height != 0) ? slider->height : handle_size / 2.0f;
@@ -3378,6 +3370,12 @@ bool lf_hovered(vec2s pos, vec2s size) {
   bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
     lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y) && 
     ((state.selected_div.id == state.current_div.id && state.grabbed_div.id == -1) || (state.grabbed_div.id == state.current_div.id && state.grabbed_div.id != -1));
+  return hovered;
+}
+
+bool lf_area_hovered(vec2s pos, vec2s size) {
+  bool hovered = lf_get_mouse_x() <= (pos.x + size.x) && lf_get_mouse_x() >= (pos.x) && 
+    lf_get_mouse_y() <= (pos.y + size.y) && lf_get_mouse_y() >= (pos.y);
   return hovered;
 }
 

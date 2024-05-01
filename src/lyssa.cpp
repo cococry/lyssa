@@ -1,5 +1,4 @@
 #include "config.hpp" 
-#include "leif.h"
 #include "log.hpp"
 #include "playlists.hpp"
 #include "popups.hpp"
@@ -23,6 +22,10 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+extern "C" {
+  #include <leif/leif.h>
+}
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -132,6 +135,8 @@ static void                     loadPlaylistAsync(Playlist& playlist);
 
 static LfClickableItemState     renderSoundFileThumbnail(vec2s thumbnailContainerSize, SoundFile& file, 
                                                           const std::function<void()>& clickCb = nullptr, bool uiResponse = true);
+
+static bool                     renderMenuBarElement(const std::string& text, uint32_t iconId);
 
 
 std::vector<std::filesystem::directory_entry> loadFolderContents(const std::wstring& folderpath) {
@@ -295,6 +300,29 @@ if(lf_key_event().pressed && lf_key_event().happened) {
       case GLFW_KEY_S: 
         {
           state.shuffle = !state.shuffle;
+          if(state.currentTab == GuiTab::OnTrack) {
+            std::string infoStr = "Shuffle Mode: ";
+            if(state.shuffle) {
+              infoStr += "On";
+            } else {
+              infoStr += "Off";
+            }
+            state.infoCards.addCard(infoStr);
+          }
+          break;
+        }
+      case GLFW_KEY_R: 
+        {
+          state.replayTrack = !state.replayTrack;
+          if(state.currentTab == GuiTab::OnTrack) {
+            std::string infoStr = "Replay Mode: ";
+            if(state.replayTrack) {
+              infoStr += "On";
+            } else {
+              infoStr += "Off";
+            }
+            state.infoCards.addCard(infoStr);
+          }
           break;
         }
       case GLFW_KEY_N:
@@ -1276,7 +1304,8 @@ void renderOnPlaylist() {
       clearedPlaylist = true;
     }
 
-    if(state.downloadPlaylistFileCount == LyssaUtils::getLineCountFile(LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName + "/archive.txt") && state.downloadPlaylistFileCount != 0) {
+    if(LyssaUtils::getLineCountFile(LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName + "/archive.txt") >= state.downloadPlaylistFileCount
+        && state.downloadPlaylistFileCount != 0) {
       state.playlistDownloadRunning = false;
       for (const auto& entry : std::filesystem::directory_iterator(LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName)) {
         if (entry.is_regular_file() && 
@@ -1370,10 +1399,7 @@ void renderOnPlaylist() {
 
     if(showPlaylistSettings) {
       lf_next_line();
-      LfUIElementProps props = secondary_button_style();
-      props.margin_top = -10;
-      lf_push_style_props(props);
-      if(lf_button("Sync Downloads") == LF_CLICKED) {
+      if(renderMenuBarElement("Sync Downloads", state.icons["sync"].id)) {
         terminateAudio();
         system(std::string(LYSSA_DIR + "/scripts/download-yt.sh \"" + currentPlaylist.url + "\" " + LYSSA_DIR + "/downloaded_playlists/ &").c_str());
 
@@ -1383,6 +1409,18 @@ void renderOnPlaylist() {
 
         clearedPlaylist = false;
       }
+      if(renderMenuBarElement("Search", state.icons["search"].id)) {
+        state.infoCards.addCard("Search is not implemented yet.");
+      }
+      if(renderMenuBarElement("Jump to top", state.icons["jump_to_top"].id)) {
+        float filePosY = currentPlaylist.musicFiles[0].renderPosY;
+        currentPlaylist.scroll = -filePosY;
+      }
+      if(renderMenuBarElement("Jump to bottom", state.icons["jump_to_bottom"].id)) {
+        float filePosY = currentPlaylist.musicFiles[currentPlaylist.musicFiles.size() - 1].renderPosY;
+        currentPlaylist.scroll = -filePosY;
+      }
+      lf_set_ptr_y_absolute(lf_get_ptr_y() + 60.0f);
     }
   }
 
@@ -1406,7 +1444,7 @@ void renderOnPlaylist() {
     lf_next_line();
     {
         std::string downloadedPlaylistDir = LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName; 
-        uint32_t downloadedFileCount = LyssaUtils::getLineCountFile(downloadedPlaylistDir + "/archive.txt");
+        uint32_t downloadedFileCount = MIN(LyssaUtils::getLineCountFile(downloadedPlaylistDir + "/archive.txt"), state.downloadPlaylistFileCount);
         const vec2s progressBarSize = (vec2s){400, 6};
 
         LfUIElementProps props = lf_get_theme().slider_props;
@@ -1967,13 +2005,12 @@ void renderOnTrack() {
 
     float controlsSpaceWidth = 
       controlSize + controlMargin + 
-      controlSize + controlMargin + 
       controlsSpaceHeight + controlMargin + 
-      controlSize + (controlMargin) +
       controlSize;
 
     lf_set_ptr_x_absolute((winWidth - controlsSpaceWidth) / 2.0f);
 
+    /*
     bool onShuffleButton = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, 
         (vec2s){controlSize, controlSize});
 
@@ -1988,7 +2025,7 @@ void renderOnTrack() {
         .width = (uint32_t)controlSize, .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
 
     lf_set_ptr_x_absolute(lf_get_ptr_x() + controlSize + controlMargin);
-
+    */
     // Skip Down
     bool onSkipDownButton = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, 
         (vec2s){controlSize, controlSize});
@@ -1999,7 +2036,7 @@ void renderOnTrack() {
 
 
     lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f},
-        LF_WHITE, (LfTexture){.id = state.icons["skip_down"].id, 
+        lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_down"].id, 
         .width = (uint32_t)(controlSize), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
 
     lf_set_ptr_x_absolute(lf_get_ptr_x() + controlSize + controlMargin);
@@ -2028,9 +2065,7 @@ void renderOnTrack() {
     lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, lf_color_brightness(GRAY, 1.5f), (LfTexture){.id = state.icons["skip_up"].id, 
         .width = (uint32_t)(controlSize), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
 
-    lf_set_ptr_x_absolute(lf_get_ptr_x() + controlSize + controlMargin);
-
-
+    /*
     bool onReplayButton = lf_hovered((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (controlsSpaceHeight - controlSize) / 2.0f}, 
         (vec2s){controlSize, controlSize});
 
@@ -2043,6 +2078,7 @@ void renderOnTrack() {
         .width = (uint32_t)(controlSize), .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
 
     lf_unset_image_color();
+    */
   }
 
   beginBottomNavBar();
@@ -2768,14 +2804,16 @@ void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
 void loadPlaylists() {
   uint32_t playlistI = 0;
 
-  std::string favouritesDir = LYSSA_DIR + "/playlists/favourites";
-  Playlist favourites;
-  favourites.path = favouritesDir;
-  favourites.name = PlaylistMetadata::getName(std::filesystem::directory_entry(favouritesDir));
-  favourites.desc = PlaylistMetadata::getDesc(std::filesystem::directory_entry(favouritesDir));
-  favourites.url = "";
-  favourites.thumbnailPath = "";
-  state.playlists.emplace_back(favourites);
+  if(std::find(state.playlists.begin(), state.playlists.end(), (Playlist){.path = LYSSA_DIR + "/playlists/favourites"}) == state.playlists.end()) {
+    std::string favouritesDir = LYSSA_DIR + "/playlists/favourites";
+    Playlist favourites;
+    favourites.path = favouritesDir;
+    favourites.name = PlaylistMetadata::getName(std::filesystem::directory_entry(favouritesDir));
+    favourites.desc = PlaylistMetadata::getDesc(std::filesystem::directory_entry(favouritesDir));
+    favourites.url = "";
+    favourites.thumbnailPath = "";
+    state.playlists.emplace_back(favourites);
+  }
 
   for (const auto& folder : std::filesystem::directory_iterator(LYSSA_DIR + "/playlists/")) {
     if(folder.path().filename() == "favourites") continue;
@@ -2919,7 +2957,7 @@ void skipSoundUp(uint32_t playlistInedx) {
   }
 
   state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-  if(state.currentTab == GuiTab::OnTrack) {
+  if(state.currentTab == GuiTab::OnTrack || state.currentTab == GuiTab::TrackFullscreen) {
     if(state.onTrackTab.trackThumbnail.width != 0) {
       lf_free_texture(&state.onTrackTab.trackThumbnail);
     }
@@ -2940,9 +2978,11 @@ void skipSoundDown(uint32_t playlistIndex) {
     playlist.playingFile = playlist.musicFiles.size() - 1; 
 
   state.currentSoundFile = &playlist.musicFiles[playlist.playingFile];
-  if(state.onTrackTab.trackThumbnail.width != 0)
-    lf_free_texture(&state.onTrackTab.trackThumbnail);
-  state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
+  if(state.currentTab == GuiTab::OnTrack || state.currentTab == GuiTab::TrackFullscreen) {
+    if(state.onTrackTab.trackThumbnail.width != 0)
+      lf_free_texture(&state.onTrackTab.trackThumbnail);
+    state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path);
+  }
 
   playlistPlayFileWithIndex(playlist.playingFile, playlistIndex);
   float filePosY = playlist.musicFiles[playlist.playingFile].renderPosY;
@@ -3175,6 +3215,48 @@ LfClickableItemState renderSoundFileThumbnail(vec2s thumbnailContainerSize, Soun
   return thumbnailState;
 }
 
+bool renderMenuBarElement(const std::string& text, uint32_t iconId) {
+  const uint32_t iconSize = 24;
+  const float divMargin = 10.0f;
+  float divWidth = iconSize + 
+    lf_get_theme().button_props.margin_right + 
+    lf_get_theme().text_props.margin_left +
+    lf_text_dimension(text.c_str()).x + 
+    lf_get_theme().text_props.margin_right;
+  float divHeight = iconSize + lf_get_theme().button_props.margin_top * 3.0f;
+  bool onDiv = lf_area_hovered(LF_PTR, (vec2s){divWidth, divHeight});
+  {
+    LfUIElementProps props = lf_get_theme().div_props;
+    props.color = onDiv ? (LfColor){255, 255, 255, 20} : LF_NO_COLOR;
+    props.corner_radius = 4.0f;
+    lf_push_style_props(props);
+    lf_div_begin(LF_PTR, ((vec2s){divWidth, divHeight}), false);
+    lf_pop_style_props();
+  }
+  {
+    LfUIElementProps icon_props = lf_get_theme().button_props;
+    icon_props.color = LF_NO_COLOR;
+    icon_props.padding = 0.0f;
+    icon_props.border_width = 0.0f;
+
+    lf_push_style_props(icon_props);
+    lf_set_image_color(lf_color_brightness(GRAY, 2.0f));
+    lf_image_button(((LfTexture){.id = iconId, .width = iconSize, .height = iconSize}));
+    lf_unset_image_color();
+    lf_pop_style_props();
+
+    LfUIElementProps text_props = lf_get_theme().text_props;
+    text_props.margin_top = icon_props.margin_top + ((iconSize - lf_text_dimension(text.c_str()).y) / 2.0f);
+    lf_push_style_props(text_props);
+    lf_push_font(&state.h6Font);
+    lf_text(text.c_str());
+    lf_pop_font();
+  }
+  lf_div_end();
+  lf_set_ptr_x_absolute(lf_get_ptr_x() + divWidth + divMargin);
+
+  return onDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT);
+}
 
 std::string formatDurationToMins(int32_t duration) {
   int32_t minutes = duration / 60;
@@ -3277,7 +3359,8 @@ int main(int argc, char* argv[]) {
     for(const auto& popup : state.popups) {
       if(popup.second->shouldRender) {
         popup.second->render();
-      } 
+      }
+      popup.second->update();
     }
     if(!lf_input_grabbed())
       handleTabKeyStrokes();
