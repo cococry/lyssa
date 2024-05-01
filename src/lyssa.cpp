@@ -1292,7 +1292,6 @@ void renderDownloadPlaylist() {
 void renderOnPlaylist() {
   Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
 
-  static bool showPlaylistSettings = false;
   static bool clearedPlaylist = false;
 
   if(state.playlistDownloadRunning) {
@@ -1343,13 +1342,6 @@ void renderOnPlaylist() {
     lf_push_style_props(props);
     lf_set_image_color(LF_WHITE);
 
-    if(onTitleArea && currentPlaylist.url != "") {
-      if(lf_image_button(((LfTexture){.id = state.icons["more"].id, .width = 30, .height = 30})) == LF_CLICKED) {
-        showPlaylistSettings = !showPlaylistSettings; 
-      }
-    } else if(!onTitleArea && currentPlaylist.url != "") {
-      lf_image_button(((LfTexture){.id = state.icons["more"].id, .width = 20, .height = 20}));
-    }
     lf_unset_image_color();
     lf_pop_style_props();
 
@@ -1397,7 +1389,7 @@ void renderOnPlaylist() {
     lf_pop_style_props();
 
 
-    if(showPlaylistSettings) {
+    { 
       lf_next_line();
       if(renderMenuBarElement("Sync Downloads", state.icons["sync"].id)) {
         terminateAudio();
