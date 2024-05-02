@@ -1492,7 +1492,7 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
   if(!selected_div->scrollable) return;
   if((state.grabbed_div.id != -1 && selected_div->id != state.grabbed_div.id)) return;
 
-  if(yoffset == -1) {
+  if(yoffset < 0.0f) {
     if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
       if(state.theme.div_smooth_scroll) {
         *state.scroll_velocity_ptr -= state.theme.div_scroll_acceleration;
@@ -1501,7 +1501,7 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
         *state.scroll_ptr -= state.theme.div_scroll_amount_px;
       }
     } 
-  } else if (yoffset == 1) {
+  } else if (yoffset > 0.0f) {
     if(*state.scroll_ptr) {
       if(state.theme.div_smooth_scroll) {
         *state.scroll_velocity_ptr += state.theme.div_scroll_acceleration;
