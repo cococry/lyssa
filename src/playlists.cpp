@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <algorithm>
 
 static std::string getMetadataValue(const std::filesystem::directory_entry& playlistDir, const std::string& searchKey) {
   std::ifstream metadata(playlistDir.path().string() + "/.metadata");
@@ -33,9 +34,15 @@ static std::string getMetadataValue(const std::filesystem::directory_entry& play
 }
 FileStatus Playlist::create(const std::string& name, const std::string& desc, const std::string& url,
     const std::filesystem::path& thumbnailPath) {
-  std::string folderPath = LYSSA_DIR + "/playlists/" + name;
+  std::string nameCpy = name;
+  for (char& ch : nameCpy) {
+    if (ch == '/') {
+      ch = '-';
+    }
+  }
+  std::string folderPath = LYSSA_DIR + "/playlists/" + nameCpy;
   if(!std::filesystem::exists(folderPath)) {
-    if(!std::filesystem::create_directory(folderPath) )
+    if(!std::filesystem::create_directory(folderPath))
       return FileStatus::Failed;
   } else {
     return FileStatus::AlreadyExists;

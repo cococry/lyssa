@@ -1044,10 +1044,9 @@ void renderDownloadPlaylist() {
       LfUIElementProps props = lf_get_theme().text_props;
       props.text_color = LF_WHITE;
       lf_push_style_props(props);
-      lf_push_font(&state.h1Font);
+      lf_push_font(&state.h3Font);
 
-      std::string text = "Finished Downloading Playlist";
-      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - lf_text_dimension(text.c_str()).x) / 2.0f);
+      std::string text = "Playlist Download Complete.";
       lf_text(text.c_str());
       lf_pop_style_props();
       lf_pop_font();
@@ -1061,7 +1060,6 @@ void renderDownloadPlaylist() {
       props.color = GRAY;
       lf_push_style_props(props);
       std::string text = "Downloading of playlist \"" + state.downloadingPlaylistName + "\" with " + std::to_string(state.downloadPlaylistFileCount) + " files finished.";
-      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - lf_text_dimension(text.c_str()).x) / 2.0f);
       lf_text(text.c_str());
       lf_pop_style_props();
       lf_pop_font();
@@ -1072,10 +1070,14 @@ void renderDownloadPlaylist() {
       LfUIElementProps props = call_to_action_button_style();
       props.margin_left = 0;
       props.margin_top = 15;
+      props.color = LYSSA_BACKGROUND_COLOR;
+      props.text_color = LF_WHITE;
+      props.border_color = GRAY;
+      props.border_width = 1.0f;
+      props.corner_radius = 9.0f;
       props.margin_right = 0; 
 
       lf_push_style_props(props);
-      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - (180 + props.padding * 2.0f)) / 2.0f);
       if(lf_button_fixed("Open Playlist", 180, -1) == LF_CLICKED) {
         loadPlaylists();
         state.playlistDownloadRunning = false;
@@ -1154,6 +1156,11 @@ void renderDownloadPlaylist() {
       if(lf_button_fixed("Download", 150, -1) == LF_CLICKED) {
         state.downloadingPlaylistName = LyssaUtils::getCommandOutput(
             std::string("yt-dlp \"" + std::string(urlInput) + "\" --flat-playlist --dump-single-json --no-warnings | jq -r .title &"));
+        for (char& ch : state.downloadingPlaylistName) {
+          if (ch == '/') {
+            ch = '-';
+          }
+        }
         if(state.downloadingPlaylistName != "null") {
           std::string downloadCmd = LYSSA_DIR + "/scripts/download-yt.sh \"" + urlInput + "\" " + LYSSA_DIR + "/downloaded_playlists/ &"; 
           system(downloadCmd.c_str());
@@ -1169,7 +1176,7 @@ void renderDownloadPlaylist() {
       lf_pop_style_props();
     }
   } else  {
-    state.playlistDownloadFinished = (downloadedFileCount == state.downloadPlaylistFileCount); 
+    state.playlistDownloadFinished = (LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") && (downloadedFileCount == state.downloadPlaylistFileCount); 
     if(state.playlistDownloadFinished) {
       FileStatus createStatus = Playlist::create(state.downloadingPlaylistName, "Downloaded Playlist", url);
 
@@ -1192,13 +1199,12 @@ void renderDownloadPlaylist() {
     }
 
     {
-      std::string title = std::string("Downloading \"" + state.downloadingPlaylistName + "\"...");
+      std::string title = std::string("Downloading " + state.downloadingPlaylistName + "...");
       LfUIElementProps props = lf_get_theme().text_props;
       props.text_color = LF_WHITE;
       props.margin_bottom = 10;
       lf_push_style_props(props);
-      lf_push_font(&state.h1Font);
-      lf_set_ptr_x_absolute(((state.win->getWidth()) + state.sideNavigationWidth - lf_text_dimension(title.c_str()).x) / 2.0f);
+      lf_push_font(&state.h3Font);
       lf_text(title.c_str());
       lf_pop_style_props();
       lf_pop_font();
@@ -1207,7 +1213,6 @@ void renderDownloadPlaylist() {
       std::string subtitle = std::string("This can take a while.");
       props.margin_bottom = 15;
       lf_push_style_props(props);
-      lf_set_ptr_x_absolute(((state.win->getWidth()) + state.sideNavigationWidth - lf_text_dimension(subtitle.c_str()).x) / 2.0f);
       lf_text(subtitle.c_str());
       lf_pop_style_props();
       lf_next_line();
@@ -1215,6 +1220,29 @@ void renderDownloadPlaylist() {
     }
     lf_next_line();
     {
+      LfUIElementProps props = lf_get_theme().div_props;
+      props.color = lf_color_brightness(LYSSA_BACKGROUND_COLOR, 1.5f);
+      props.corner_radius = 6.0f; 
+      lf_push_style_props(props);
+      lf_div_begin(LF_PTR, ((vec2s){440, 120}), false);
+      lf_pop_style_props();
+    }
+    {
+      int percentage = (downloadedFileCount * 100) / state.downloadPlaylistFileCount;
+      std::ostringstream oss;
+      oss << percentage << "%";
+
+      std::string percentStr = oss.str();
+      LfUIElementProps text_props = lf_get_theme().text_props;
+      text_props.margin_left = 15.0f;
+      text_props.margin_bottom = 15.0f;
+      lf_push_style_props(text_props);
+      lf_push_font(&state.h4Font);
+      lf_text(percentStr.c_str());
+      lf_pop_font();
+      lf_pop_style_props();
+      
+      lf_next_line();
       const vec2s progressBarSize = (vec2s){400, 6};
 
       LfUIElementProps props = lf_get_theme().slider_props;
@@ -1222,41 +1250,12 @@ void renderDownloadPlaylist() {
       props.color = GRAY;
       props.text_color = BLUE_GRAY;  
       props.corner_radius = 1.5f;
-      props.margin_top = 15;
-      props.margin_left = 0;
+      props.margin_top = 0;
+      props.margin_left = 15;
       props.margin_right = 0;
-
-      {
-        vec2s textDim = lf_text_dimension(std::to_string(downloadedFileCount).c_str());
-        lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - progressBarSize.x - textDim.x) / 2.0f);
-
-        LfUIElementProps props = lf_get_theme().text_props;
-        props.color = lf_color_brightness(GRAY, 1.5);
-        props.margin_top = 15 - (textDim.y - progressBarSize.y) / 2.0f;
-
-        lf_push_style_props(props);
-        lf_push_font(&state.h6Font);
-        lf_text(std::to_string(downloadedFileCount).c_str());
-        lf_pop_font();
-      }
-
       lf_push_style_props(props);
       lf_progress_bar_int(downloadedFileCount, 0, (float)state.downloadPlaylistFileCount, progressBarSize.x, progressBarSize.y);
       lf_pop_style_props();
-
-      {
-        std::string totalFileCount = std::to_string(state.downloadPlaylistFileCount);
-        static float totalFileCountHeight = lf_text_dimension(totalFileCount.c_str()).y;
-
-        LfUIElementProps props = lf_get_theme().text_props;
-        props.color = lf_color_brightness(GRAY, 1.5);
-        props.margin_top = 15 - (totalFileCountHeight - progressBarSize.y) / 2.0f;
-
-        lf_push_style_props(props);
-        lf_push_font(&state.h6Font);
-        lf_text(totalFileCount.c_str());
-        lf_pop_font();
-      }
     }
 
     lf_next_line();
@@ -1264,21 +1263,24 @@ void renderDownloadPlaylist() {
     {
       const float buttonSize = 180.0f;
       LfUIElementProps props = call_to_action_button_style();
-      props.color = LYSSA_RED;
-      props.margin_left = 0;
+      props.color = lf_color_brightness(LYSSA_BACKGROUND_COLOR, 1.5f);
+      props.margin_left = 15;
       props.margin_right = 0;
-      props.corner_radius = 8;
-      props.margin_top = 15;
+      props.corner_radius = 8.0f;
+      props.border_width = 1.0f;
+      props.border_color = GRAY;
+      props.margin_top = 10;
       props.text_color = LF_WHITE;
       lf_push_style_props(props);
-      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth)  - (buttonSize + props.padding * 2.0f)) / 2.0f);
-      if(lf_button_fixed("Cancle Download", buttonSize, -1) == LF_CLICKED) {
+      if(lf_button_fixed("Cancle", buttonSize, -1) == LF_CLICKED) {
         state.playlistDownloadRunning = false;
         system("pkill yt-dlp &");
       }
       lf_pop_style_props();
     }
   }
+  lf_div_end();
+
   if(LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") {
     beginBottomNavBar();
     backButtonTo(GuiTab::Dashboard, [&](){
