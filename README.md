@@ -86,9 +86,14 @@ paru -S make gcc glfw cglm taglib yt-dlp libclipboard ffmpeg jq perl-image-exift
 ```console
 sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev yt-dlp jq ffmpeg libimage-exiftool-perl
 ```
-Build the application
+Build and install
 ```console
-make rebuild install
+make && sudo make install
+```
+
+Uninstalling
+```
+sudo make uninstall
 ```
 
 ### Running the Application
