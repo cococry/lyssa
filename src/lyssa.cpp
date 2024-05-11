@@ -1330,7 +1330,9 @@ void renderOnPlaylist() {
       props.text_color = LYSSA_PLAYLIST_COLOR;
       props.margin_bottom = 20;
       lf_push_style_props(props);
+      lf_set_cull_end_x(state.win->getWidth() - 250.0f);
       lf_text(currentPlaylist.name == "favourites" ? "Favourites" : currentPlaylist.name.c_str());
+      lf_unset_cull_end_x();
       lf_pop_style_props();
     }
     lf_pop_font();
@@ -1714,7 +1716,7 @@ void renderOnPlaylist() {
             draggingTrackTitle = file.title;
             draggingTrackIndex = i;
           } 
-          if(!draggingTrack && draggingTrackTitle != L"" && lf_mouse_move_event().happened) {
+          if(!draggingTrack && draggingTrackTitle != L"" && (fabsf(lf_get_mouse_x_delta()) > 1 || fabsf(lf_get_mouse_y_delta()) > 1)) {
             draggingTrack = true;
           }
           if(!onActionButton) {

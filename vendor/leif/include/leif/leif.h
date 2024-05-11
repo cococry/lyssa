@@ -86,7 +86,6 @@ typedef struct {
 
     bool _init;
 
-
     void (*char_callback)(char);
     
 } LfInputField;

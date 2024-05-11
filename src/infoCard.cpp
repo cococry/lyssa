@@ -1,7 +1,7 @@
 #include "infoCard.hpp"
 #include "config.hpp"
 #include "global.hpp"
-
+#include <algorithm>
 extern "C" {
   #include <leif/leif.h>
 }
