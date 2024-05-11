@@ -87,7 +87,9 @@ typedef struct {
     bool _init;
 
     void (*char_callback)(char);
-    
+    void (*insert_override_callback)(void*);
+
+    bool retain_height;
 } LfInputField;
 
 typedef struct {
@@ -252,7 +254,7 @@ double lf_get_mouse_scroll_y();
 
 #define lf_div_begin_ex(pos, size, scrollable, scroll_ptr, scroll_velocity_ptr) _lf_div_begin_loc(pos, size, scrollable, scroll_ptr, scroll_velocity_ptr, __FILE__, __LINE__);
 
-LfDiv _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, 
+LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, 
         float* scroll_velocity, const char* file, int32_t line);
 
 void lf_div_end();
@@ -263,7 +265,7 @@ LfClickableItemState _lf_item_loc(vec2s size,  const char* file, int32_t line);
 #define lf_button(text) _lf_button_loc(text, __FILE__, __LINE__)
 LfClickableItemState _lf_button_loc(const char* text, const char* file, int32_t line);
 
-#define lf_button_wide(text) _lf_button_loc_wide(text, __FILE__, __LINE__)
+#define lf_button_wide(text) _lf_button_wide_loc(text, __FILE__, __LINE__)
 LfClickableItemState _lf_button_wide_loc(const wchar_t* text, const char* file, int32_t line);
 
 #define lf_image_button(img) _lf_image_button_loc(img, __FILE__, __LINE__)
@@ -346,6 +348,12 @@ void _lf_input_int_loc(LfInputField* input, const char* file, int32_t line);
 
 #define lf_input_float(input) _lf_input_float_loc(input, __FILE__, __LINE__)
 void _lf_input_float_loc(LfInputField* input, const char* file, int32_t line);
+
+void lf_input_insert_char_idx(LfInputField* input, char c, uint32_t idx);
+
+void lf_input_insert_str_idx(LfInputField* input, const char* insert, uint32_t len, uint32_t idx);
+
+void lf_input_field_unselect_all(LfInputField* input);
 
 bool lf_input_grabbed();
 
@@ -463,7 +471,11 @@ void lf_unset_image_color();
 
 void lf_set_current_div_scroll(float scroll); 
 
+float lf_get_current_div_scroll(); 
+
 void lf_set_current_div_scroll_velocity(float scroll_velocity);
+
+float lf_get_current_div_scroll_velocity();
 
 void lf_set_line_height(uint32_t line_height);
 
@@ -493,3 +505,4 @@ void lf_rect(float width, float height, LfColor color, float corner_radius);
 
 void lf_seperator();
 
+void lf_set_clipboard_text(const char* text);

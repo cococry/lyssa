@@ -41,6 +41,7 @@ rebuild:
 	$(MAKE) build
 
 install:
+	$(MAKE) -C ./vendor/leif/ install
 	@mkdir -p $(LYSSA_DIR)
 	cp -r ./scripts/ ~/.lyssa/
 	cp -r ./assets/ ~/.lyssa/
@@ -53,8 +54,13 @@ install:
 	if [ ! -d ~/.lyssa/playlists/favourites ]; then \
 		cp -r ./.lyssa/favourites/ ~/.lyssa/playlists; \
 	fi
-	cp -r ./vendor/leif/.leif/ ~
-	sudo cp ./bin/lyssa /usr/bin/
-	sudo cp ./Lyssa.desktop /usr/share/applications
-	sudo cp -r ./logo /usr/share/icons/lyssa
-		
+	cp ./bin/lyssa /usr/bin/
+	cp ./Lyssa.desktop /usr/share/applications
+	cp -r ./logo /usr/share/icons/lyssa
+
+uninstall:
+	$(MAKE) -C ./vendor/leif/ uninstall
+	rm -rf $(LYSSA_DIR)
+	rm -rf /usr/bin/lyssa 
+	rm -rf /usr/share/applications/Lyssa.desktop
+	rm -rf /usr/share/icons/lyssa/
