@@ -88,6 +88,7 @@ typedef struct {
 
     void (*char_callback)(char);
     void (*insert_override_callback)(void*);
+    void (*key_callback)(void*);
 
     bool retain_height;
 } LfInputField;

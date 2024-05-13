@@ -31,8 +31,8 @@ extern "C" {
 
 // General colors
 
-#define NIGHT lf_color_from_hex(0x121212)
-#define GRAY lf_color_from_hex(0x454541)
+#define NIGHT (LfColor){30, 34, 42, 255} 
+#define GRAY (LfColor){60, 64, 72, 255}
 #define DARK_SLATE_GRAY lf_color_from_hex(0x3A4E48)
 #define BLUE_GRAY lf_color_from_hex(0x6A7B76)
 #define CAMBRIDGE_BLUE lf_color_from_hex(0x8B9D83)
@@ -77,7 +77,7 @@ inline LfUIElementProps primary_button_style() {
     LfUIElementProps props = lf_get_theme().button_props;
     props.corner_radius = 6;
     props.border_width = 0;
-    props.color = BLUE_GRAY; 
+    props.color = lf_color_brightness(GRAY, 1.8f); 
     return props;
 }
 

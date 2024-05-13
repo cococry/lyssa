@@ -35,12 +35,15 @@ enum class GuiTab {
     PlaylistAddFromFile,
     PlaylistAddFromFolder,
     PlaylistSetThumbnail,
+    SearchPlaylist,
+    SearchAll,
     TabCount
 };
 
 enum class DashboardTab {
   Home = 0,
-  Favourites
+  Favourites,
+  Search
 };
 
 struct InputField {
@@ -101,7 +104,7 @@ struct GlobalState {
     h3Font,
     h4Font,
     h5Font,
-    h5BoldFont,
+    h5BoldFont, h6BoldFont,
     h6Font,
     h7Font;
 
@@ -151,6 +154,9 @@ struct GlobalState {
     uint32_t downloadPlaylistFileCount;
 
     bool shuffle, replayTrack;
+
+    InputField searchPlaylistInput;
+    std::vector<SoundFile> searchPlaylistResults;
 };
 
 extern GlobalState state;

@@ -928,6 +928,9 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
         }
       }
     }
+    if(input->key_callback) {
+      input->key_callback(input);
+    }
   }
 
   LfTextProps textprops =  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, input->buf, 
@@ -989,7 +992,9 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     }
   }
 
-  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, (!strlen(input->buf) && !input->selected) ? input->placeholder : input->buf, font, props.text_color, 
+  lf_text_render((vec2s){state.pos_ptr.x + props.padding, state.pos_ptr.y + props.padding}, 
+                 (!strlen(input->buf) && !input->selected) ? input->placeholder : input->buf, font, 
+                 !strlen(input->buf) ? lf_color_brightness(props.text_color, 0.75f) : props.text_color, 
                  wrap_point, (vec2s){-1, -1}, false, false, -1, -1); 
 
 

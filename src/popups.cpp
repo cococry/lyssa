@@ -151,10 +151,12 @@ void EditPlaylistPopup::render() {
 void PlaylistFileDialoguePopup::render() {
   if(!this->shouldRender) return;
   const vec2s popupSize =(vec2s){300, 230};
+  this->pos.x = MIN(this->pos.x, state.win->getWidth() - popupSize.x - 15.0f);
+  this->pos.y = MIN(this->pos.y, state.win->getHeight() - popupSize.y - 15.0f);
   static bool onPlaylistAddTab = false;
 
   LfUIElementProps props = lf_get_theme().div_props;
-  props.color = lf_color_brightness(GRAY, 0.6);
+  props.color = lf_color_brightness(GRAY, 0.5);
   props.corner_radius = 5;
   lf_push_style_props(props);
 

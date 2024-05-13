@@ -65,7 +65,7 @@ As lyssa uses the leif library which also depends on a few things there are some
 - [x] Playlist Shuffle Mode
 - [x] Replay mode for tracks
 - [x] Fullscreened Tracks
-- [ ] Searching Playlists for Files
+- [x] Searching Playlists for Files
 - [x] Moving files in playlists
 
 ## Build Instructions
