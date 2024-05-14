@@ -1,5 +1,6 @@
 #pragma once
 #include "log.hpp"
+#include "config.hpp"
 
 #include <cstddef>
 #include <functional>
@@ -20,7 +21,7 @@ class Window {
             }
             glfwMakeContextCurrent(_window);
             
-            glfwSwapInterval(0);
+            glfwSwapInterval(WIN_VSYNC);
         }
 
         ~Window() {

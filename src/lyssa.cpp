@@ -537,7 +537,7 @@ static void renderHomepage() {
     }
   } else {
 
-    lf_set_ptr_y_absolute(lf_get_ptr_y() + 15);
+    lf_set_ptr_y_absolute(lf_get_ptr_y() + 30);
     lf_div_begin(LF_PTR, ((vec2s){(float)state.win->getWidth() - DIV_START_X * 2 - state.sideNavigationWidth, 
           (float)state.win->getHeight() - DIV_START_Y * 2 - lf_get_ptr_y() - 
           (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM)}), true);
@@ -547,7 +547,7 @@ static void renderHomepage() {
     const vec2s size = (vec2s){220, 380};
     const LfColor color = lf_color_brightness(LYSSA_BACKGROUND_COLOR, 0.8f);
     const float ptrXStart = lf_get_ptr_x();
-    const float cornerRadius = 4.5f;
+    const float cornerRadius = 6.5f;
 
     for(uint32_t i = 0; i < state.playlists.size(); i++) {
       Playlist& playlist = state.playlists[i];
@@ -3448,6 +3448,14 @@ int main(int argc, char* argv[]) {
     float currentTime = glfwGetTime();
     state.deltaTime = currentTime - state.lastTime;
     state.lastTime = currentTime;
+
+    if(!WIN_VSYNC) {
+      float frameTime = 1.0f / TARGET_FRAME_RATE;
+      if(state.deltaTime < frameTime) {
+        float sleepTime = frameTime - state.deltaTime;
+        glfwWaitEventsTimeout(sleepTime);
+      }
+    }
 
     // OpenGL color clearing 
     glClear(GL_COLOR_BUFFER_BIT);

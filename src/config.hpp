@@ -19,6 +19,10 @@ extern "C" {
 #define WIN_MIN_W 1050
 #define WIN_MIN_H 450
 
+#define WIN_VSYNC false
+
+#define TARGET_FRAME_RATE 144
+
 // Divs
 #define DIV_START_X 20.0f
 #define DIV_START_Y 20.0f
@@ -31,7 +35,7 @@ extern "C" {
 
 // General colors
 
-#define NIGHT (LfColor){30, 34, 42, 255} 
+#define NIGHT (LfColor){20, 23, 28, 255} 
 #define GRAY (LfColor){60, 64, 72, 255}
 #define DARK_SLATE_GRAY lf_color_from_hex(0x3A4E48)
 #define BLUE_GRAY lf_color_from_hex(0x6A7B76)
