@@ -19,6 +19,8 @@ class Window {
                 return;
             }
             glfwMakeContextCurrent(_window);
+            
+            glfwSwapInterval(0);
         }
 
         ~Window() {

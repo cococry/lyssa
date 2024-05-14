@@ -136,7 +136,7 @@ typedef struct {
                      inputfield_props, checkbox_props, slider_props, scrollbar_props;
     LfFont font;
     bool div_smooth_scroll;
-    float div_scroll_acceleration, div_scroll_max_veclocity;
+    float div_scroll_acceleration, div_scroll_max_velocity;
     float div_scroll_amount_px;
     float div_scroll_velocity_deceleration;
 

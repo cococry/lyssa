@@ -195,6 +195,8 @@ typedef struct {
 
   bool div_velocity_accelerating;
 
+  float last_time, delta_time;
+
   clipboard_c* clipboard;
 } LfState;
 
@@ -1493,7 +1495,7 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
   if(yoffset < 0.0f) {
     if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
       if(state.theme.div_smooth_scroll) {
-        *state.scroll_velocity_ptr -= state.theme.div_scroll_acceleration;
+        *state.scroll_velocity_ptr -= (state.theme.div_scroll_acceleration * state.delta_time);
         state.div_velocity_accelerating = true;
       } else {
         *state.scroll_ptr -= state.theme.div_scroll_amount_px;
@@ -1502,15 +1504,21 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
   } else if (yoffset > 0.0f) {
     if(*state.scroll_ptr) {
       if(state.theme.div_smooth_scroll) {
-        *state.scroll_velocity_ptr += state.theme.div_scroll_acceleration;
+        *state.scroll_velocity_ptr += (state.theme.div_scroll_acceleration * state.delta_time);
         state.div_velocity_accelerating = false;
       } else {
         *state.scroll_ptr += state.theme.div_scroll_amount_px;
       }
     }        
   }
-  if(state.theme.div_smooth_scroll)
-    *state.scroll_velocity_ptr = MIN(MAX(*state.scroll_velocity_ptr, -state.theme.div_scroll_max_veclocity), state.theme.div_scroll_max_veclocity);
+  if(state.theme.div_smooth_scroll) {
+    if(*state.scroll_velocity_ptr < -state.theme.div_scroll_max_velocity) {
+      *state.scroll_velocity_ptr = -state.theme.div_scroll_max_velocity;
+    }
+    if(*state.scroll_velocity_ptr > state.theme.div_scroll_max_velocity) {
+      *state.scroll_velocity_ptr = state.theme.div_scroll_max_velocity;
+    }
+  }
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
   (void)window;
@@ -1736,9 +1744,9 @@ LfTheme lf_default_theme() {
   };
   theme.font = lf_load_font_asset("inter", "ttf", 24);
 
-  theme.div_scroll_max_veclocity = 100.0f; 
-  theme.div_scroll_velocity_deceleration = 0.92;
-  theme.div_scroll_acceleration = 2.5f;
+  theme.div_scroll_max_velocity = 1.5f; 
+  theme.div_scroll_velocity_deceleration = 6.0f;
+  theme.div_scroll_acceleration = 900.0f;
   theme.div_scroll_amount_px = 20.0f;
   theme.div_smooth_scroll = true;
 
@@ -2284,7 +2292,11 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, 
 
     if(state.theme.div_smooth_scroll) {
       *scroll += *scroll_velocity;
-      *scroll_velocity *= state.theme.div_scroll_velocity_deceleration;
+      if(*scroll_velocity < 0.0f) {
+        *scroll_velocity += (state.delta_time * state.theme.div_scroll_velocity_deceleration);
+      } else if(*scroll_velocity > 0.0f) {
+        *scroll_velocity -= (state.delta_time * state.theme.div_scroll_velocity_deceleration);
+      }
       if(*scroll_velocity > -0.1 && state.div_velocity_accelerating) {
         *scroll_velocity = 0.0f;
       }
@@ -2698,6 +2710,9 @@ LfDiv lf_get_grabbed_div() {
 }
 
 void _lf_begin_loc(const char* file, int32_t line) {
+  float current_time = glfwGetTime();
+  state.delta_time = current_time - state.last_time;
+  state.last_time = current_time;
   state.pos_ptr = (vec2s){0, 0};
   renderer_begin();
   LfUIElementProps props = state.props_on_stack ? state.props_stack : state.div_props; 
