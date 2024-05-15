@@ -3283,6 +3283,7 @@ void loadPlaylistAsync(Playlist& playlist) {
           file = (SoundFile){
             .path = path,
               .artist = SoundTagParser::getSoundArtist(path),
+              .title = SoundTagParser::getSoundTitle(path),
               .releaseYear = SoundTagParser::getSoundReleaseYear(path),
               .duration = static_cast<int32_t>(SoundTagParser::getSoundDuration(path)),
               .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){128, 64}),
