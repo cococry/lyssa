@@ -683,6 +683,7 @@ static void renderHomepage() {
           state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(playlist.path));
           loadPlaylistAsync(playlist);
           playlist.loaded = true;
+          printf("Hello.\n");
         }
         changeTabTo(GuiTab::OnPlaylist);
       }
@@ -2504,7 +2505,7 @@ void renderSearchPlaylist() {
   }
 
   beginBottomNavBar();
-  backButtonTo(state.previousTab);
+  backButtonTo(GuiTab::OnPlaylist);
   renderTrackMenu();
 }
 void renderSearchAll() {
@@ -2975,7 +2976,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
   }
   files->emplace_back(file);
   if(std::filesystem::exists(path)) {
-    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){128, 128}));
+    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){128, 48}));
   } else {
     state.playlistFileThumbnailData.emplace_back((TextureData){0});
   }
@@ -3284,7 +3285,7 @@ void loadPlaylistAsync(Playlist& playlist) {
               .artist = SoundTagParser::getSoundArtist(path),
               .releaseYear = SoundTagParser::getSoundReleaseYear(path),
               .duration = static_cast<int32_t>(SoundTagParser::getSoundDuration(path)),
-              .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){0.1, 0.1}),
+              .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){128, 64}),
           };
 
         } else {

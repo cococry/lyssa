@@ -196,7 +196,6 @@ typedef struct {
   bool div_velocity_accelerating;
 
   float last_time, delta_time;
-
   clipboard_c* clipboard;
 } LfState;
 
@@ -1495,7 +1494,7 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
   if(yoffset < 0.0f) {
     if(selected_div->total_area.y > (selected_div->aabb.size.y + selected_div->aabb.pos.y)) { 
       if(state.theme.div_smooth_scroll) {
-        *state.scroll_velocity_ptr -= (state.theme.div_scroll_acceleration * state.delta_time);
+        *state.scroll_velocity_ptr -= state.theme.div_scroll_acceleration;
         state.div_velocity_accelerating = true;
       } else {
         *state.scroll_ptr -= state.theme.div_scroll_amount_px;
@@ -1504,21 +1503,15 @@ void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
   } else if (yoffset > 0.0f) {
     if(*state.scroll_ptr) {
       if(state.theme.div_smooth_scroll) {
-        *state.scroll_velocity_ptr += (state.theme.div_scroll_acceleration * state.delta_time);
+        *state.scroll_velocity_ptr += state.theme.div_scroll_acceleration;
         state.div_velocity_accelerating = false;
       } else {
         *state.scroll_ptr += state.theme.div_scroll_amount_px;
       }
     }        
   }
-  if(state.theme.div_smooth_scroll) {
-    if(*state.scroll_velocity_ptr < -state.theme.div_scroll_max_velocity) {
-      *state.scroll_velocity_ptr = -state.theme.div_scroll_max_velocity;
-    }
-    if(*state.scroll_velocity_ptr > state.theme.div_scroll_max_velocity) {
-      *state.scroll_velocity_ptr = state.theme.div_scroll_max_velocity;
-    }
-  }
+  if(state.theme.div_smooth_scroll)
+    *state.scroll_velocity_ptr = MIN(MAX(*state.scroll_velocity_ptr, -state.theme.div_scroll_max_velocity), state.theme.div_scroll_max_velocity);
 }
 void glfw_cursor_callback(GLFWwindow* window, double xpos, double ypos) {
   (void)window;
@@ -1744,9 +1737,9 @@ LfTheme lf_default_theme() {
   };
   theme.font = lf_load_font_asset("inter", "ttf", 24);
 
-  theme.div_scroll_max_velocity = 1.5f; 
-  theme.div_scroll_velocity_deceleration = 6.0f;
-  theme.div_scroll_acceleration = 900.0f;
+  theme.div_scroll_max_velocity = 100.0f; 
+  theme.div_scroll_velocity_deceleration = 0.92;
+  theme.div_scroll_acceleration = 2.5f;
   theme.div_scroll_amount_px = 20.0f;
   theme.div_smooth_scroll = true;
 
@@ -1915,50 +1908,17 @@ LfTexture lf_load_texture_from_memory(const void* data, size_t size, bool flip, 
   return tex;
 
 }
-
 LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, bool flip, LfTextureFiltering filter, uint32_t w, uint32_t h) {
   LfTexture tex;
-  int width, height, channels;
-  unsigned char* image = stbi_load_from_memory(data, size, &width, &height, &channels, STBI_rgb_alpha);
-  if (!image) {
-    return tex;
-  }
-  size_t new_size = w * h * channels;
-  unsigned char* resized_data = (unsigned char*)malloc(new_size);
-  if (resized_data == NULL) {
-    return tex;
-  }
 
-  stbir_resize_uint8_linear(image, width, height, channels, resized_data, w, h, 0,(stbir_pixel_layout)channels);
+  int32_t channels;
+  unsigned char* resized = lf_load_texture_data_from_memory_resized_to_fit(data, size, (int32_t*)&tex.width, (int32_t*)&tex.height, &channels, flip, w, h);
+  lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &tex.id, tex.width, tex.height, channels, resized);
 
-  glGenTextures(1, &tex.id);
-  glBindTexture(GL_TEXTURE_2D, tex.id); 
+  tex.width = w;
+  tex.height = h;
 
-  // Set texture parameters
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  switch(filter) {
-    case LF_TEX_FILTER_LINEAR:
-      glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      break;
-    case LF_TEX_FILTER_NEAREST:
-      glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-      glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-      break;
-  }
-
-  // Load texture data
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, resized_data);
-  glGenerateMipmap(GL_TEXTURE_2D);
-
-  stbi_image_free(image); 
-  free(resized_data);
-
-  tex.width = width;
-  tex.height = height;
   return tex;
-
 }
 LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
   LfTexture tex;
@@ -2292,11 +2252,7 @@ LfDiv* _lf_div_begin_loc(vec2s pos, vec2s size, bool scrollable, float* scroll, 
 
     if(state.theme.div_smooth_scroll) {
       *scroll += *scroll_velocity;
-      if(*scroll_velocity < 0.0f) {
-        *scroll_velocity += (state.delta_time * state.theme.div_scroll_velocity_deceleration);
-      } else if(*scroll_velocity > 0.0f) {
-        *scroll_velocity -= (state.delta_time * state.theme.div_scroll_velocity_deceleration);
-      }
+      *scroll_velocity *= state.theme.div_scroll_velocity_deceleration;
       if(*scroll_velocity > -0.1 && state.div_velocity_accelerating) {
         *scroll_velocity = 0.0f;
       }
@@ -2710,9 +2666,6 @@ LfDiv lf_get_grabbed_div() {
 }
 
 void _lf_begin_loc(const char* file, int32_t line) {
-  float current_time = glfwGetTime();
-  state.delta_time = current_time - state.last_time;
-  state.last_time = current_time;
   state.pos_ptr = (vec2s){0, 0};
   renderer_begin();
   LfUIElementProps props = state.props_on_stack ? state.props_stack : state.div_props; 
