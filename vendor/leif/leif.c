@@ -1912,8 +1912,8 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, boo
   LfTexture tex;
 
   int32_t channels;
-  unsigned char* resized = lf_load_texture_data_from_memory_resized_to_fit(data, size, (int32_t*)&tex.width, (int32_t*)&tex.height, &channels, flip, w, h);
-  lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &tex.id, tex.width, tex.height, channels, resized);
+  unsigned char* resized = lf_load_texture_data_from_memory_resized(data, size, &channels, flip, w, h);
+  lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &tex.id, w, h, channels, resized);
 
   tex.width = w;
   tex.height = h;
@@ -1922,49 +1922,22 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, boo
 }
 LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
   LfTexture tex;
-  int width, height, channels;
-  unsigned char* image = stbi_load_from_memory(data, size, &width, &height, &channels, STBI_rgb_alpha);
-  if (!image) {
-    return tex;
-  }
 
-  float w = (wfactor * width);
-  float h = (hfactor * height);
+  int32_t width, height, channels;
+  stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
 
-  size_t new_size = w * h * channels;
-  unsigned char* resized_data = (unsigned char*)malloc(new_size);
-  if (resized_data == NULL) {
-    return tex;
-  }
+  int w = width * 0.1f;
+  int h = height * 0.1f;
 
-  stbir_resize_uint8_linear(image, width, height, channels, resized_data, w, h, 0,(stbir_pixel_layout)channels);
+  unsigned char* resized_data = (unsigned char*)malloc(sizeof(unsigned char) * w * h * channels);
+  stbir_resize_uint8_linear(image_data, width, height, 0, resized_data, w, h, 0,(stbir_pixel_layout)channels);
+  stbi_image_free(image_data);
 
-  glGenTextures(1, &tex.id);
-  glBindTexture(GL_TEXTURE_2D, tex.id); 
+  lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &tex.id, w, h, channels, resized_data);
 
-  // Set texture parameters
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  switch(filter) {
-    case LF_TEX_FILTER_LINEAR:
-      glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      break;
-    case LF_TEX_FILTER_NEAREST:
-      glTextureParameteri(tex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-      glTextureParameteri(tex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-      break;
-  }
+  tex.width = w;
+  tex.height = h;
 
-  // Load texture data
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, resized_data);
-  glGenerateMipmap(GL_TEXTURE_2D);
-
-  stbi_image_free(image); 
-  free(resized_data);
-
-  tex.width = width;
-  tex.height = height;
   return tex;
 }
 

@@ -47,7 +47,7 @@ namespace SoundTagParser {
         if(size_factor.x == -1 || size_factor.y == -1)
             tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
         else 
-            tex = lf_load_texture_from_memory_resized(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, (uint32_t)size_factor.x, (uint32_t)size_factor.y);
+            tex = lf_load_texture_from_memory_resized_factor(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, (uint32_t)size_factor.x, (uint32_t)size_factor.y);
 
         return tex;
     }

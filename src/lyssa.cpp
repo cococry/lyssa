@@ -3005,7 +3005,7 @@ void addFileToPlaylistAsync(std::vector<SoundFile>* files, std::string path, uin
   file.releaseYear = SoundTagParser::getSoundReleaseYear(path);
   files->emplace_back(file);
   state.loadedPlaylistFilepaths.emplace_back(path);
-  state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){60, 40}));
+  state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){128, 48}));
 }
 
 std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folderPath) {
