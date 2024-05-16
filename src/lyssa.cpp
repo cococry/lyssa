@@ -3134,7 +3134,7 @@ std::string removeFileExtension(const std::string& filename) {
 }
 
 void terminateAudio() {
-  if(!state.soundHandler.isInit) return;
+  if(!state.soundHandler.isInit || !ASYNC_PLAYLIST_LOADING) return;
   state.soundHandler.stop();
   state.soundHandler.uninit();
   state.previousSoundFile = state.currentSoundFile;
