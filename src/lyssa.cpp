@@ -1697,7 +1697,7 @@ void renderOnPlaylist() {
             bool hoveredPlayButton = lf_hovered((vec2s){indexPos.x - 5, indexPos.y}, 
                 (vec2s){(float)lf_get_theme().font.font_size, (float)lf_get_theme().font.font_size}); 
             onActionButton = hoveredPlayButton;
-            if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onActionButton && state.playlistFileFutures.empty() && !draggingTrack) {
+            if(hoveredTextDiv && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT) && onActionButton && state.playlistFileFutures.empty()) {
               if(currentPlaylist.playingFile == i) {
                 if(state.soundHandler.isPlaying)
                   state.soundHandler.stop();
@@ -1724,37 +1724,16 @@ void renderOnPlaylist() {
           lf_set_ptr_y_absolute(lf_get_ptr_y() + marginTopThumbnail);
           LfClickableItemState thumbnailState = renderSoundFileThumbnail(thumbnailContainerSize, file, nullptr, false);
 
-          if(thumbnailState == LF_CLICKED) {
-            if(!draggingTrack) {
-              if(i != currentPlaylist.playingFile) {
-                draggingTrack = false;
-                draggingTrackTitle = L"";
-                state.currentSoundFile = &file;
-                if(state.onTrackTab.trackThumbnail.width != 0) {
-                  lf_free_texture(&state.onTrackTab.trackThumbnail);
-                }
-                state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path, (vec2s){-1, -1});
-                changeTabTo(GuiTab::OnTrack);
-                playlistPlayFileWithIndex(i, state.currentPlaylist);
-              }
-            } else {
-              if(state.currentSoundFile) {
-                if(*state.currentSoundFile == currentPlaylist.musicFiles[draggingTrackIndex]) {
-                  terminateAudio();
-                }
-              }
-              moveFileInPlaylistIdx(state.currentPlaylist, draggingTrackIndex, i);
-              draggingTrack = false;
-              draggingTrackTitle = L"";
+          if(thumbnailState == LF_CLICKED && i != currentPlaylist.playingFile) {
+            state.currentSoundFile = &file;
+            if(state.onTrackTab.trackThumbnail.width != 0) {
+              lf_free_texture(&state.onTrackTab.trackThumbnail);
             }
+            state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path, (vec2s){-1, -1});
+            changeTabTo(GuiTab::OnTrack);
+            playlistPlayFileWithIndex(i, state.currentPlaylist);
           }
-          if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && thumbnailState != LF_IDLE) {
-            draggingTrackTitle = file.title;
-            draggingTrackIndex = i;
-          } 
-          if(!draggingTrack && draggingTrackTitle != L"" && (fabsf(lf_get_mouse_x_delta()) > 2 || fabsf(lf_get_mouse_y_delta()) > 2)) {
-            draggingTrack = true;
-          }
+         
           if(!onActionButton) {
             onActionButton = (thumbnailState != LF_IDLE); 
           }
@@ -1832,7 +1811,14 @@ void renderOnPlaylist() {
           std::string durationText = formatDurationToMins(file.duration);
           props.margin_top = (thumbnailContainerSize.y - lf_text_dimension(durationText.c_str()).y) / 2.0f;
           lf_push_style_props(props);
-          lf_text(durationText.c_str());
+          LfClickableItemState durationState = lf_button(durationText.c_str());
+          if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && durationState != LF_IDLE) {
+            draggingTrackTitle = file.title;
+            draggingTrackIndex = i;
+          } 
+          if(!draggingTrack && draggingTrackTitle != L"" && (fabsf(lf_get_mouse_x_delta()) > 2 || fabsf(lf_get_mouse_y_delta()) > 2)) {
+            draggingTrack = true;
+          }
           lf_pop_style_props();
         }
         if(draggingTrack && hoveredTextDiv) {
@@ -3285,7 +3271,7 @@ void loadPlaylistAsync(Playlist& playlist) {
               .artist = metadata.artist, 
               .title = metadata.title,
               .releaseYear = metadata.releaseYear,
-              .duration = metadata.duration,
+              .duration = static_cast<int32_t>(metadata.duration),
               .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){0.1f, 0.1f}),
           };
 
