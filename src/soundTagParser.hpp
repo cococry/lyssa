@@ -8,7 +8,7 @@ extern "C" {
 #include "textureData.hpp"
 
 struct SoundMetadata {
-    std::wstring artist;
+    std::wstring artist, title;
     std::string comment;
     TextureData thumbnailData;
     uint32_t releaseYear;
@@ -25,5 +25,6 @@ namespace SoundTagParser {
     uint32_t getSoundReleaseYear(const std::string& soundPath);
     std::string getSoundComment(const std::string& soundPath);
     SoundMetadata getSoundMetadata(const std::string& soundPath);
+    SoundMetadata getSoundMetadataNoThumbnail(const std::string& soundPath);
     bool isValidSoundFile(const std::string& path);
 }

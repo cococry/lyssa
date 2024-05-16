@@ -683,7 +683,6 @@ static void renderHomepage() {
           state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(playlist.path));
           loadPlaylistAsync(playlist);
           playlist.loaded = true;
-          printf("Hello.\n");
         }
         changeTabTo(GuiTab::OnPlaylist);
       }
@@ -3280,13 +3279,14 @@ void loadPlaylistAsync(Playlist& playlist) {
       } else {
         SoundFile file;
         if(std::filesystem::exists(std::filesystem::path(path))) {
+          SoundMetadata metadata = SoundTagParser::getSoundMetadataNoThumbnail(path); 
           file = (SoundFile){
             .path = path,
-              .artist = SoundTagParser::getSoundArtist(path),
-              .title = SoundTagParser::getSoundTitle(path),
-              .releaseYear = SoundTagParser::getSoundReleaseYear(path),
-              .duration = static_cast<int32_t>(SoundTagParser::getSoundDuration(path)),
-              .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){128, 64}),
+              .artist = metadata.artist, 
+              .title = metadata.title,
+              .releaseYear = metadata.releaseYear,
+              .duration = metadata.duration,
+              .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){0.1f, 0.1f}),
           };
 
         } else {

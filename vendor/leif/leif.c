@@ -1926,8 +1926,8 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t si
   int32_t width, height, channels;
   stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, &channels, 0);
 
-  int w = width * 0.1f;
-  int h = height * 0.1f;
+  int w = width * wfactor;
+  int h = height * hfactor;
 
   unsigned char* resized_data = (unsigned char*)malloc(sizeof(unsigned char) * w * h * channels);
   stbir_resize_uint8_linear(image_data, width, height, 0, resized_data, w, h, 0,(stbir_pixel_layout)channels);

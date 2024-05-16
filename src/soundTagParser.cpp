@@ -47,7 +47,7 @@ namespace SoundTagParser {
         if(size_factor.x == -1 || size_factor.y == -1)
             tex = lf_load_texture_from_memory(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR);
         else 
-            tex = lf_load_texture_from_memory_resized_factor(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, (uint32_t)size_factor.x, (uint32_t)size_factor.y);
+            tex = lf_load_texture_from_memory_resized_factor(imageData.data(), (int)imageData.size(), true, LF_TEX_FILTER_LINEAR, size_factor.x, size_factor.y);
 
         return tex;
     }
@@ -167,12 +167,34 @@ namespace SoundTagParser {
 
             metadata.artist = tag->artist().toWString() == L"" ? L"-" : tag->artist().toWString();
             metadata.releaseYear = tag->year();
+            metadata.title = tag->title().toWString();
         } else {
             metadata.artist = L"-";
+            metadata.title = L"-";
             metadata.releaseYear = 0;
         }
         metadata.comment = getSoundComment(soundPath);
         
         return metadata;
+    }
+    SoundMetadata getSoundMetadataNoThumbnail(const std::string& soundPath) {
+      SoundMetadata metadata;
+      metadata.duration = SoundTagParser::getSoundDuration(soundPath);
+
+      FileRef file(soundPath.c_str());
+
+      if (!file.isNull() && file.tag()) {
+        Tag *tag = file.tag();
+
+        metadata.artist = tag->artist().toWString() == L"" ? L"-" : tag->artist().toWString();
+        metadata.releaseYear = tag->year();
+        metadata.title = tag->title().toWString();
+      } else {
+        metadata.artist = L"-";
+        metadata.title = L"-";
+        metadata.releaseYear = 0;
+      }
+
+      return metadata;
     }
 }
