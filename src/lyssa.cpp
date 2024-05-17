@@ -2961,7 +2961,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
   }
   files->emplace_back(file);
   if(std::filesystem::exists(path)) {
-    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){128, 48}));
+    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){0.1f, 0.1f}));
   } else {
     state.playlistFileThumbnailData.emplace_back((TextureData){0});
   }
@@ -2982,15 +2982,24 @@ void addFileToPlaylistAsync(std::vector<SoundFile>* files, std::string path, uin
   metadata.close();
 
   SoundFile file{};
-  file.path = path;
-  file.thumbnail = (LfTexture){0};
-  file.duration = SoundTagParser::getSoundDuration(path);
-  file.title = SoundTagParser::getSoundTitle(path);
-  file.artist = SoundTagParser::getSoundArtist(path);
-  file.releaseYear = SoundTagParser::getSoundReleaseYear(path);
+  if(std::filesystem::exists(path)) {
+    file.path = std::filesystem::path(path); 
+    file.thumbnail = (LfTexture){0};
+    file.duration = SoundTagParser::getSoundDuration(path);
+    file.artist = SoundTagParser::getSoundArtist(path);
+    file.title = SoundTagParser::getSoundTitle(path);
+    file.releaseYear = SoundTagParser::getSoundReleaseYear(path);
+  } else {
+    file.path = L"File cannot be loaded";
+    file.thumbnail = (LfTexture){0};
+    file.duration = 0; 
+  }
   files->emplace_back(file);
-  state.loadedPlaylistFilepaths.emplace_back(path);
-  state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){128, 48}));
+  if(std::filesystem::exists(path)) {
+    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){0.1f, 0.1f}));
+  } else {
+    state.playlistFileThumbnailData.emplace_back((TextureData){0});
+  }
 }
 
 std::vector<std::wstring> loadFilesFromFolder(const std::filesystem::path& folderPath) {
@@ -3237,7 +3246,6 @@ void handleAsyncPlaylistLoading() {
       std::sort(state.playlistFileThumbnailData.begin(), state.playlistFileThumbnailData.end(), compareTextureDataByName);
 
       if(state.previousSoundFile) {
-        std::cout << state.previousSoundFile->path << "\n";
         Playlist& playingPlaylist = state.playlists[state.playingPlaylist];
         auto it = std::find(playingPlaylist.musicFiles.begin(), playingPlaylist.musicFiles.end(), (SoundFile){.path = state.previousSoundFile->path});
         if(it != playingPlaylist.musicFiles.end()) {
@@ -3285,6 +3293,9 @@ void loadPlaylistAsync(Playlist& playlist) {
         playlist.musicFiles.emplace_back(file);
       }
     }
+  }
+  if(!ASYNC_PLAYLIST_LOADING) {
+    std::sort(playlist.musicFiles.begin(), playlist.musicFiles.end(), compareSoundFilesByName);
   }
 }
 

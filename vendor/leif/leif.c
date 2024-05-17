@@ -1974,6 +1974,7 @@ unsigned char* lf_load_texture_data_resized_factor(const char* filepath, int32_t
   stbir_resize_uint8_linear(image, *width, *height, *channels, resized_data, w, h, 0,(stbir_pixel_layout)*channels);
   free(image);
   return resized_data;
+
  }
 
 unsigned char* lf_load_texture_data_from_memory(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip) {
@@ -2022,19 +2023,15 @@ unsigned char* lf_load_texture_data_from_memory_resized_to_fit(const void* data,
 }
 
 unsigned char* lf_load_texture_data_from_memory_resized_factor(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, float wfactor, float hfactor) {
-  int32_t base_width, base_height;
-  stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &base_width, &base_height, channels, 0);
+  stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, width, height, channels, 0);
 
-  float real_w = base_width * wfactor;
-  float real_h = base_height * hfactor;
+  int w = *width * wfactor;
+  int h = *height * hfactor;
 
-  unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * real_w * real_h * *channels);
-  stbir_resize_uint8_linear(image_data, base_width, base_height, 0, downscaled_image, real_w, real_h, 0,(stbir_pixel_layout)*channels);
+  unsigned char* resized_data = (unsigned char*)malloc(sizeof(unsigned char) * w * h * (*channels));
+  stbir_resize_uint8_linear(image_data, *width, *height, 0, resized_data, w, h, 0,(stbir_pixel_layout)*channels);
   stbi_image_free(image_data);
-
-  *width = real_w;
-  *height = real_h;
-  return downscaled_image; 
+  return resized_data;
 }
 
 void lf_create_texture_from_image_data(LfTextureFiltering filter, uint32_t* id, int32_t width, int32_t height, int32_t channels, unsigned char* data) {

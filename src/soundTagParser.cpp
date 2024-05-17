@@ -82,7 +82,7 @@ namespace SoundTagParser {
         if(size_factor.x == -1 || size_factor.y == -1) {
             retData.data = lf_load_texture_data_from_memory(imageData.data(), (size_t)imageData.size(), (int32_t*)&retData.width, (int32_t*)&retData.height, &retData.channels, true); 
         } else  {
-            retData.data = lf_load_texture_data_from_memory_resized_to_fit(imageData.data(), (size_t)imageData.size(), 
+            retData.data = lf_load_texture_data_from_memory_resized_factor(imageData.data(), (size_t)imageData.size(), 
                 (int32_t*)&retData.width, (int32_t*)&retData.height, &retData.channels, true, size_factor.x, size_factor.y); 
         }
         retData.path = soundPath;
