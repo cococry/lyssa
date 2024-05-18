@@ -295,19 +295,14 @@ if(lf_key_event().pressed && lf_key_event().happened) {
           if(state.currentTab == GuiTab::OnTrack) {
             changeTabTo(GuiTab::TrackFullscreen);
           } else {
-              Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
-              if(currentPlaylist.selectedFile != currentPlaylist.playingFile) {
-                  playlistPlayFileWithIndex(currentPlaylist.selectedFile, state.currentPlaylist);
-                  state.currentSoundFile = &currentPlaylist.musicFiles[currentPlaylist.selectedFile];
-                  currentPlaylist.playingFile = currentPlaylist.selectedFile;
-              } else {
-                  state.currentSoundFile = &currentPlaylist.musicFiles[currentPlaylist.selectedFile];
-                  if(state.onTrackTab.trackThumbnail.width != 0) {
-                      lf_free_texture(&state.onTrackTab.trackThumbnail);
-                  }
-                  state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path, (vec2s){-1, -1});
-                  changeTabTo(GuiTab::OnTrack);
-              }
+            Playlist& currentPlaylist = state.playlists[state.currentPlaylist];
+            if(currentPlaylist.playingFile == -1) return;
+            state.currentSoundFile = &currentPlaylist.musicFiles[currentPlaylist.playingFile];
+            if(state.onTrackTab.trackThumbnail.width != 0) {
+              lf_free_texture(&state.onTrackTab.trackThumbnail);
+            }
+            state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path, (vec2s){-1, -1});
+            changeTabTo(GuiTab::OnTrack);
           }
           break;
         }
@@ -1732,6 +1727,12 @@ void renderOnPlaylist() {
             state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path, (vec2s){-1, -1});
             changeTabTo(GuiTab::OnTrack);
             playlistPlayFileWithIndex(i, state.currentPlaylist);
+          } else if(thumbnailState == LF_CLICKED && i == currentPlaylist.playingFile) {
+            if(state.onTrackTab.trackThumbnail.width != 0) {
+              lf_free_texture(&state.onTrackTab.trackThumbnail);
+            }
+            state.onTrackTab.trackThumbnail = SoundTagParser::getSoundThubmnail(state.currentSoundFile->path, (vec2s){-1, -1});
+            changeTabTo(GuiTab::OnTrack);
           }
          
           if(!onActionButton) {

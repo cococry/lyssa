@@ -1,6 +1,7 @@
 CPP=g++
 INCS=-Ivendor/miniaudio -Ivendor/leif/include -Ivendor/leif/vendor/glad/include -Ivendor/stb_image_write
-LIBS=-lleif -lclipboard -Lvendor/leif/lib -lglfw -ltag -lm -Lvendor/miniaudio/lib -lminiaudio -lxcb
+LIBS=-lleif -lclipboard -Lvendor/leif/lib -lglfw -lm -Lvendor/miniaudio/lib -lminiaudio -lxcb
+PKG_CONFIG=`pkg-config --cflags --libs taglib`
 CFLAGS=-O3 -ffast-math -DGLFW_INCLUDE_NONE -std=c++17
 
 LEIF_LIB_DIR := ./vendor/leif/lib/
@@ -23,7 +24,7 @@ leif:
 
 build: bin
 	@echo "[INFO]: Building Lyssa."
-	${CPP} ${CFLAGS} src/*.cpp -o bin/lyssa ${INCS} ${LIBS} 
+	${CPP} ${CFLAGS} src/*.cpp -o bin/lyssa ${INCS} ${LIBS} ${PKG_CONFIG} 
 
 bin:
 	mkdir bin
