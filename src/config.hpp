@@ -19,7 +19,7 @@ extern "C" {
 #define WIN_MIN_W 1050
 #define WIN_MIN_H 450
 
-#define WIN_VSYNC false
+#define WIN_VSYNC false 
 
 #define TARGET_FRAME_RATE 144
 
@@ -56,7 +56,7 @@ extern "C" {
 #define DIV_SMOOTH_SCROLL true
 
 // Playlist file thumbnails 
-#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 0.0f // Setting this to > 0 will worsen perfomance on low-end systems
+#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 4.0f // Setting this to > 0 will worsen perfomance on low-end systems
 #define PLAYLIST_ON_TRACK_CORNER_RADIUS PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS * 4.0f
 #define PLAYLIST_FILE_THUMBNAIL_COLOR GRAY
 #define PLAYLIST_FILE_THUMBNAIL_SIZE (vec2s){48, 48}

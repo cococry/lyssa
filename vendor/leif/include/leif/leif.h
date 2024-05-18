@@ -169,7 +169,7 @@ void lf_resize_display(uint32_t display_width, uint32_t display_height);
 
 LfFont lf_load_font(const char* filepath, uint32_t size);
 
-LfFont lf_load_font_ex(const char* filepath, uint32_t size, uint32_t bitmap_w, uint32_t bitmap_h, uint32_t num_glyphs);
+LfFont lf_load_font_ex(const char* filepath, uint32_t size, uint32_t bitmap_w, uint32_t bitmap_h);
 
 LfTexture lf_load_texture(const char* filepath, bool flip, LfTextureFiltering filter);
 
@@ -424,7 +424,8 @@ void lf_pop_font();
 LfTextProps lf_text_render(vec2s pos, const char* str, LfFont font, LfColor color, 
         int32_t wrap_point, vec2s stop_point, bool no_render, bool render_solid, int32_t start_index, int32_t end_index);
 
-LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, int32_t wrap_point, bool no_render, LfColor color);
+LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, LfColor color, 
+                           int32_t wrap_point, vec2s stop_point, bool no_render, bool render_solid, int32_t start_index, int32_t end_index);
 
 void lf_rect_render(vec2s pos, vec2s size, LfColor color, LfColor border_color, float border_width, float corner_radius);
 

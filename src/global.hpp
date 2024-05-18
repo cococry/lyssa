@@ -76,7 +76,7 @@ struct OnTrackTab {
 
 struct PlaylistAddFromFolderTab {
     std::vector<std::filesystem::directory_entry> folderContents;
-    std::wstring currentFolderPath;
+    std::string currentFolderPath;
     bool addedFile;
 };
 

@@ -90,40 +90,35 @@ namespace SoundTagParser {
         return retData;
     }
 
-    std::wstring getSoundArtist(const std::string& soundPath) {
-        FileRef file(soundPath.c_str());
-
-        if (!file.isNull() && file.tag()) {
-            Tag *tag = file.tag();
-
-            std::wstring artist = tag->artist().toWString();
-            return artist;
-        } else {
-            return L"-";
-        }
-        return L"-";
-    }
-    std::wstring getSoundAlbum(const std::string& soundPath) {
-        FileRef file(soundPath.c_str());
-
-        if (!file.isNull() && file.tag()) {
-            Tag *tag = file.tag();
-
-            return (tag->album().toWString() != L"") ? tag->album().toWString() : L"-";
-        } else {
-            return L"None";
-        }
-        return L"None";
-    }
-    std::wstring getSoundTitle(const std::string& soundPath) {
-      FileRef file(soundPath.c_str());
-
+    std::string getSoundArtist(const std::string& soundPath) {
+      TagLib::FileRef file(soundPath.c_str());
       if (!file.isNull() && file.tag()) {
-        Tag *tag = file.tag();
+        TagLib::Tag *tag = file.tag();
 
-        return tag->title().toWString();
+        return tag->artist().to8Bit(true);
+      } else {
+        return "None"; 
+      }
+    }
+    std::string getSoundAlbum(const std::string& soundPath) {
+      TagLib::FileRef file(soundPath.c_str());
+      if (!file.isNull() && file.tag()) {
+        TagLib::Tag *tag = file.tag();
+
+        return tag->album().to8Bit(true);
+      } else {
+        return "None";
       } 
-      return L"";
+    }
+    std::string getSoundTitle(const std::string& soundPath) {
+      TagLib::FileRef file(soundPath.c_str());
+      if (!file.isNull() && file.tag()) {
+        TagLib::Tag *tag = file.tag();
+
+        return tag->title().to8Bit(true);
+      } else {
+        return "No Title";
+      }
     }
     int32_t getSoundDuration(const std::string& soundPath) {
       FileRef fileRef(soundPath.c_str());
@@ -165,12 +160,12 @@ namespace SoundTagParser {
         if (!file.isNull() && file.tag()) {
             Tag *tag = file.tag();
 
-            metadata.artist = tag->artist().toWString() == L"" ? L"-" : tag->artist().toWString();
+            metadata.artist = tag->artist().to8Bit(true) == "" ? "-" : tag->artist().to8Bit(true);
             metadata.releaseYear = tag->year();
-            metadata.title = tag->title().toWString();
+            metadata.title = tag->title().to8Bit(true);
         } else {
-            metadata.artist = L"-";
-            metadata.title = L"-";
+            metadata.artist = "-";
+            metadata.title = "-";
             metadata.releaseYear = 0;
         }
         metadata.comment = getSoundComment(soundPath);
@@ -186,12 +181,12 @@ namespace SoundTagParser {
       if (!file.isNull() && file.tag()) {
         Tag *tag = file.tag();
 
-        metadata.artist = tag->artist().toWString() == L"" ? L"-" : tag->artist().toWString();
+        metadata.artist = tag->artist().to8Bit(true) == "" ? "-" : tag->artist().to8Bit(true);
         metadata.releaseYear = tag->year();
-        metadata.title = tag->title().toWString();
+        metadata.title = tag->title().to8Bit(true);
       } else {
-        metadata.artist = L"-";
-        metadata.title = L"-";
+        metadata.artist = "-";
+        metadata.title = "-";
         metadata.releaseYear = 0;
       }
 

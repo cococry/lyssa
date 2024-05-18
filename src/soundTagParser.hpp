@@ -8,7 +8,7 @@ extern "C" {
 #include "textureData.hpp"
 
 struct SoundMetadata {
-    std::wstring artist, title;
+    std::string artist, title;
     std::string comment;
     TextureData thumbnailData;
     uint32_t releaseYear;
@@ -18,9 +18,9 @@ struct SoundMetadata {
 namespace SoundTagParser {
     LfTexture getSoundThubmnail(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
     TextureData getSoundThubmnailData(const std::string& soundPath, vec2s size_factor = (vec2s){-1, -1});
-    std::wstring getSoundArtist(const std::string& soundPath);
-    std::wstring getSoundAlbum(const std::string& soundPath);
-    std::wstring getSoundTitle(const std::string& soundPath);
+    std::string getSoundArtist(const std::string& soundPath);
+    std::string getSoundAlbum(const std::string& soundPath);
+    std::string getSoundTitle(const std::string& soundPath);
     int32_t getSoundDuration(const std::string& soundPath);
     uint32_t getSoundReleaseYear(const std::string& soundPath);
     std::string getSoundComment(const std::string& soundPath);
