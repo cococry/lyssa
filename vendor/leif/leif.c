@@ -786,6 +786,15 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
       if(input->insert_override_callback) {
         input->insert_override_callback(input);
       } else {
+        if(input->selection_start != -1) {
+          int start = input->selection_dir != 0 ?  input->selection_start : input->selection_start - 1;
+          int end = input->selection_end;
+
+          remove_substr_str(input->buf, start, end);
+
+          input->cursor_index = input->selection_start;
+          lf_input_field_unselect_all(input);
+        }
         lf_input_insert_char_idx(input, lf_char_event().charcode, input->cursor_index++);
       }
     }
@@ -967,7 +976,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
       state.pos_ptr.x + props.padding, 
       state.pos_ptr.y + props.padding
     }, input->buf, font, LF_NO_COLOR, 
-                                                wrap_point, (vec2s){lf_get_mouse_x(), lf_get_mouse_y()}, true, false, -1, -1);
+      wrap_point, (vec2s){lf_get_mouse_x(), lf_get_mouse_y()}, true, false, -1, -1);
     input->cursor_index = selected_props.rendered_count;
   }
 
@@ -990,7 +999,7 @@ void input_field(LfInputField* input, InputFieldType type, const char* file, int
     } else {
       lf_text_render((vec2s){state.pos_ptr.x + props.padding, 
         state.pos_ptr.y + props.padding}, input->buf, font, (LfColor){255, 255, 255, 80}, wrap_point, (vec2s){-1, -1}, 
-                     false, true, input->selection_start, input->selection_end + 1);
+                     false, true, input->selection_start, input->selection_end);
     }
   }
 
@@ -3006,6 +3015,9 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, LfC
       str[i] != L' ' && str[i] != L'\n' && str[i] != L'\t' && !iswdigit(str[i]) && !iswpunct(str[i]))  {
       continue;
     }
+    if(i >= end_index && end_index != -1) {
+      break;
+    }
     // If the current character is a new line or the wrap point has been reached, advance to the next line
     if(str[i] == L'\n' || (x >= wrap_point && wrap_point != -1)) {
       y += font.font_size;
@@ -3022,11 +3034,29 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, LfC
     // Retrieving the vertex data of the current character & submitting it to the batch  
     stbtt_aligned_quad q;
     stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
-
+    if(i < start_index && start_index != -1) {
+      last_x = x;
+      ret.rendered_count++;
+      continue;
+    }
+    if(stop_point.x != -1 && stop_point.y != -1) {
+      if(x >= stop_point.x && stop_point.x != -1 && y + get_max_char_height_font(font) >= stop_point.y && stop_point.y != -1) {
+        break;
+      }
+    } else {
+      if(y + get_max_char_height_font(font) >= stop_point.y && stop_point.y != -1) {
+        break;
+      }
+    }
     if(!culled && !no_render)  {
-      renderer_add_glyph(q, max_descended_char_height, color, tex_index); 
+      if(render_solid) {
+        lf_rect_render((vec2s){x, y}, (vec2s){last_x - x, get_max_char_height_font(font)}, color, LF_NO_COLOR, 0.0f, 0.0f);
+      } else {
+        renderer_add_glyph(q, max_descended_char_height, color, tex_index); 
+      }
       last_x = x;
     }
+    ret.rendered_count++;
   }
 
   // Populating the return value

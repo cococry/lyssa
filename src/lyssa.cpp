@@ -1056,6 +1056,15 @@ void renderCreatePlaylistFromFolder() {
   }
 
 }
+static std::string removeSpecialCharactersStr(const std::string& input) {
+    std::string result;
+    for (char ch : input) {
+        if (std::isalnum(static_cast<unsigned char>(ch))) {
+            result += ch;
+        }
+    }
+    return result;
+}
 
 void renderDownloadPlaylist() {
   std::string downloadedPlaylistDir = LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName; 
@@ -1181,11 +1190,8 @@ void renderDownloadPlaylist() {
       if(lf_button_fixed("Download", 150, -1) == LF_CLICKED) {
         state.downloadingPlaylistName = LyssaUtils::getCommandOutput(
             std::string("yt-dlp \"" + std::string(urlInput) + "\" --flat-playlist --dump-single-json --no-warnings | jq -r .title &"));
-        for (char& ch : state.downloadingPlaylistName) {
-          if (ch == '/') {
-            ch = '-';
-          }
-        }
+        state.downloadingPlaylistName = removeSpecialCharactersStr(state.downloadingPlaylistName); 
+
         if(state.downloadingPlaylistName != "null") {
           std::string downloadCmd = LYSSA_DIR + "/scripts/download.sh \"" + urlInput + "\" " + LYSSA_DIR + "/downloaded_playlists/ &"; 
           system(downloadCmd.c_str());
@@ -1201,7 +1207,17 @@ void renderDownloadPlaylist() {
       lf_pop_style_props();
     }
   } else  {
-    state.playlistDownloadFinished = (LyssaUtils::getCommandOutput("pgrep yt-dlp") == "");
+    static float ytdlpDownTimer = 0.0f;
+    if(LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") {
+      ytdlpDownTimer += state.deltaTime;
+      if(ytdlpDownTimer >= 2.0f) {
+        ytdlpDownTimer = 0.0f;
+        state.playlistDownloadFinished = true;
+      }
+    } else {
+      ytdlpDownTimer = 0.0f;
+    }
+      state.downloadPlaylistFileCount == LyssaUtils::getLineCountFile(LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName + "/archive.txt");
 
     if(state.playlistDownloadFinished) {
       FileStatus createStatus = Playlist::create(state.downloadingPlaylistName, "Downloaded Playlist", url);
