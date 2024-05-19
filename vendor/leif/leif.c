@@ -1914,7 +1914,7 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, boo
   LfTexture tex;
 
   int32_t channels;
-  unsigned char* resized = lf_load_texture_data_from_memory_resized(data, size, &channels, flip, w, h);
+  unsigned char* resized = lf_load_texture_data_from_memory_resized(data, size, &channels, NULL, NULL, flip, w, h);
   lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &tex.id, w, h, channels, resized);
 
   tex.width = w;
@@ -1922,6 +1922,8 @@ LfTexture lf_load_texture_from_memory_resized(const void* data, size_t size, boo
 
   return tex;
 }
+
+
 LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t size, bool flip, LfTextureFiltering filter, float wfactor, float hfactor) {
   LfTexture tex;
 
@@ -1943,6 +1945,24 @@ LfTexture lf_load_texture_from_memory_resized_factor(const void* data, size_t si
   return tex;
 }
 
+LfTexture lf_load_texture_from_memory_resized_to_fit(const void* data, size_t size, bool flip, LfTextureFiltering filter, int32_t container_w, int32_t container_h) {
+  LfTexture tex;
+
+  int32_t image_width, image_height, channels;
+  stbi_uc* image_data = lf_load_texture_data_from_memory((const stbi_uc*)data, size, &image_width, &image_height, &channels, flip);
+
+  int32_t new_width, new_height;
+  unsigned char* resized_data =  lf_load_texture_data_from_memory_resized_to_fit_ex(image_data, size, &new_width, &new_height, 
+                                                                                 channels, image_width, image_height, flip, container_w, container_h);
+  stbi_image_free(image_data);
+
+  lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &tex.id, new_width, new_height, channels, resized_data);
+
+  tex.width = new_width;
+  tex.height = new_height;
+
+  return tex;
+}
 unsigned char* lf_load_texture_data(const char* filepath, int32_t* width, int32_t* height, int32_t* channels, bool flip) {
   stbi_set_flip_vertically_on_load(!flip);
   stbi_uc* data = stbi_load(filepath, width, height, channels, STBI_rgb_alpha);
@@ -1988,40 +2008,53 @@ unsigned char* lf_load_texture_data_from_memory(const void* data, size_t size, i
   return image;
 }
 
-unsigned char* lf_load_texture_data_from_memory_resized(const void* data, size_t size, int32_t* channels, bool flip, uint32_t w, uint32_t h) {
+unsigned char* lf_load_texture_data_from_memory_resized(const void* data, size_t size, int32_t* channels, int32_t* o_w, int32_t* o_h, bool flip, uint32_t w, uint32_t h) {
   int32_t width, height;
   stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &width, &height, channels, 0);
-  unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * w * h * *channels);
-  stbir_resize_uint8_linear(image_data, width, height, 0, downscaled_image, w, h, 0,(stbir_pixel_layout)*channels);
+  unsigned char* resized_data = lf_load_texture_data_from_memory_resized_to_fit_ex(image_data, size, o_w, o_h, *channels, width, height, flip, 48, 48);
   stbi_image_free(image_data);
-  return downscaled_image;
+  return resized_data;
 }
 
-unsigned char* lf_load_texture_data_from_memory_resized_to_fit(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, uint32_t w, uint32_t h) {
-  int32_t base_width, base_height;
-  stbi_uc* image_data = stbi_load_from_memory((const stbi_uc*)data, size, &base_width, &base_height, channels, 0);
+unsigned char* lf_load_texture_data_from_memory_resized_to_fit_ex(const void* data, size_t size, int32_t* o_width, int32_t* o_height, int32_t i_channels, 
+    int32_t i_width, int32_t i_height, bool flip, int32_t container_w, int32_t container_h) {
+  float container_aspect_ratio = (float)container_w / container_h;
+  float image_aspect_ratio = (float)i_width / i_height;
 
-  float image_aspect = (float)base_width / (float)base_height;
+  int new_width, new_height;
 
-  float container_aspect = (float)w / (float)w;
-
-  float scale_factor;
-  if (image_aspect > container_aspect) {
-    scale_factor = (float)w / (float)base_width;
+  if (image_aspect_ratio > container_aspect_ratio) {
+    new_width = container_w;
+    new_height = (int)((container_w / (float)i_width) * i_height);
   } else {
-    scale_factor = (float)w / (float)base_height;
+    new_height = container_h;
+    new_width = (int)((container_h / (float)i_height) * i_width);
   }
 
-  float fit_w = base_width * scale_factor; 
-  float fit_h = base_height * scale_factor;
+  if(o_width) 
+    *o_width = new_width;
+  if(o_height)
+    *o_height = new_height;
 
-  unsigned char* downscaled_image = (unsigned char*)malloc(sizeof(unsigned char) * (int32_t)fit_w * (int32_t)fit_h * (*channels));
-  stbir_resize_uint8_linear(image_data, base_width, base_height, 0, downscaled_image, (int32_t)fit_w, (int32_t)fit_h, 0,(stbir_pixel_layout)*channels);
+  unsigned char* resized_image = (unsigned char*)malloc(sizeof(unsigned char) * new_width * new_height * i_channels);
+  stbir_resize_uint8_linear(data, i_width, i_height, 0, resized_image, new_width, new_height, 0,(stbir_pixel_layout)i_channels);
+  return resized_image;
+}
+unsigned char* lf_load_texture_data_from_memory_resized_to_fit(const void* data, size_t size, int32_t* o_width, int32_t* o_height, 
+                                                               int32_t* o_channels, bool flip, int32_t container_w, int32_t container_h) {
+
+  int32_t image_width, image_height, channels;
+  stbi_uc* image_data = lf_load_texture_data_from_memory((const stbi_uc*)data, size, &image_width, &image_height, &channels, flip);
+
+  int32_t new_width, new_height;
+  unsigned char* resized_data =  lf_load_texture_data_from_memory_resized_to_fit_ex(image_data, size, &new_width, &new_height, 
+                                                                                    channels, image_width, image_height, flip, container_w, container_h);
+  *o_width = new_width;
+  *o_height = new_height;
+  *o_channels = channels;
+
   stbi_image_free(image_data);
-
-  *width = (int32_t)fit_w;
-  *height = (int32_t)fit_h;
-  return downscaled_image; 
+  return image_data;
 }
 
 unsigned char* lf_load_texture_data_from_memory_resized_factor(const void* data, size_t size, int32_t* width, int32_t* height, int32_t* channels, bool flip, float wfactor, float hfactor) {
@@ -2903,40 +2936,8 @@ static void renderer_add_glyph(stbtt_aligned_quad q, int32_t max_descended_char_
   state.render.index_count += 6; 
 }
 
-int utf8_decode(const char *buffer, uint32_t *out_codepoint) {
-    uint32_t ch = (unsigned char)buffer[0];
-    int extra_bytes = 0;
-    if ((ch & 0x80) == 0) {
-        *out_codepoint = ch;
-        return 1;
-    } else if ((ch & 0xe0) == 0xc0) {
-        extra_bytes = 1;
-        *out_codepoint = ch & 0x1f;
-    } else if ((ch & 0xf0) == 0xe0) {
-        extra_bytes = 2;
-        *out_codepoint = ch & 0x0f;
-    } else if ((ch & 0xf8) == 0xf0) {
-        extra_bytes = 3;
-        *out_codepoint = ch & 0x07;
-    } else {
-        // Invalid UTF-8 sequence
-        *out_codepoint = 0;
-        return -1;
-    }
-    for (int i = 1; i <= extra_bytes; ++i) {
-        if ((buffer[i] & 0xc0) != 0x80) {
-            // Invalid UTF-8 sequence
-            *out_codepoint = 0;
-            return -1;
-        }
-        *out_codepoint <<= 6;
-        *out_codepoint |= buffer[i] & 0x3f;
-    }
-    return extra_bytes + 1;
-}
 
 static wchar_t* str_to_wstr(const char* str) {
-    // Calculate the length of the narrow string
     size_t len = strlen(str) + 1;
 
     wchar_t* wstr = (wchar_t*)malloc(len * sizeof(wchar_t));
@@ -3023,57 +3024,7 @@ LfTextProps lf_text_render_wchar(vec2s pos, const wchar_t* str, LfFont font, LfC
     stbtt_GetBakedQuad((stbtt_bakedchar*)font.cdata, font.tex_width, font.tex_height, str[i]-32, &x, &y, &q, 1);
 
     if(!culled && !no_render)  {
-      vec2s texcoords[4] = {
-        q.s0, q.t0, 
-        q.s1, q.t0, 
-        q.s1, q.t1, 
-        q.s0, q.t1
-      };
-      vec2s verts[4] = {
-        (vec2s){q.x0, q.y0 + max_descended_char_height}, 
-        (vec2s){q.x1, q.y0 + max_descended_char_height}, 
-        (vec2s){q.x1, q.y1 + max_descended_char_height},
-        (vec2s){q.x0, q.y1 + max_descended_char_height}
-      }; 
-      for(uint32_t i = 0; i < 4; i++) {
-        if(state.render.vert_count >= MAX_RENDER_BATCH) {
-          renderer_flush();
-          renderer_begin();
-        }
-        const vec2 verts_arr = {verts[i].x, verts[i].y};
-        memcpy(state.render.verts[state.render.vert_count].pos, verts_arr, sizeof(vec2));
-
-        const vec4 border_color = {0, 0, 0, 0};
-        memcpy(state.render.verts[state.render.vert_count].border_color, border_color, sizeof(vec4));
-
-        state.render.verts[state.render.vert_count].border_width = 0;
-
-
-        vec4s color_zto = lf_color_to_zto(color);
-        const vec4 color_arr = {color_zto.r, color_zto.g, color_zto.b, color_zto.a};
-        memcpy(state.render.verts[state.render.vert_count].color, color_arr, sizeof(vec4));
-
-        const vec2 texcoord_arr = {texcoords[i].x, texcoords[i].y};
-        memcpy(state.render.verts[state.render.vert_count].texcoord, texcoord_arr, sizeof(vec2));
-
-        state.render.verts[state.render.vert_count].tex_index = tex_index;
-
-        const vec2 scale_arr = {0, 0};
-        memcpy(state.render.verts[state.render.vert_count].scale, scale_arr, sizeof(vec2));
-
-        const vec2 pos_px_arr = {0, 0};
-        memcpy(state.render.verts[state.render.vert_count].pos_px, pos_px_arr, sizeof(vec2));
-
-        state.render.verts[state.render.vert_count].corner_radius = 0;
-
-        const vec2 cull_start_arr = {state.cull_start.x, state.cull_start.y};
-        const vec2 cull_end_arr = {state.cull_end.x, state.cull_end.y};
-        memcpy(state.render.verts[state.render.vert_count].min_coord, cull_start_arr, sizeof(vec2));
-        memcpy(state.render.verts[state.render.vert_count].max_coord, cull_end_arr, sizeof(vec2));
-
-        state.render.vert_count++;
-      }
-      state.render.index_count += 6;
+      renderer_add_glyph(q, max_descended_char_height, color, tex_index); 
       last_x = x;
     }
   }

@@ -56,8 +56,8 @@ extern "C" {
 #define DIV_SMOOTH_SCROLL true
 
 // Playlist file thumbnails 
-#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 4.0f // Setting this to > 0 will worsen perfomance on low-end systems
-#define PLAYLIST_ON_TRACK_CORNER_RADIUS PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS * 4.0f
+#define PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS 0.0f // Setting this to > 0 will worsen perfomance on low-end systems
+#define PLAYLIST_ON_TRACK_CORNER_RADIUS 15.0f 
 #define PLAYLIST_FILE_THUMBNAIL_COLOR GRAY
 #define PLAYLIST_FILE_THUMBNAIL_SIZE (vec2s){48, 48}
 
@@ -122,5 +122,5 @@ inline LfTheme ui_theme() {
 }
 
 // Async loading
-#define ASYNC_PLAYLIST_LOADING false 
+#define ASYNC_PLAYLIST_LOADING true 
 #define MIN_FILES_FOR_ASYNC 10

@@ -1187,7 +1187,7 @@ void renderDownloadPlaylist() {
           }
         }
         if(state.downloadingPlaylistName != "null") {
-          std::string downloadCmd = LYSSA_DIR + "/scripts/download-yt.sh \"" + urlInput + "\" " + LYSSA_DIR + "/downloaded_playlists/ &"; 
+          std::string downloadCmd = LYSSA_DIR + "/scripts/download.sh \"" + urlInput + "\" " + LYSSA_DIR + "/downloaded_playlists/ &"; 
           system(downloadCmd.c_str());
           state.playlistDownloadRunning = true;
           state.downloadPlaylistFileCount = LyssaUtils::getPlaylistFileCountURL(urlInput);
@@ -1201,7 +1201,8 @@ void renderDownloadPlaylist() {
       lf_pop_style_props();
     }
   } else  {
-    state.playlistDownloadFinished = (LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") && (downloadedFileCount == state.downloadPlaylistFileCount); 
+    state.playlistDownloadFinished = (LyssaUtils::getCommandOutput("pgrep yt-dlp") == "");
+
     if(state.playlistDownloadFinished) {
       FileStatus createStatus = Playlist::create(state.downloadingPlaylistName, "Downloaded Playlist", url);
 
@@ -1422,7 +1423,7 @@ void renderOnPlaylist() {
       lf_next_line();
       if(renderMenuBarElement("Sync Downloads", state.icons["sync"].id)) {
         terminateAudio();
-        system(std::string(LYSSA_DIR + "/scripts/download-yt.sh \"" + currentPlaylist.url + "\" " + LYSSA_DIR + "/downloaded_playlists/ &").c_str());
+        system(std::string(LYSSA_DIR + "/scripts/download.sh \"" + currentPlaylist.url + "\" " + LYSSA_DIR + "/downloaded_playlists/ &").c_str());
 
         state.playlistDownloadRunning = true;
         state.downloadingPlaylistName = std::filesystem::path(currentPlaylist.path).filename().string();
@@ -1912,7 +1913,8 @@ void renderOnTrack() {
 
     lf_image_render((vec2s){lf_get_ptr_x(), lf_get_ptr_y() + (containerSize - thumbnailHeight) / 2.0f}, 
         LF_WHITE, (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailWidth, .height = (uint32_t)thumbnailHeight}, 
-        LF_NO_COLOR, 0.0f, PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS * 4.0f);
+        LF_NO_COLOR, 0.0f, 
+        (thumbnailHeight >= containerSize - 1) ? PLAYLIST_ON_TRACK_CORNER_RADIUS : 0.0f);
 
     lf_set_ptr_y_absolute(lf_get_ptr_y() + containerSize + margin);
   }
@@ -2957,7 +2959,7 @@ void loadPlaylistFileAsync(std::vector<SoundFile>* files, std::string path) {
   }
   files->emplace_back(file);
   if(std::filesystem::exists(path)) {
-    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){0.1f, 0.1f}));
+    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, PLAYLIST_FILE_THUMBNAIL_SIZE));
   } else {
     state.playlistFileThumbnailData.emplace_back((TextureData){0});
   }
@@ -2992,7 +2994,7 @@ void addFileToPlaylistAsync(std::vector<SoundFile>* files, std::string path, uin
   }
   files->emplace_back(file);
   if(std::filesystem::exists(path)) {
-    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, (vec2s){0.1f, 0.1f}));
+    state.playlistFileThumbnailData.emplace_back(SoundTagParser::getSoundThubmnailData(path, PLAYLIST_FILE_THUMBNAIL_SIZE));
   } else {
     state.playlistFileThumbnailData.emplace_back((TextureData){0});
   }
@@ -3267,7 +3269,7 @@ void loadPlaylistAsync(Playlist& playlist) {
               .title = metadata.title,
               .releaseYear = metadata.releaseYear,
               .duration = static_cast<int32_t>(metadata.duration),
-              .thumbnail = SoundTagParser::getSoundThubmnail(path, (vec2s){0.1f, 0.1f}),
+              .thumbnail = SoundTagParser::getSoundThubmnail(path, PLAYLIST_FILE_THUMBNAIL_SIZE),
           };
 
         } else {
@@ -3314,10 +3316,13 @@ LfClickableItemState renderSoundFileThumbnail(vec2s thumbnailContainerSize, Soun
   }
   lf_pop_style_props();
 
+  if(thumbnailHeight >= thumbnailContainerSize.y - 10) {
+    thumbnailHeight = thumbnailContainerSize.y;
+  }
   lf_image_render((vec2s){lf_get_ptr_x() - thumbnailContainerSize.x, lf_get_ptr_y() + 
       (thumbnailContainerSize.y - thumbnailHeight) / 2.0f}, LF_WHITE,
-      (LfTexture){.id = thumbnail.id, .width = 
-      (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 0.0f);  
+      (LfTexture){.id = thumbnail.id, .width = (uint32_t)thumbnailContainerSize.x, .height = (uint32_t)thumbnailHeight}, LF_NO_COLOR, 0.0f, 
+      thumbnailHeight >= thumbnailContainerSize.y ? PLAYLIST_FILE_THUMBNAIL_CORNER_RADIUS : 0.0f); 
   return thumbnailState;
 }
 
