@@ -19,10 +19,24 @@ check-leif:
 		echo "[INFO]: Leif already built."; \
     fi
 
+lyssa-dir: 
+	@mkdir -p $(LYSSA_DIR)
+	cp -r ./scripts/ $(LYSSA_DIR)
+	cp -r ./assets/ $(LYSSA_DIR)
+	@if [ ! -d ~/.lyssa/playlists/ ]; then \
+		mkdir ~/.lyssa/playlists; \
+	fi
+	@if [ ! -d ~/.lyssa/downloaded_playlists/ ]; then \
+		mkdir ~/.lyssa/downloaded_playlists; \
+	fi
+	if [ ! -d ~/.lyssa/playlists/favourites ]; then \
+		cp -r ./.lyssa/favourites/ ~/.lyssa/playlists; \
+	fi
+
 leif:
 	$(MAKE) -C ./vendor/leif/
 
-build: bin
+build: bin lyssa-dir
 	@echo "[INFO]: Building Lyssa."
 	${CPP} ${CFLAGS} src/*.cpp -o bin/lyssa ${INCS} ${LIBS} ${PKG_CONFIG} 
 
@@ -43,18 +57,6 @@ rebuild:
 
 install:
 	$(MAKE) -C ./vendor/leif/ install
-	@mkdir -p $(LYSSA_DIR)
-	cp -r ./scripts/ ~/.lyssa/
-	cp -r ./assets/ ~/.lyssa/
-	@if [ ! -d ~/.lyssa/playlists/ ]; then \
-		mkdir ~/.lyssa/playlists; \
-	fi
-	@if [ ! -d ~/.lyssa/downloaded_playlists/ ]; then \
-		mkdir ~/.lyssa/downloaded_playlists; \
-	fi
-	if [ ! -d ~/.lyssa/playlists/favourites ]; then \
-		cp -r ./.lyssa/favourites/ ~/.lyssa/playlists; \
-	fi
 	cp ./bin/lyssa /usr/bin/
 	cp ./Lyssa.desktop /usr/share/applications
 	cp -r ./logo /usr/share/icons/lyssa
