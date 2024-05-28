@@ -44,6 +44,7 @@ void EditPlaylistPopup::render() {
   lf_push_style_props(div_props);
   // Centering the div/popup
   lf_div_begin(((vec2s){(state.win->getWidth() - popupSize.x) / 2.0f, (state.win->getHeight() - popupSize.y) / 2.0f}), popupSize, false);
+  lf_pop_style_props();
   if(!lf_div_grabbed()) {
     lf_div_grab(lf_get_current_div());
   }
@@ -142,6 +143,7 @@ void EditPlaylistPopup::render() {
       initBufs = false;
       lf_div_ungrab();
     }
+    lf_pop_style_props();
   }
 
   lf_div_end();
@@ -363,6 +365,7 @@ void PlaylistFileDialoguePopup::render() {
       if(renderedCount == 0) {
         lf_text("No other playlists.");
       }
+      lf_pop_style_props();
     }
     lf_next_line();
   }
@@ -392,6 +395,7 @@ void TwoChoicePopup::render() {
   if(!lf_div_grabbed()) {
     lf_div_grab(lf_get_current_div());
   }
+  lf_pop_style_props();
 
   // Close Button
   {
@@ -442,6 +446,4 @@ void TwoChoicePopup::render() {
     lf_pop_style_props();
   }
   lf_div_end();
-  lf_pop_style_props();
-
 }

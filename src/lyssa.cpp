@@ -27,7 +27,7 @@ extern "C" {
   #include <leif/leif.h>
 }
 
-#include <glad/glad.h>
+#include <GL/gl.h>
 #include <GLFW/glfw3.h>
 
 #include <taglib/tag.h>
@@ -122,7 +122,7 @@ static std::string              formatDurationToMins(int32_t duration);
 static void                     updateSoundProgress();
 
 static std::string              removeFileExtension(const std::string& filename);
-static std::string             removeFileExtensionW(const std::string& filename);
+static std::string              removeFileExtensionW(const std::string& filename);
 
 static void                     terminateAudio();
 
@@ -432,7 +432,11 @@ if(lf_key_event().pressed && lf_key_event().happened) {
 
 static void renderHomepage() {
   lf_push_font(&state.h1Font);
+  LfUIElementProps props = lf_get_theme().text_props;
+  props.text_color = LF_WHITE;
+  lf_push_style_props(props);
   lf_text("Your Playlists");
+  lf_pop_style_props();
   lf_pop_font();
   if(state.playlists.size() > 1)  {
     {
@@ -449,6 +453,7 @@ static void renderHomepage() {
       if(lf_button_fixed("Download Playlist", width, height) == LF_CLICKED) { 
         changeTabTo(GuiTab::DownloadPlaylist);
       }
+      lf_pop_style_props();
       props.margin_left = 10;
       lf_push_style_props(props);
       if(lf_button_fixed("Add Playlist", width, height) == LF_CLICKED) {
@@ -640,6 +645,7 @@ static void renderHomepage() {
           state.popups[PopupType::EditPlaylistPopup] = std::make_unique<EditPlaylistPopup>();
           state.popups[PopupType::EditPlaylistPopup]->shouldRender = true;
         }
+        lf_pop_style_props();
 
         props.margin_left = 5.0f;
         lf_push_style_props(props);
@@ -845,6 +851,7 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
       if(lf_button("Select") == LF_CLICKED) {
         changeTabTo(GuiTab::PlaylistSetThumbnail);
       }
+      lf_pop_style_props();
     } else {
       lf_next_line();
       static LfTexture preview{0};
@@ -890,6 +897,7 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
           state.createPlaylistTab.thumbnailPath = "";
           lf_free_texture(&preview);
         }
+        lf_pop_style_props();
       }
     }
   }
@@ -912,6 +920,7 @@ void renderCreatePlaylist(std::function<void()> onCreateCb, std::function<void()
           props.text_color = LYSSA_RED;
           lf_push_style_props(props);
           state.infoCards.addCard("Playlist already exists.", LYSSA_RED);
+          lf_pop_style_props();
           break;
         case FileStatus::Success:
           state.infoCards.addCard("Successfully created playlist.", LYSSA_GREEN, LF_BLACK);
@@ -1507,6 +1516,7 @@ void renderOnPlaylist() {
             lf_push_style_props(props);
             lf_push_font(&state.h6Font);
             lf_text(std::to_string(downloadedFileCount).c_str());
+            lf_pop_style_props();
             lf_pop_font();
         }
 
@@ -1525,10 +1535,10 @@ void renderOnPlaylist() {
             lf_push_style_props(props);
             lf_push_font(&state.h6Font);
             lf_text(totalFileCount.c_str());
+            lf_pop_style_props();
             lf_pop_font();
         }
     }
-    lf_pop_style_props();
   } else if(currentPlaylist.musicFiles.empty()) {
       lf_next_line();
     // Text
@@ -1629,6 +1639,7 @@ void renderOnPlaylist() {
       props.text_color = lf_color_brightness(GRAY, 1.6);
       lf_push_style_props(props);
       lf_text("#");
+      lf_pop_style_props();
 
       props.margin_left = 0;
       props.margin_right = 0;
@@ -2201,16 +2212,19 @@ void renderPlaylistAddFromFile() {
           props.text_color = LYSSA_RED;
           lf_push_style_props(props);
           lf_text("Failed to add file to playlist.");
+          lf_pop_style_props();
           break;
         case FileStatus::AlreadyExists:
           props.text_color = LYSSA_RED;
           lf_push_style_props(props);
           lf_text("File already exists in playlist.");
+          lf_pop_style_props();
           break;
         case FileStatus::Success:
           props.text_color = LYSSA_GREEN;
           lf_push_style_props(props);
           lf_text("Added file to playlist.");
+          lf_pop_style_props();
           break;
         default:
           break;
@@ -2484,18 +2498,18 @@ void renderSearchPlaylist() {
 
       const char* text = "There are no matches :(";
       lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - lf_text_dimension(text).x) / 2.0f);
-    lf_text(text);
-    lf_pop_style_props();
+      lf_text(text);
+      lf_pop_style_props();
 
-    lf_next_line();
+      lf_next_line();
 
-    const char* subtext = "Try searching for something else.";
-    lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - lf_text_dimension(subtext).x) / 2.0f);
-    props.text_color = lf_color_brightness(GRAY, 1.2f);
-    props.margin_top = 5.0f;
-    lf_push_style_props(props);
-    lf_text(subtext);
-    lf_pop_style_props();
+      const char* subtext = "Try searching for something else.";
+      lf_set_ptr_x_absolute(((state.win->getWidth() + state.sideNavigationWidth) - lf_text_dimension(subtext).x) / 2.0f);
+      props.text_color = lf_color_brightness(GRAY, 1.2f);
+      props.margin_top = 5.0f;
+      lf_push_style_props(props);
+      lf_text(subtext);
+      lf_pop_style_props();
   } 
   if(clickedThumbnail) {
     state.popups[PopupType::PlaylistFileDialoguePopup] = std::make_unique<PlaylistFileDialoguePopup>(clickedSoundFile.path, 
@@ -2567,6 +2581,7 @@ void renderSearchAll() {
   lf_push_style_props(divProps);
   lf_div_begin(((vec2s){lf_get_ptr_x() + DIV_START_X - lf_get_theme().button_props.margin_left, lf_get_ptr_y() + DIV_START_Y}), (((vec2s){(float)lf_get_current_div().aabb.size.x - (DIV_START_X * 4),
           (float)lf_get_current_div().aabb.size.y - DIV_START_Y * 2 - lf_get_ptr_y() - (BACK_BUTTON_HEIGHT + BACK_BUTTON_MARGIN_BOTTOM) - divMarginButton})), true);
+  lf_pop_style_props();
 
   vec2s initialPtr = LF_PTR;
 
@@ -2634,11 +2649,10 @@ void renderSearchAll() {
     renderedEntryCount++;
   }
   if(renderedEntryCount == 0) {
-    lf_text("This directory is empty.");
+    lf_text(renderDirectoriesOnly ? "There are no directories here" : "This directory is empty.");
   }
 
   lf_div_end();
-  lf_pop_style_props();
 }
 
 void renderTrackDisplay() {
@@ -2784,6 +2798,7 @@ void renderTrackProgress(bool dark) {
     if(lf_image_button(((LfTexture){.id = state.icons[dark ? "skip_down_dark" : "skip_down"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
       skipSoundDown(state.playingPlaylist);
     }
+    lf_pop_style_props();
     {
       LfUIElementProps playProps = props; 
       playProps.margin_top = -15.0f;
@@ -2802,15 +2817,14 @@ void renderTrackProgress(bool dark) {
     if(lf_image_button(((LfTexture){.id = state.icons[dark ? "skip_up_dark" : "skip_up"].id, .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
       skipSoundUp(state.playingPlaylist);
     }
+    lf_pop_style_props();
     props.margin_right = 0;
     lf_push_style_props(props);
     if(lf_image_button(((LfTexture){.id = state.icons[(state.replayTrack ? "replay_active" : (dark ? "replay_dark" : "replay"))].id, 
             .width = (uint32_t)iconSizeSm.x, .height = (uint32_t)iconSizeSm.y})) == LF_CLICKED) {
       state.replayTrack = !state.replayTrack;
     }
-
     lf_unset_image_color();
-
     lf_pop_style_props();
   }
 }
@@ -2893,7 +2907,7 @@ void renderTrackVolumeControl() {
         props.text_color, LF_NO_COLOR, 0.0f, props.corner_radius);
 
     LfClickableItemState sliderState = lf_slider_int(&state.volumeSlider);
-
+    lf_pop_style_props();
 
     if(VOLUME_SHOW_PERCENT) {
       std::stringstream volumeSS;
@@ -2906,8 +2920,8 @@ void renderTrackVolumeControl() {
       if(sliderState == LF_CLICKED || sliderState == LF_HELD) {
         lf_text((volumeSS.str().c_str()));
       }
+      lf_pop_style_props();
     }
-    lf_pop_style_props();
   } 
 }
 void backButtonTo(GuiTab tab, const std::function<void()>& clickCb ) {
@@ -3377,6 +3391,7 @@ bool renderMenuBarElement(const std::string& text, uint32_t iconId) {
     lf_push_style_props(text_props);
     lf_push_font(&state.h6Font);
     lf_text(text.c_str());
+    lf_pop_style_props();
     lf_pop_font();
   }
   lf_div_end();
