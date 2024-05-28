@@ -74,22 +74,14 @@ As lyssa uses the leif library which also depends on a few things there are some
 - Lyssa is currently only able to build (easily) on linux system at the moment
 
 ### Installation
-
-Install dependencies: 
-
-#### Arch (paru): 
 ```console
-paru -S make gcc glfw cglm taglib yt-dlp libclipboard ffmpeg jq perl-image-exiftool
+git clone https://github.com/cococry/lyssa
+cd lyssa
+./install.sh
 ```
 
-#### Debian
-```console
-sudo apt install make gcc libglfw3 libglfw3-dev libcglm-dev libtag1-dev yt-dlp jq ffmpeg libimage-exiftool-perl
-```
-Build and install
-```console
-make && sudo make install
-```
+This will install & build all the depdencies before installing
+lyssa onto your system.
 
 Uninstalling
 ```
