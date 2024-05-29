@@ -3,6 +3,8 @@
 #include <string>
 #include <algorithm>
 #include <fstream>
+#include <iostream>
+
 #include <stdint.h>
 
 namespace LyssaUtils {
@@ -37,7 +39,9 @@ namespace LyssaUtils {
     return lineCount;
   }
   static uint32_t getPlaylistFileCountURL(const std::string& url) {
-    std::string cmd = "yt-dlp --compat-options no-youtube-unavailable-videos --flat-playlist -j --no-warnings \"" + url + "\"" + "| jq -c .n_entries | head -n 1";
+    std::string cmd = "yt-dlp --compat-options no-youtube-unavailable-videos --flat-playlist -j --no-warnings ";
+    cmd += url;
+    cmd += " | jq -c .n_entries | head -n 1";
     return (uint32_t)std::stoi(getCommandOutput(cmd));
   }
   static std::string toLower(const std::string& str) {

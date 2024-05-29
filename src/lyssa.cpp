@@ -742,6 +742,8 @@ void renderDashboardNav() {
     "Search"
   };
 
+  bool deactivated = state.playlistDownloadRunning;
+
   for(uint32_t i = 0; i < elementCount; i++) {
     LfUIElementProps imgProps = lf_get_theme().image_props;
     imgProps.margin_top = 15.0f;
@@ -753,10 +755,15 @@ void renderDashboardNav() {
     lf_pop_style_props();
 
     LfUIElementProps props = lf_get_theme().text_props;
-    if(i == (uint32_t)state.dashboardTab) {
-      lf_push_font(&state.h5BoldFont);
-    } else {
-      props.text_color = (LfColor){175, 175, 175, 255};
+    if(deactivated) {
+      props.text_color = (LfColor){100, 100, 100, 255};
+    }
+    else {
+      if(i == (uint32_t)state.dashboardTab) {
+        lf_push_font(&state.h5BoldFont);
+      } else {
+        props.text_color = (LfColor){175, 175, 175, 255};
+      }
     }
     props.margin_top = imgProps.margin_top + (imgSize- lf_text_dimension(titles[i]).y) / 2.0f;
     lf_push_style_props(props);
@@ -766,7 +773,7 @@ void renderDashboardNav() {
         lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT);
 
     lf_button(titles[i]);
-    if(clickedElement) {
+    if(clickedElement && !deactivated) {
       switch((DashboardTab)i) {
         case DashboardTab::Home: 
           {
@@ -1356,13 +1363,26 @@ void renderOnPlaylist() {
       clearedPlaylist = true;
     }
 
-    if(LyssaUtils::getLineCountFile(LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName + "/archive.txt") >= state.downloadPlaylistFileCount
-        && state.downloadPlaylistFileCount != 0) {
+
+    static float ytdlpDownTimer = 0.0f;
+    bool downloadFinished = false;
+    if(LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") {
+      ytdlpDownTimer += state.deltaTime;
+      if(ytdlpDownTimer >= 2.0f) {
+        ytdlpDownTimer = 0.0f;
+        downloadFinished = true;
+      }
+    } else {
+      ytdlpDownTimer = 0.0f;
+    }
+    if(downloadFinished) {
       state.playlistDownloadRunning = false;
+      state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName));
       for (const auto& entry : std::filesystem::directory_iterator(LYSSA_DIR + "/downloaded_playlists/" + state.downloadingPlaylistName)) {
         if (entry.is_regular_file() && 
             !Playlist::containsFile(entry.path().string(), state.currentPlaylist) && 
             SoundTagParser::isValidSoundFile(entry.path().string()) && entry.path().extension() == ".mp3") {
+          state.loadedPlaylistFilepaths.emplace_back(entry.path().string());
           state.playlistFileFutures.emplace_back(std::async(std::launch::async, addFileToPlaylistAsync, 
                 &state.playlists[state.currentPlaylist].musicFiles, entry.path().string(), state.currentPlaylist));
         }
@@ -1440,13 +1460,14 @@ void renderOnPlaylist() {
             }); 
         state.popups[PopupType::TwoChoicePopup]->shouldRender = !state.popups[PopupType::TwoChoicePopup]->shouldRender;
       }  
+      lf_pop_style_props();
     }
-    lf_pop_style_props();
 
 
     { 
       lf_next_line();
       if(renderMenuBarElement("Sync Downloads", state.icons["sync"].id)) {
+        terminateAudio();
         system(std::string(LYSSA_DIR + "/scripts/download.sh \"" + currentPlaylist.url + "\" " + LYSSA_DIR + "/downloaded_playlists/ &").c_str());
 
         state.playlistDownloadRunning = true;
@@ -3259,11 +3280,11 @@ static bool compareTextureDataByName(const TextureData& a, const TextureData& b)
 }
 
 void handleAsyncPlaylistLoading() {
-    for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
-      SoundFile& file = state.playlists[state.currentPlaylist].musicFiles[i];
-      if(file.loaded) continue;
-      file.loaded = true;
-    }
+  for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
+    SoundFile& file = state.playlists[state.currentPlaylist].musicFiles[i];
+    if(file.loaded) continue;
+    file.loaded = true;
+  }
   if(state.loadedPlaylistFilepaths.size() == state.playlists[state.currentPlaylist].musicFiles.size() && !state.playlistFileFutures.empty()) {
     // Create OpenGL Textures for the thumbnails that were loaded
     for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
@@ -3275,9 +3296,10 @@ void handleAsyncPlaylistLoading() {
       thumbnail.height = data.height;
     } 
     if(state.currentPlaylist != -1) {
-      state.playlistFileFutures.clear();
-      state.playlistFileFutures.shrink_to_fit();
-
+      for (auto &future : state.playlistFileFutures) {
+        future.get(); // Wait for each future to complete
+      } 
+      state.playlistFileFutures.clear(); 
       Playlist& playlist = state.playlists[state.currentPlaylist];
       std::sort(playlist.musicFiles.begin(), playlist.musicFiles.end(), compareSoundFilesByName);
       std::sort(state.playlistFileThumbnailData.begin(), state.playlistFileThumbnailData.end(), compareTextureDataByName);
@@ -3302,11 +3324,12 @@ void loadPlaylistAsync(Playlist& playlist) {
   state.playlistFileThumbnailData.clear();
   state.playlistFileThumbnailData.shrink_to_fit();
 
+
   for(auto& path : state.loadedPlaylistFilepaths) {
     if(!Playlist::containsFile(path, state.currentPlaylist)){ 
       if(ASYNC_PLAYLIST_LOADING) {
         state.playlistFileFutures.emplace_back(std::async(std::launch::async, loadPlaylistFileAsync, &state.playlists[state.currentPlaylist].musicFiles, path));
-      } else {
+     } else {
         SoundFile file;
         if(std::filesystem::exists(std::filesystem::path(path))) {
           SoundMetadata metadata = SoundTagParser::getSoundMetadataNoThumbnail(path); 
