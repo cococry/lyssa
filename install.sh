@@ -60,3 +60,18 @@ if [ $? -eq 0 ]; then
   echo "Copied .desktop file into /usr/share/applications."
   echo "Copied binaries into /usr/bin"
 fi 
+
+read -p "Do you want to start lyssa (y/n): " answer
+
+# Convert the answer to lowercase to handle Y/y and N/n
+answer=${answer,,}
+
+# Check the user's response
+if [[ "$answer" == "y" ]]; then
+    echo "Starting..."
+    lyssa
+elif [[ "$answer" == "n" ]]; then
+  echo "Not starting the app."
+else
+    echo "Invalid input. Please enter y or n."
+fi
