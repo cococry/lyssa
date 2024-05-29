@@ -34,13 +34,20 @@ void InfoCardHandler::render() {
             state.win->getHeight() - _cardH - _cardPadding - yOffset}), 
           ((vec2s){infoCard.width, _cardH}), false);
     }
+    // Info icon
+    {
+      LfUIElementProps props = lf_get_theme().image_props;
+      lf_push_style_props(props);
+      props.margin_left = 15;
+      props.margin_top = 10;
+      lf_set_image_color(infoCard.textColor);
+      lf_image((LfTexture){.id = state.icons["info"].id, .width = 20, .height = 20});
+      lf_unset_image_color();
+      lf_pop_style_props();
+    }
     // Content
     {
-      lf_set_image_color(infoCard.textColor);
-      lf_image((LfTexture){.id = state.icons["info"].id, .width = 32, .height = 32});
-      lf_unset_image_color();
       LfUIElementProps props = lf_get_theme().text_props;
-      props.margin_top = (32 - lf_text_dimension(infoCard.title.c_str()).y) / 2.0f + lf_get_theme().image_props.margin_top;
       props.text_color = infoCard.textColor;
       lf_push_style_props(props);
       lf_text(infoCard.title.c_str());
