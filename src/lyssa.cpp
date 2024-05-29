@@ -1705,6 +1705,25 @@ void renderOnPlaylist() {
               LF_NO_COLOR, 0.0f, 3.0f);
         } 
 
+        {
+          LfUIElementProps props = lf_get_theme().button_props;
+          props.color = LF_NO_COLOR; props.border_width = 0.0f;
+          props.padding = 10.0f;
+          props.margin_top = 10;
+          lf_push_style_props(props);
+          uint32_t id = state.icons["move"].id;
+          LfClickableItemState state = lf_image_button(((LfTexture){.id = id, .width = 25, .height = 7}));
+
+          if(lf_mouse_button_went_down(GLFW_MOUSE_BUTTON_LEFT) && state != LF_IDLE) {
+            draggingTrackTitle = file.title;
+            draggingTrackIndex = i;
+          } 
+          if(!draggingTrack && draggingTrackTitle != "" && (fabsf(lf_get_mouse_x_delta()) > 2 || fabsf(lf_get_mouse_y_delta()) > 2)) {
+            draggingTrack = true;
+          }
+          lf_pop_style_props();
+          
+        }
         // Index 
         {
           std::stringstream indexSS;
