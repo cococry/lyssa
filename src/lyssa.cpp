@@ -307,15 +307,6 @@ if(lf_key_event().pressed && lf_key_event().happened) {
       case GLFW_KEY_S: 
         {
           state.shuffle = !state.shuffle;
-          if(state.currentTab == GuiTab::OnTrack) {
-            std::string infoStr = "Shuffle Mode: ";
-            if(state.shuffle) {
-              infoStr += "On";
-            } else {
-              infoStr += "Off";
-            }
-            state.infoCards.addCard(infoStr);
-          }
           break;
         }
       case GLFW_KEY_R: 
@@ -2161,8 +2152,27 @@ void renderOnTrack() {
 
     lf_unset_image_color();
     */
-  }
 
+    vec2s shufflePos = (vec2s){state.win->getWidth() - controlSize - DIV_START_X - BACK_BUTTON_WIDTH, 
+        state.win->getHeight() - controlSize - DIV_START_Y - BACK_BUTTON_HEIGHT - 5};
+
+    bool onShuffleButton = lf_area_hovered(shufflePos, (vec2s){controlSize, controlSize});
+
+    if(onShuffleButton && lf_mouse_button_is_released(GLFW_MOUSE_BUTTON_LEFT)) {
+      state.shuffle = !state.shuffle;
+    }
+
+    if(!state.shuffle) {
+      lf_set_image_color(lf_color_brightness(GRAY, 2.5f));
+    } else {
+      lf_set_image_color(lf_color_brightness(LF_WHITE, 0.8));
+    }
+
+    lf_image_render(shufflePos, !state.shuffle ? LF_WHITE : LF_BLACK, 
+        (LfTexture){.id = state.icons[state.shuffle ? "shuffle_active" : "shuffle"].id, 
+        .width = (uint32_t)controlSize, .height = (uint32_t)controlSize}, LF_NO_COLOR, 0.0f, 0.0f);
+    lf_unset_image_color();
+  }
   beginBottomNavBar();
   backButtonTo(state.previousTab, [&](){
       if(state.onTrackTab.trackThumbnail.width != 0)
