@@ -1,23 +1,22 @@
 #!/bin/bash
 
+# Function to install packages using apt (Debian/Ubuntu)
 install_with_apt() {
     sudo apt update
-    sudo apt install -y ffmpeg exiftool jq libglfw3 libglfw3-dev
-    sudo apt install -y python3-pip
-    pip3 install --upgrade yt-dlp
+    sudo apt install -y ffmpeg exiftool jq libglfw3 libglfw3-dev yt-dlp
 }
 
+# Function to install packages using yum (Red Hat/CentOS)
 install_with_yum() {
     sudo yum install -y epel-release
     sudo yum install -y ffmpeg perl-Image-ExifTool jq glfw glfw-devel
-    sudo yum install -y python3-pip
-    pip3 install --upgrade yt-dlp
+    sudo yum install -y https://download1.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm
+    sudo yum install -y yt-dlp
 }
 
+# Function to install packages using pacman (Arch Linux)
 install_with_pacman() {
-    sudo pacman -Sy --noconfirm ffmpeg exiftool jq glfw
-    sudo pacman -S --noconfirm python-pip
-    pip install --upgrade yt-dlp
+    sudo pacman -Sy --noconfirm ffmpeg exiftool jq glfw yt-dlp
 }
 
 if [ -f /etc/arch-release ]; then
