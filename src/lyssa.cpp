@@ -1447,7 +1447,6 @@ void renderOnPlaylist() {
     { 
       lf_next_line();
       if(renderMenuBarElement("Sync Downloads", state.icons["sync"].id)) {
-        terminateAudio();
         system(std::string(LYSSA_DIR + "/scripts/download.sh \"" + currentPlaylist.url + "\" " + LYSSA_DIR + "/downloaded_playlists/ &").c_str());
 
         state.playlistDownloadRunning = true;
@@ -3241,22 +3240,22 @@ static bool compareTextureDataByName(const TextureData& a, const TextureData& b)
 }
 
 void handleAsyncPlaylistLoading() {
-  // Create OpenGL Textures for the thumbnails that were loaded
-  for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
-    SoundFile& file = state.playlists[state.currentPlaylist].musicFiles[i];
-    LfTexture& thumbnail = file.thumbnail;
-    if(file.loaded) continue;
-
-    TextureData data = state.playlistFileThumbnailData[i];
-
-    lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &thumbnail.id, data.width, data.height, data.channels, data.data);
-
-    thumbnail.width = data.width;
-    thumbnail.height = data.height;
-    file.loaded = true;
-  }
-  if(state.currentPlaylist != -1) {
-    if(state.loadedPlaylistFilepaths.size() == state.playlists[state.currentPlaylist].musicFiles.size() && !state.playlistFileFutures.empty()) {
+    for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
+      SoundFile& file = state.playlists[state.currentPlaylist].musicFiles[i];
+      if(file.loaded) continue;
+      file.loaded = true;
+    }
+  if(state.loadedPlaylistFilepaths.size() == state.playlists[state.currentPlaylist].musicFiles.size() && !state.playlistFileFutures.empty()) {
+    // Create OpenGL Textures for the thumbnails that were loaded
+    for (uint32_t i = 0; i < state.playlistFileThumbnailData.size(); i++) {
+      SoundFile& file = state.playlists[state.currentPlaylist].musicFiles[i];
+      LfTexture& thumbnail = file.thumbnail;
+      TextureData data = state.playlistFileThumbnailData[i];
+      lf_create_texture_from_image_data(LF_TEX_FILTER_LINEAR, &thumbnail.id, data.width, data.height, data.channels, data.data);
+      thumbnail.width = data.width;
+      thumbnail.height = data.height;
+    } 
+    if(state.currentPlaylist != -1) {
       state.playlistFileFutures.clear();
       state.playlistFileFutures.shrink_to_fit();
 
@@ -3280,7 +3279,6 @@ void handleAsyncPlaylistLoading() {
 }
 
 void loadPlaylistAsync(Playlist& playlist) {
-  terminateAudio();
   playlist.musicFiles.clear();
   state.playlistFileThumbnailData.clear();
   state.playlistFileThumbnailData.shrink_to_fit();

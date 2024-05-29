@@ -18,26 +18,26 @@
 #include <miniaudio.h>
 
 extern "C" {
-    #include <leif/leif.h>
+#include <leif/leif.h>
 }
 
 #define MAX(a, b) a > b ? a : b
 #define MIN(a, b) a < b ? a : b
 
 enum class GuiTab {
-    Dashboard = 0, 
-    CreatePlaylist,
-    CreatePlaylistFromFolder,
-    DownloadPlaylist,
-    OnPlaylist,
-    OnTrack,
-    TrackFullscreen,
-    PlaylistAddFromFile,
-    PlaylistAddFromFolder,
-    PlaylistSetThumbnail,
-    SearchPlaylist,
-    SearchAll,
-    TabCount
+  Dashboard = 0, 
+  CreatePlaylist,
+  CreatePlaylistFromFolder,
+  DownloadPlaylist,
+  OnPlaylist,
+  OnTrack,
+  TrackFullscreen,
+  PlaylistAddFromFile,
+  PlaylistAddFromFolder,
+  PlaylistSetThumbnail,
+  SearchPlaylist,
+  SearchAll,
+  TabCount
 };
 
 enum class DashboardTab {
@@ -47,21 +47,21 @@ enum class DashboardTab {
 };
 
 struct InputField {
-    LfInputField input;
-    char buffer[INPUT_BUFFER_SIZE] = {0};
+  LfInputField input;
+  char buffer[INPUT_BUFFER_SIZE] = {0};
 };
 
 struct CreatePlaylistState {
-    InputField nameInput, descInput; 
-    std::filesystem::path thumbnailPath;
+  InputField nameInput, descInput; 
+  std::filesystem::path thumbnailPath;
 };
 
 struct PlaylistAddFromFileTab {
-    InputField pathInput;
+  InputField pathInput;
 
-    FileStatus addFileStatus;
-    float addFileMessageShowTime = 3.0f; 
-    float addFileMessageTimer = 0.0f;
+  FileStatus addFileStatus;
+  float addFileMessageShowTime = 3.0f; 
+  float addFileMessageTimer = 0.0f;
 };
 
 struct TrackFullscreenTab {
@@ -71,92 +71,92 @@ struct TrackFullscreenTab {
 };
 
 struct OnTrackTab {
-    LfTexture trackThumbnail;
+  LfTexture trackThumbnail;
 };
 
 struct PlaylistAddFromFolderTab {
-    std::vector<std::filesystem::directory_entry> folderContents;
-    std::string currentFolderPath;
-    bool addedFile;
+  std::vector<std::filesystem::directory_entry> folderContents;
+  std::string currentFolderPath;
+  bool addedFile;
 };
 
 enum class PopupID {
-    EditPlaylistPopup = 0,
-    PlaylistFileDialoguePopup,
-    PopupCount
+  EditPlaylistPopup = 0,
+  PlaylistFileDialoguePopup,
+  PopupCount
 };
 
 struct GlobalState {
-    Window* win = NULL;
-    float deltaTime, lastTime;
+  Window* win = NULL;
+  float deltaTime, lastTime;
 
-    float sideNavigationWidth; 
+  float sideNavigationWidth; 
 
-    SoundHandler soundHandler;
-    InfoCardHandler infoCards;
+  SoundHandler soundHandler;
+  InfoCardHandler infoCards;
 
-    SoundFile* currentSoundFile = NULL, *previousSoundFile = NULL;
-    int32_t currentSoundPos, previousSoundPos;
+  SoundFile* currentSoundFile = NULL, *previousSoundFile = NULL;
+  int32_t currentSoundPos, previousSoundPos;
 
-    LfFont musicTitleFont,
-    h1Font,
-    h2Font,
-    h3Font,
-    h4Font,
-    h5Font,
-    h5BoldFont, h6BoldFont,
-    h6Font,
-    h7Font;
+  LfFont musicTitleFont,
+         h1Font,
+         h2Font,
+         h3Font,
+         h4Font,
+         h5Font,
+         h5BoldFont, h6BoldFont,
+         h6Font,
+         h7Font;
 
-    GuiTab currentTab = GuiTab::TabCount, previousTab = GuiTab::TabCount;
-    DashboardTab dashboardTab;
+  GuiTab currentTab = GuiTab::TabCount, previousTab = GuiTab::TabCount;
+  DashboardTab dashboardTab;
 
-    std::vector<Playlist> playlists;
-    std::unordered_map<PopupType, std::unique_ptr<Popup>> popups;
+  std::vector<Playlist> playlists;
+  std::unordered_map<PopupType, std::unique_ptr<Popup>> popups;
 
-    std::vector<uint32_t> alreadyPlayedTracks;
-    uint32_t skipDownAmount;
+  std::vector<uint32_t> alreadyPlayedTracks;
+  uint32_t skipDownAmount;
 
-    std::unordered_map<std::string, LfTexture> icons;
+  std::unordered_map<std::string, LfTexture> icons;
 
-    CreatePlaylistState createPlaylistTab;
-    PlaylistAddFromFileTab playlistAddFromFileTab;
-    PlaylistAddFromFolderTab playlistAddFromFolderTab;
-    OnTrackTab onTrackTab;
-    TrackFullscreenTab trackFullscreenTab;
-
-
-    int32_t currentPlaylist, playingPlaylist;
-
-    float soundPosUpdateTimer;
-    float soundPosUpdateTime;
-
-    LfSlider trackProgressSlider;
-    LfSlider volumeSlider;
-    bool showVolumeSliderTrackDisplay, showVolumeSliderOverride;
-
-    float volumeBeforeMute;
+  CreatePlaylistState createPlaylistTab;
+  PlaylistAddFromFileTab playlistAddFromFileTab;
+  PlaylistAddFromFolderTab playlistAddFromFolderTab;
+  OnTrackTab onTrackTab;
+  TrackFullscreenTab trackFullscreenTab;
 
 
-    // Async loading
-    std::vector<std::future<void>> playlistFileFutures;
-    std::vector<std::future<void>> playlistFutures;
-    std::vector<std::string> loadedPlaylistFilepaths;
-    std::vector<TextureData> playlistFileThumbnailData;
-    std::vector<TextureData> playlistThumbnailData;
-    std::mutex mutex;
+  int32_t currentPlaylist, playingPlaylist;
+
+  float soundPosUpdateTimer;
+  float soundPosUpdateTime;
+
+  LfSlider trackProgressSlider;
+  LfSlider volumeSlider;
+  bool showVolumeSliderTrackDisplay, showVolumeSliderOverride;
+
+  float volumeBeforeMute;
 
 
-    bool playlistDownloadRunning, playlistDownloadFinished;
-    int32_t playlistThumbnailDownloadIndex;
+  // Async loading
+  std::vector<std::future<void>> playlistFileFutures;
+  std::vector<std::future<void>> playlistFutures;
+  std::vector<std::string> loadedPlaylistFilepaths;
+  std::vector<TextureData> playlistFileThumbnailData;
+  std::vector<TextureData> playlistThumbnailData;
+  std::mutex mutex;
 
-    std::string downloadingPlaylistName;
-    uint32_t downloadPlaylistFileCount;
 
-    bool shuffle, replayTrack;
+  bool playlistDownloadRunning, playlistDownloadFinished;
+  int32_t playlistThumbnailDownloadIndex;
 
-    InputField searchPlaylistInput;
-    std::vector<SoundFile> searchPlaylistResults;
+  std::string downloadingPlaylistName;
+  uint32_t downloadPlaylistFileCount;
+
+  bool shuffle, replayTrack;
+
+  InputField searchPlaylistInput;
+  std::vector<SoundFile> searchPlaylistResults;
 };
 
 extern GlobalState state;

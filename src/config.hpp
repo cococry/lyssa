@@ -1,7 +1,7 @@
 #pragma once 
-    
+
 extern "C" {
-    #include <leif/leif.h>
+#include <leif/leif.h>
 }
 
 // Lyssa Path 
@@ -78,47 +78,47 @@ extern "C" {
 
 // Styles & Theming 
 inline LfUIElementProps primary_button_style() {
-    LfUIElementProps props = lf_get_theme().button_props;
-    props.corner_radius = 6;
-    props.border_width = 0;
-    props.color = lf_color_brightness(GRAY, 1.8f); 
-    return props;
+  LfUIElementProps props = lf_get_theme().button_props;
+  props.corner_radius = 6;
+  props.border_width = 0;
+  props.color = lf_color_brightness(GRAY, 1.8f); 
+  return props;
 }
 
 inline LfUIElementProps secondary_button_style() {
-    LfUIElementProps props = lf_get_theme().button_props;
-    props.corner_radius = 9;
-    props.border_width = 0;
-    props.color = lf_color_brightness(GRAY, 1.8f); 
-    return props;
+  LfUIElementProps props = lf_get_theme().button_props;
+  props.corner_radius = 9;
+  props.border_width = 0;
+  props.color = lf_color_brightness(GRAY, 1.8f); 
+  return props;
 }
 
 
 inline LfUIElementProps call_to_action_button_style() {
-    LfUIElementProps props = lf_get_theme().button_props;
-    props.color = PERSIAN_GREEN;
-    props.text_color = LF_BLACK;
-    props.corner_radius = 6;
-    props.border_width = 0;
-    return props;
+  LfUIElementProps props = lf_get_theme().button_props;
+  props.color = PERSIAN_GREEN;
+  props.text_color = LF_BLACK;
+  props.corner_radius = 6;
+  props.border_width = 0;
+  return props;
 }
 
 inline LfUIElementProps input_field_style() {
-    LfUIElementProps props = lf_get_theme().inputfield_props;
-    props.padding = 15; 
-    props.border_width = 0;
-    props.color = GRAY; 
-    props.corner_radius = 4;
-    props.text_color = LF_WHITE;
-    return props;
+  LfUIElementProps props = lf_get_theme().inputfield_props;
+  props.padding = 15; 
+  props.border_width = 0;
+  props.color = GRAY; 
+  props.corner_radius = 4;
+  props.text_color = LF_WHITE;
+  return props;
 }
 
 inline LfTheme ui_theme() {
-    LfTheme theme = lf_get_theme();
-    theme.div_props.color = LF_NO_COLOR;
-    theme.scrollbar_props.corner_radius = 1.5;
-    theme.div_smooth_scroll = DIV_SMOOTH_SCROLL;
-    return theme;
+  LfTheme theme = lf_get_theme();
+  theme.div_props.color = LF_NO_COLOR;
+  theme.scrollbar_props.corner_radius = 1.5;
+  theme.div_smooth_scroll = DIV_SMOOTH_SCROLL;
+  return theme;
 }
 
 // Async loading

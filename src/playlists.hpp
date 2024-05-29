@@ -34,7 +34,7 @@ struct Playlist {
   std::vector<SoundFile> musicFiles;
 
   std::string name, desc, url;
-              // Moving the file that is being dragged  
+  // Moving the file that is being dragged  
   std::filesystem::path path, thumbnailPath;
   LfTexture thumbnail;
   int32_t playingFile = -1, selectedFile = -1;

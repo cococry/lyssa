@@ -3,12 +3,12 @@
 #include "global.hpp"
 #include <algorithm>
 extern "C" {
-  #include <leif/leif.h>
+#include <leif/leif.h>
 }
 
 InfoCardHandler::InfoCardHandler(float cardPadding, float cardH) 
   : _cardPadding(cardPadding), _cardH(cardH) {
-}
+  }
 
 void InfoCardHandler::addCard(const std::string& title, LfColor bgColor, LfColor textColor) {
   if(_infoCards.size() + 1 <= MAX_INFO_CARDS) {

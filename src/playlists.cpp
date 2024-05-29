@@ -177,7 +177,7 @@ bool Playlist::metadataContainsFile(const std::string& path, uint32_t playlistIn
 
 std::string PlaylistMetadata::getName(const std::filesystem::directory_entry& playlistDir) {
   return getMetadataValue(playlistDir, "name:");
- 
+
 }
 
 std::string PlaylistMetadata::getDesc(const std::filesystem::directory_entry& playlistDir) {

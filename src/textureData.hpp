@@ -5,9 +5,9 @@
 #include <filesystem>
 
 struct TextureData {
-    unsigned char* data;
-    uint32_t width, height; 
-    int32_t channels;
-    std::filesystem::path path;
+  unsigned char* data;
+  uint32_t width, height; 
+  int32_t channels;
+  std::filesystem::path path;
 };
 
