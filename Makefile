@@ -1,6 +1,6 @@
 CPP=g++
 INCS=-Ivendor/miniaudio -Ivendor/leif/vendor/glad/include -Ivendor/stb_image_write
-LIBS=-lleif -lclipboard -lleif -lglfw -lm -Lvendor/miniaudio/lib -lminiaudio -lxcb -lGL
+LIBS=-lleif -lclipboard -lglfw -lm -Lvendor/miniaudio/lib -lminiaudio -lxcb -lGL
 PKG_CONFIG=`pkg-config --cflags --libs taglib`
 CFLAGS=-O3 -ffast-math -DGLFW_INCLUDE_NONE -std=c++17
 
