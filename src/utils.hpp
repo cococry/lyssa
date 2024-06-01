@@ -39,10 +39,9 @@ namespace LyssaUtils {
     return lineCount;
   }
   static uint32_t getPlaylistFileCountURL(const std::string& url) {
-    std::string cmd = "yt-dlp --compat-options no-youtube-unavailable-videos --flat-playlist -j --no-warnings ";
-    cmd += url;
-    cmd += " | jq -c .n_entries | head -n 1";
-    return (uint32_t)std::stoi(getCommandOutput(cmd));
+    std::string cmd = LYSSA_DIR + "/scripts/count-files.sh " + "\"" +  url + "\"";
+    std::cout << getCommandOutput(cmd) << "\n";
+    return (uint32_t)107;
   }
   static std::string toLower(const std::string& str) {
     std::string result = str;
