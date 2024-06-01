@@ -1108,49 +1108,55 @@ void renderDownloadPlaylist() {
 
     {
       lf_next_line();
-      LfUIElementProps props = call_to_action_button_style();
-      props.margin_left = 0;
-      props.margin_top = 15;
-      props.color = LYSSA_BACKGROUND_COLOR;
-      props.text_color = LF_WHITE;
-      props.border_color = GRAY;
-      props.border_width = 1.0f;
-      props.corner_radius = 9.0f;
-      props.margin_right = 0; 
+      if(LyssaUtils::getCommandOutput("pgrep yt-dlp") == "") {
+        LfUIElementProps props = call_to_action_button_style();
+        props.margin_left = 0;
+        props.margin_top = 15;
+        props.color = LYSSA_BACKGROUND_COLOR;
+        props.text_color = LF_WHITE;
+        props.border_color = GRAY;
+        props.border_width = 1.0f;
+        props.corner_radius = 9.0f;
+        props.margin_right = 0; 
 
-      lf_push_style_props(props);
-      if(lf_button_fixed("Open Playlist", 180, -1) == LF_CLICKED) {
-        loadPlaylists();
-        state.playlistDownloadRunning = false;
-        state.playlistDownloadFinished = false;
-        uint32_t playlistIndex = 0;
-        for(uint32_t i = 0; i < state.playlists.size(); i++) {
-          if(state.playlists[i].name == state.downloadingPlaylistName) {
-            playlistIndex = i;
-            break;
+        lf_push_style_props(props);
+        if(lf_button_fixed("Open Playlist", 180, -1) == LF_CLICKED) {
+          loadPlaylists();
+          state.playlistDownloadRunning = false;
+          state.playlistDownloadFinished = false;
+          uint32_t playlistIndex = 0;
+          for(uint32_t i = 0; i < state.playlists.size(); i++) {
+            if(state.playlists[i].name == state.downloadingPlaylistName) {
+              playlistIndex = i;
+              break;
+            }
           }
-        }
-        state.currentPlaylist = playlistIndex;
-        auto& playlist = state.playlists[state.currentPlaylist];
-        if(!playlist.loaded) {
-          state.loadedPlaylistFilepaths.clear();
-          state.loadedPlaylistFilepaths.shrink_to_fit();
+          state.currentPlaylist = playlistIndex;
+          auto& playlist = state.playlists[state.currentPlaylist];
+          if(!playlist.loaded) {
+            state.loadedPlaylistFilepaths.clear();
+            state.loadedPlaylistFilepaths.shrink_to_fit();
 
-          state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(playlist.path));
-          loadPlaylistAsync(playlist);
-          playlist.loaded = true;
+            state.loadedPlaylistFilepaths = PlaylistMetadata::getFilepaths(std::filesystem::directory_entry(playlist.path));
+            loadPlaylistAsync(playlist);
+            playlist.loaded = true;
+          }
+          changeTabTo(GuiTab::OnPlaylist);
         }
-        changeTabTo(GuiTab::OnPlaylist);
+        lf_pop_style_props();
+        beginBottomNavBar();
+        backButtonTo(GuiTab::Dashboard, [&](){
+            state.playlistDownloadRunning = false;
+            state.playlistDownloadFinished = false;
+            loadPlaylists();
+            });
+        renderTrackMenu();
+      } else {
+        lf_push_font(&state.h6Font);
+        lf_text("You will be able to open your playlist in a few seconds...");
+        lf_pop_font();
       }
-      lf_pop_style_props();
     }
-    beginBottomNavBar();
-    backButtonTo(GuiTab::Dashboard, [&](){
-        state.playlistDownloadRunning = false;
-        state.playlistDownloadFinished = false;
-        loadPlaylists();
-        });
-    renderTrackMenu();
     lf_div_end();
     return;
   }
@@ -1277,7 +1283,7 @@ void renderDownloadPlaylist() {
       lf_pop_style_props();
     }
     {
-      int percentage = (downloadedFileCount * 100) / state.downloadPlaylistFileCount;
+      int percentage = MIN(((downloadedFileCount * 100) / state.downloadPlaylistFileCount), 100);
       std::ostringstream oss;
       oss << percentage << "%";
 
